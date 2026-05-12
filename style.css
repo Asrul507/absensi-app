@@ -1,6 +1,4 @@
-/* =========================
-   RESET
-========================= */
+/* ================= BASE ================= */
 * {
   margin: 0;
   padding: 0;
@@ -9,114 +7,77 @@
 }
 
 body {
-  background: #0b1220;
-  color: #e5e7eb;
-  min-height: 100vh;
+  background: #f4f6fb;
+  color: #1f2937;
 }
 
-/* =========================
-   LAYOUT
-========================= */
+/* ================= LOGIN ================= */
+#loginPage {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg,#2563eb,#1e40af);
+}
+
+.login-box {
+  width: 90%;
+  max-width: 360px;
+  background: #fff;
+  padding: 25px;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.login-logo {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.login-icon {
+  font-size: 40px;
+}
+
+.login-field {
+  margin-bottom: 12px;
+}
+
+.login-field input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+}
+
+.btn-login {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ================= APP LAYOUT ================= */
 #appPage {
   display: flex;
-  min-height: 100vh;
-}
-
-/* =========================
-   OVERLAY
-========================= */
-#overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-  opacity: 0;
-  pointer-events: none;
-  transition: 0.3s;
-  z-index: 900;
-}
-
-#overlay.active {
-  opacity: 1;
-  pointer-events: all;
-}
-
-/* =========================
-   SIDEBAR
-========================= */
-#sidebar {
-  position: fixed;
-  top: 0;
-  left: -280px;
-  width: 280px;
   height: 100vh;
-  background: #111827;
-  border-right: 1px solid rgba(255,255,255,0.08);
-  transition: 0.3s ease;
-  z-index: 1000;
-  padding-top: 20px;
-}
-
-#sidebar.open {
-  left: 0;
-}
-
-.sidebar-header {
-  padding: 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-
-.sb-name {
-  font-size: 20px;
-  font-weight: 800;
-  color: #60a5fa;
-}
-
-.sb-role {
-  font-size: 12px;
-  opacity: 0.7;
-  margin-top: 5px;
-}
-
-.sidebar-nav {
-  display: flex;
   flex-direction: column;
-  padding: 10px;
-  gap: 8px;
 }
 
-.sidebar-nav a {
-  padding: 12px 14px;
-  border-radius: 10px;
-  text-decoration: none;
-  color: #e5e7eb;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  transition: 0.2s;
-  background: rgba(255,255,255,0.03);
-}
-
-.sidebar-nav a:hover {
-  background: #2563eb;
-  transform: translateX(4px);
-}
-
-/* =========================
-   TOPBAR
-========================= */
+/* ================= TOPBAR ================= */
 .topbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 56px;
-  background: #111827;
+  height: 55px;
+  background: #fff;
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 0 15px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  z-index: 800;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid #eee;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .topbar-left {
@@ -125,102 +86,89 @@ body {
   gap: 10px;
 }
 
-.topbar-title {
-  font-weight: 700;
-  letter-spacing: 1px;
+.btn-menu {
+  background: none;
+  border: none;
+  font-size: 20px;
 }
 
-.btn-menu,
-.btn-logout-top {
-  background: #1f2937;
-  border: none;
+.topbar-title {
+  font-weight: 700;
+}
+
+/* ================= SIDEBAR ================= */
+#sidebar {
+  position: fixed;
+  left: -260px;
+  top: 0;
+  width: 260px;
+  height: 100%;
+  background: #111827;
   color: white;
-  padding: 8px 10px;
+  transition: 0.3s;
+  z-index: 1000;
+  padding: 15px;
+}
+
+#sidebar.open {
+  left: 0;
+}
+
+.sidebar-nav a {
+  display: block;
+  padding: 12px;
+  color: white;
+  text-decoration: none;
   border-radius: 8px;
 }
 
-/* =========================
-   CONTENT
-========================= */
+.sidebar-nav a:hover {
+  background: #1f2937;
+}
+
+/* ================= OVERLAY ================= */
+#overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  z-index: 999;
+}
+
+#overlay.active {
+  display: block;
+}
+
+/* ================= CONTENT ================= */
 #content {
-  margin-top: 56px;
-  width: 100%;
-  padding: 15px;
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
 }
 
-/* =========================
-   CARD
-========================= */
+/* ================= CARD ================= */
 .card {
-  background: #111827;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
+  background: #fff;
   padding: 15px;
+  border-radius: 14px;
   margin-bottom: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
-/* =========================
-   BUTTON
-========================= */
-button {
-  background: #2563eb;
-  color: white;
-  border: none;
-  padding: 10px 14px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: 0.2s;
-  font-weight: 600;
+/* ================= DASHBOARD ================= */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
-button:hover {
-  background: #1d4ed8;
-  transform: translateY(-1px);
+.kpi-card {
+  background: #fff;
+  padding: 15px;
+  border-radius: 12px;
 }
 
-button:active {
-  transform: scale(0.97);
-}
-
-/* =========================
-   INPUT
-========================= */
-input, select, textarea {
-  width: 100%;
-  padding: 10px;
-  margin-top: 8px;
-  margin-bottom: 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: #0f172a;
-  color: white;
-  outline: none;
-}
-
-/* =========================
-   LOGIN
-========================= */
-#loginPage {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background: radial-gradient(circle at top, #1e293b, #0b1220);
-}
-
-.login-box {
-  width: 100%;
-  max-width: 380px;
-  background: #111827;
-  padding: 25px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.08);
-}
-
-/* =========================
-   TABLE
-========================= */
+/* ================= TABLE ================= */
 table {
   width: 100%;
   border-collapse: collapse;
@@ -228,43 +176,22 @@ table {
 }
 
 th, td {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+/* ================= BUTTON ================= */
+button {
   padding: 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  text-align: left;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: white;
 }
 
-th {
-  color: #93c5fd;
-}
-
-/* =========================
-   BADGE
-========================= */
-.badge {
-  padding: 4px 8px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.badge-green { background: #14532d; color: #22c55e; }
-.badge-red { background: #450a0a; color: #ef4444; }
-.badge-yellow { background: #422006; color: #facc15; }
-
-/* =========================
-   RESPONSIVE
-========================= */
-@media (max-width: 768px) {
-
-  #sidebar {
-    width: 260px;
-  }
-
-  .card {
-    padding: 12px;
-  }
-
-  table {
-    font-size: 12px;
-  }
+/* ================= SHIFT BOX ================= */
+.shift-box {
+  padding: 12px;
+  background: #f3f4f6;
+  border-radius: 10px;
 }
