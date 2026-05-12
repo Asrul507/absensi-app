@@ -186,11 +186,14 @@ function renderMenu(role) {
 }
 
 /* ================= NAVIGATE ================= */
-window.navigate = async function(page) {
+window.navigate = function(page) {
+
+  if (!window.currentUser) {
+    alert("Silakan login dulu")
+    return
+  }
 
   const content = document.getElementById('content')
-  
-
   // ================= DASHBOARD =================
   if (page === 'dashboard') {
     renderDashboard()
