@@ -6,7 +6,7 @@ export async function renderPengajuan(user) {
     user.role === "admin" ||
     user.role === "super_admin"
 
-  // ================= FETCH PENGAJUAN =================
+  // ================= FETCH DATA =================
   const { data: list, error } = await supabase
     .from("pengajuan")
     .select("*")
@@ -17,12 +17,12 @@ export async function renderPengajuan(user) {
     return
   }
 
-  // ================= FILTER DATA USER =================
+  // ================= FILTER DATA =================
   const myList = isAdmin
     ? list
     : list.filter(i => i.user_id === user.id)
 
-  // ================= RENDER UI =================
+  // ================= UI =================
   content.innerHTML = `
     <div class="card">
       <h3>📩 Pengajuan ${isAdmin ? "Management" : "Saya"}</h3>
@@ -54,54 +54,60 @@ export async function renderPengajuan(user) {
 
       ${
         myList.length === 0
-        ? `<div class="empty-state">Belum ada pengajuan</div>`
-        : myList.map(i => `
-            <div class="card">
+          ? `<div class="empty-state">Belum ada pengajuan</div>`
+          : myList.map(i => `
 
-              <b>Jenis:</b> ${i.jenis || "-"} <br>
+              <div class="card">
 
-              <b>Nama:</b> ${i.nama || "Unknown"} <br>
+                <b>Jenis:</b> ${i.jenis || "-"} <br>
 
-              <b>Alasan:</b> ${i.alasan || "-"} <br>
+                <b>Nama:</b> ${i.nama || "Unknown"} <br>
 
-              <b>Status:</b> 
-              <span class="badge ${
-                i.status === "approved"
-                  ? "badge-green"
-                  : i.status === "rejected"
-                    ? "badge-red"
-                    : "badge-yellow"
-              }">
-                ${i.status}
-              </span>
+                <b>Alasan:</b> ${i.alasan || "-"} <br>
 
-              <br>
+                <b>Status:</b>
+                <span class="badge ${
+                  i.status === "approved"
+                    ? "badge-green"
+                    : i.status === "rejected"
+                      ? "badge-red"
+                      : "badge-yellow"
+                }">
+                  ${i.status}
+                </span>
 
-              ${i.file
-                ? `<a href="${i.file}" target="_blank">📎 Lihat File</a>`
-                : ""}
+                <br>
 
-             ${
-  isAdmin && i.status === "pending"
-    ? `
-      <div style="margin-top:10px; display:flex; gap:8px;">
-        <button onclick="approvePengajuan('${i.id}')">Approve</button>
-        <button onclick="rejectPengajuan('${i.id}')">Reject</button>
-      </div>
-    `
-    : `
-      <div style="margin-top:10px;">
-        <span class="badge ${
-          i.status === "approved"
-            ? "badge-green"
-            : i.status === "rejected"
-              ? "badge-red"
-              : "badge-yellow"
-        }">
-          ${i.status.toUpperCase()}
+                ${i.file
+                  ? `<a href="${i.file}" target="_blank">📎 Lihat File</a>`
+                  : ""}
 
-            </div>
-          `).join("")
+                ${
+                  isAdmin && i.status === "pending"
+                    ? `
+                      <div style="margin-top:10px; display:flex; gap:8px;">
+                        <button onclick="approvePengajuan('${i.id}')">Approve</button>
+                        <button onclick="rejectPengajuan('${i.id}')">Reject</button>
+                      </div>
+                    `
+                    : `
+                      <div style="margin-top:10px;">
+                        <span class="badge ${
+                          i.status === "approved"
+                            ? "badge-green"
+                            : i.status === "rejected"
+                              ? "badge-red"
+                              : "badge-yellow"
+                        }">
+                          ${i.status.toUpperCase()}
+                        </span>
+                      </div>
+                    `
+                }
+
+              </div>
+
+            `).join("")
       }
 
     </div>
@@ -131,14 +137,14 @@ export async function renderPengajuan(user) {
         .from("surat")
         .upload(fileName, file)
 
-      if (!uploadError) {
-        fileUrl = supabase.storage
-          .from("surat")
-          .getPublicUrl(fileName).data.publicUrl
-      } else {
+      if (uploadError) {
         alert("Upload gagal")
         return
       }
+
+      fileUrl = supabase.storage
+        .from("surat")
+        .getPublicUrl(fileName).data.publicUrl
     }
 
     // ================= INSERT DATA =================
@@ -165,7 +171,10 @@ export async function renderPengajuan(user) {
   }
 }
 
+
+/* ================= APPROVE ================= */
 window.approvePengajuan = async function (id) {
+
   const { error } = await supabase
     .from("pengajuan")
     .update({ status: "approved" })
@@ -177,11 +186,14 @@ window.approvePengajuan = async function (id) {
   }
 
   alert("Pengajuan di-approve")
+
   renderPengajuan(window.currentUser)
 }
 
 
+/* ================= REJECT ================= */
 window.rejectPengajuan = async function (id) {
+
   const { error } = await supabase
     .from("pengajuan")
     .update({ status: "rejected" })
@@ -193,5 +205,6 @@ window.rejectPengajuan = async function (id) {
   }
 
   alert("Pengajuan ditolak")
+
   renderPengajuan(window.currentUser)
 }
