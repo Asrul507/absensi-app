@@ -279,3 +279,9 @@ window.closeSidebar = () => {
   document.getElementById('overlay').classList.remove('active')
 }
 
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeSidebar()
+  }
+})
