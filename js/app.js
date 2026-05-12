@@ -6,6 +6,7 @@ import { renderDashboard } from './dashboard.js'
 import { renderShiftManagement } from './shift.js'
 import { renderJadwalManagement } from './jadwal.js'
 import { renderRiwayat } from './ui.js'
+import { renderPengajuan } from "./pengajuan.js"
 
 /* ================= GLOBAL STATE ================= */
 window.currentUser = null
