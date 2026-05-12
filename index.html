@@ -51,16 +51,16 @@
 </div>
 
 <!-- ================= APP PAGE ================= -->
+<!-- ================= APP PAGE ================= -->
 <div id="appPage" style="display:none;">
 
   <!-- TOPBAR -->
   <div class="topbar">
-
     <div class="topbar-left">
       <button class="btn-menu" onclick="toggleSidebar()">
         <i class="fa-solid fa-bars"></i>
       </button>
-      <div class="topbar-title">GENIUS</div>
+      <div class="topbar-title">GENIUS HR</div>
     </div>
 
     <div class="topbar-right">
@@ -69,7 +69,6 @@
         <i class="fa-solid fa-right-from-bracket"></i>
       </button>
     </div>
-
   </div>
 
   <!-- OVERLAY -->
@@ -79,21 +78,32 @@
   <div id="sidebar"></div>
 
   <!-- CONTENT -->
-  <div id="content">
+  <div id="content"></div>
 
-    <div class="card">
-      <div class="card-title">
-        <i class="fa-solid fa-house"></i> Dashboard
-      </div>
+  <!-- BOTTOM NAV (FIXED HR STYLE) -->
+  <nav id="bottomNav">
 
-      <p>Selamat datang di sistem absensi.</p>
+    <button class="bottom-nav-item" onclick="navigate('dashboard')">
+      <i class="fa fa-house"></i>
+      Home
+    </button>
 
-    </div>
+    <button class="bottom-nav-item" onclick="navigate('absensi')">
+      <i class="fa fa-clock"></i>
+      Absen
+    </button>
 
-  </div>
+    <button class="bottom-nav-item" onclick="navigate('pengajuan')">
+      <i class="fa fa-file"></i>
+      Izin
+    </button>
 
-  <!-- BOTTOM NAV -->
-  <nav id="bottomNav"></nav>
+    <button class="bottom-nav-item" onclick="navigate('riwayat')">
+      <i class="fa fa-list"></i>
+      Riwayat
+    </button>
+
+  </nav>
 
 </div>
 
