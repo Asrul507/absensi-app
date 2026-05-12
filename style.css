@@ -1,3 +1,4 @@
+
 /* ================= RESET ================= */
 * {
   margin: 0;
@@ -6,22 +7,25 @@
   font-family: "Inter", sans-serif;
 }
 
-body {
+html, body {
+  height: 100%;
   background: #f1f5f9;
   color: #111827;
 }
 
 /* ================= APP WRAPPER ================= */
 #appPage {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  height: 100vh;
   background: #f1f5f9;
 }
 
+/* ================= CONTENT AREA ================= */
 #content {
   flex: 1;
-  padding: 12px;
+  padding: 70px 12px 80px;
+  background: #f1f5f9;
   overflow-y: auto;
 }
 
@@ -43,16 +47,6 @@ body {
   box-shadow: 0 10px 30px rgba(0,0,0,0.15);
 }
 
-.login-logo {
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.login-icon {
-  font-size: 40px;
-  margin-bottom: 5px;
-}
-
 .login-field {
   margin-bottom: 12px;
 }
@@ -60,23 +54,16 @@ body {
 .login-field input {
   width: 100%;
   padding: 12px;
+  border-radius: 10px;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
-}
-
-.btn-login {
-  width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: 10px;
-  background: #2563eb;
-  color: white;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 /* ================= TOPBAR ================= */
 .topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 55px;
   background: white;
   display: flex;
@@ -84,9 +71,7 @@ body {
   align-items: center;
   padding: 0 12px;
   border-bottom: 1px solid #eee;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  z-index: 2000;
 }
 
 .topbar-left {
@@ -95,29 +80,28 @@ body {
   gap: 10px;
 }
 
-.btn-menu {
-  background: none;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-}
-
 .topbar-title {
   font-weight: 700;
+}
+
+.btn-menu {
+  font-size: 20px;
+  background: none;
+  border: none;
 }
 
 /* ================= SIDEBAR ================= */
 #sidebar {
   position: fixed;
-  left: -260px;
   top: 0;
-  width: 260px;
+  left: -270px;
+  width: 270px;
   height: 100%;
   background: #111827;
   color: white;
   padding: 15px;
   transition: 0.3s;
-  z-index: 1000;
+  z-index: 3000;
 }
 
 #sidebar.open {
@@ -127,9 +111,9 @@ body {
 .sidebar-nav a {
   display: block;
   padding: 12px;
+  border-radius: 10px;
   color: white;
   text-decoration: none;
-  border-radius: 10px;
 }
 
 .sidebar-nav a:hover {
@@ -142,7 +126,7 @@ body {
   inset: 0;
   background: rgba(0,0,0,0.4);
   display: none;
-  z-index: 999;
+  z-index: 2500;
 }
 
 #overlay.active {
@@ -153,26 +137,60 @@ body {
 .card {
   background: white;
   padding: 14px;
-  border-radius: 16px;
+  border-radius: 14px;
   margin-bottom: 12px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.05);
   border: 1px solid #eef2f7;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.05);
 }
 
-/* ================= DASHBOARD ================= */
-.dashboard-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* ================= INPUT & FORM ================= */
+input, select, textarea {
+  width: 100%;
+  padding: 10px;
+  margin-top: 6px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  outline: none;
+  background: white;
 }
 
-.dash-header {
-  background: linear-gradient(135deg,#2563eb,#1d4ed8);
+/* ================= BUTTON ================= */
+button {
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
   color: white;
-  padding: 16px;
-  border-radius: 16px;
+  cursor: pointer;
+  font-weight: 600;
 }
 
+button:disabled {
+  background: #9ca3af;
+}
+
+/* ================= TABLE (FIX TELANJANG ISSUE) ================= */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+th {
+  background: #f8fafc;
+  text-align: left;
+  padding: 10px;
+}
+
+td {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+/* ================= KPI DASHBOARD ================= */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -193,26 +211,13 @@ body {
 
 .kpi-card h1 {
   font-size: 22px;
-  margin-top: 5px;
 }
 
-/* warna KPI */
+/* warna border KPI */
 .kpi-card.blue { border-left: 4px solid #2563eb; }
 .kpi-card.green { border-left: 4px solid #10b981; }
 .kpi-card.orange { border-left: 4px solid #f59e0b; }
 .kpi-card.red { border-left: 4px solid #ef4444; }
-
-/* ================= TABLE ================= */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-th, td {
-  padding: 8px;
-  border-bottom: 1px solid #eee;
-}
 
 /* ================= SHIFT BOX ================= */
 .shift-box {
@@ -221,12 +226,14 @@ th, td {
   border-radius: 12px;
 }
 
-/* ================= BUTTON ================= */
-button {
-  padding: 10px;
-  border: none;
-  border-radius: 10px;
-  background: #2563eb;
-  color: white;
-  cursor: pointer;
+/* ================= BADGE ================= */
+.badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
 }
+
+.badge-green { background: #dcfce7; color: #166534; }
+.badge-red { background: #fee2e2; color: #991b1b; }
+.badge-yellow { background: #fef9c3; color: #854d0e; }
+.badge-gray { background: #e5e7eb; color: #374151; }
