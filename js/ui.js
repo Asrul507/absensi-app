@@ -423,3 +423,57 @@ export async function renderRiwayat() {
     </div>
   `
 }
+
+window.uploadJadwalExcel = async function () {
+
+  const file = document.getElementById('excelFile').files[0]
+
+  if (!file) {
+    alert("Pilih file Excel dulu")
+    return
+  }
+
+  const buffer = await file.arrayBuffer()
+
+  const workbook = XLSX.read(buffer)
+
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+
+  const json = XLSX.utils.sheet_to_json(sheet)
+
+  let result = []
+
+  json.forEach(row => {
+
+    const nama = row.nama
+
+    Object.keys(row).forEach(key => {
+
+      if (key === "nama") return
+
+      result.push({
+        nama: nama,
+        tanggal: key,
+        status: row[key]
+      })
+
+    })
+
+  })
+
+  console.log("DATA:", result)
+
+  // 🔥 INSERT KE SUPABASE
+  for (let item of result) {
+
+    await supabase.from('jadwal').insert({
+      nama: item.nama,
+      tanggal: item.tanggal,
+      status_override: item.status
+    })
+
+  }
+
+  alert("Upload jadwal berhasil ✔")
+
+}
