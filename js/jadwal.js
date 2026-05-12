@@ -166,8 +166,9 @@ window.createJadwal = async function () {
 
   const tanggal = document.getElementById('tanggalJadwal').value
   const user_id = document.getElementById('userJadwal').value
-  const shift_code = document.getElementById('shiftJadwal').value
-
+  const shift_code =
+  document.getElementById('shiftJadwal').value
+  
   if (!tanggal || !user_id || !shift_code) {
     alert('Lengkapi data')
     return
