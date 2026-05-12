@@ -148,6 +148,15 @@ export async function renderJadwalManagement() {
         </tbody>
 
       </table>
+      <div class="card">
+  <h3>Upload Jadwal Excel</h3>
+
+  <input type="file" id="excelFile" />
+
+  <button onclick="uploadJadwalExcel()">
+    Upload
+  </button>
+</div>
 
     </div>
   `
