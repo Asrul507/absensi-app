@@ -81,3 +81,67 @@ export async function renderKalenderHR() {
 
   content.innerHTML = html
 }
+
+window.openCalendarDetail = async function (tanggal) {
+
+  const content = document.getElementById('content')
+
+  const { data } = await supabase
+    .from('jadwal')
+    .select(`
+      *,
+      profiles:user_id(nama_lengkap),
+      shift:shift_id(nama_shift,jam_masuk,jam_pulang)
+    `)
+    .eq('tanggal', tanggal)
+
+  if (!data || data.length === 0) {
+    alert("Tidak ada data di tanggal ini")
+    return
+  }
+
+  content.innerHTML = `
+    <div class="card">
+
+      <button onclick="location.reload()">
+        ⬅ Kembali
+      </button>
+
+      <h2>📅 Detail Tanggal: ${tanggal}</h2>
+
+      ${data.map(j => {
+
+        let status = j.status_override || "shift"
+
+        let badge = "badge-gray"
+
+        if (status === "cuti") badge = "badge-green"
+        if (status === "sakit") badge = "badge-yellow"
+        if (status === "izin") badge = "badge-blue"
+
+        return `
+          <div class="card">
+
+            <h3>${j.profiles?.nama_lengkap || '-'}</h3>
+
+            <p>
+              <span class="${badge}">
+                ${status.toUpperCase()}
+              </span>
+            </p>
+
+            <p>
+              🏷 Shift: ${j.shift?.nama_shift || 'CUTI/OVERRIDE'}
+            </p>
+
+            <p>
+              ⏰ ${j.shift?.jam_masuk || '-'} - ${j.shift?.jam_pulang || '-'}
+            </p>
+
+          </div>
+        `
+      }).join('')}
+
+    </div>
+  `
+}
