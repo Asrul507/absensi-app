@@ -247,13 +247,10 @@ window.approvePengajuan = async function (id) {
 /* ================= REJECT ================= */
 window.rejectPengajuan = async function (id) {
 
-  const keterangan = prompt("Alasan reject:")
-
   const { error } = await supabase
     .from("pengajuan")
     .update({
-      status: "rejected",
-      keterangan_admin: keterangan || null
+      status: "rejected"
     })
     .eq("id", id)
 
@@ -262,8 +259,7 @@ window.rejectPengajuan = async function (id) {
     return
   }
 
-  
-  alert("Rejected")
+  alert("Pengajuan ditolak")
   renderPengajuan(window.currentUser)
 }
 
