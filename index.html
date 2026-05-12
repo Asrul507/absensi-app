@@ -3,21 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Genius Attendance</title>
+  <title>Genius HR App</title>
 
   <!-- ICON -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  
-  <!-- CSS KAMU -->
+
+  <!-- FONT -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- CSS -->
   <link rel="stylesheet" href="style.css"/>
 </head>
 
 <body>
 
-<!-- ================= LOGIN PAGE ================= -->
+<!-- ================= LOGIN ================= -->
 <div id="loginPage">
 
   <div class="login-box">
@@ -25,7 +25,7 @@
     <div class="login-logo">
       <div class="login-icon">🏢</div>
       <h1>GENIUS APP</h1>
-      <p>Attendance System</p>
+      <p>HR & Attendance System</p>
     </div>
 
     <div class="login-field">
@@ -42,20 +42,20 @@
       <i class="fa-solid fa-right-to-bracket"></i> Login
     </button>
 
-    <button class="btn-login" style="background:#059669;margin-top:10px;" onclick="signup()">
+    <button id="btnSignup" class="btn-login" style="background:#059669;margin-top:10px;" onclick="signup()">
+      Sign Up
     </button>
-    <button id="btnSignup" onclick="signup()">Sign Up</button>
 
   </div>
 
 </div>
 
-<!-- ================= APP PAGE ================= -->
-<!-- ================= APP PAGE ================= -->
+<!-- ================= APP ================= -->
 <div id="appPage" style="display:none;">
 
   <!-- TOPBAR -->
   <div class="topbar">
+
     <div class="topbar-left">
       <button class="btn-menu" onclick="toggleSidebar()">
         <i class="fa-solid fa-bars"></i>
@@ -69,50 +69,29 @@
         <i class="fa-solid fa-right-from-bracket"></i>
       </button>
     </div>
+
   </div>
 
-  <!-- OVERLAY -->
+  <!-- OVERLAY (WAJIB) -->
   <div id="overlay" onclick="closeSidebar()"></div>
 
   <!-- SIDEBAR -->
   <div id="sidebar"></div>
 
   <!-- CONTENT -->
-  <div id="content"></div>
+  <div id="content">
 
-  <!-- BOTTOM NAV (FIXED HR STYLE) -->
-  <nav id="bottomNav">
+    <div class="card">
+      <h3>Dashboard</h3>
+      <p>Selamat datang di HR System</p>
+    </div>
 
-    <button class="bottom-nav-item" onclick="navigate('dashboard')">
-      <i class="fa fa-house"></i>
-      Home
-    </button>
-
-    <button class="bottom-nav-item" onclick="navigate('absensi')">
-      <i class="fa fa-clock"></i>
-      Absen
-    </button>
-
-    <button class="bottom-nav-item" onclick="navigate('pengajuan')">
-      <i class="fa fa-file"></i>
-      Izin
-    </button>
-
-    <button class="bottom-nav-item" onclick="navigate('riwayat')">
-      <i class="fa fa-list"></i>
-      Riwayat
-    </button>
-
-  </nav>
+  </div>
 
 </div>
 
-<!-- ================= SCRIPTS ================= -->
-
-<!-- SUPABASE -->
+<!-- ================= SCRIPT ================= -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-
-<!-- JS APP -->
 <script type="module" src="js/app.js"></script>
 
 </body>
