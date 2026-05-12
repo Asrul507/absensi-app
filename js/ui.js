@@ -380,12 +380,7 @@ export async function renderRiwayat() {
     .order('tanggal', { ascending: false })
 
   if (error) {
-    content.innerHTML = `<div class="card">Gagal load riwayat</div>`
-    return
-  }
-
-  if (!data || data.length === 0) {
-    content.innerHTML = `<div class="card">Belum ada riwayat absensi</div>`
+    content.innerHTML = `<div class="card">Error load riwayat</div>`
     return
   }
 
@@ -393,36 +388,22 @@ export async function renderRiwayat() {
     <div class="card">
       <h2>Riwayat Absensi</h2>
 
-      <table style="width:100%;border-collapse:collapse;margin-top:10px">
+      <table>
+        <tr>
+          <th>Tanggal</th>
+          <th>Masuk</th>
+          <th>Pulang</th>
+          <th>Status</th>
+        </tr>
 
-        <thead>
+        ${data.map(r => `
           <tr>
-            <th>Tanggal</th>
-            <th>Masuk</th>
-            <th>Pulang</th>
-            <th>Status</th>
-            <th>Shift</th>
+            <td>${r.tanggal}</td>
+            <td>${r.waktu_masuk || '-'}</td>
+            <td>${r.waktu_pulang || '-'}</td>
+            <td>${r.status_masuk || '-'}</td>
           </tr>
-        </thead>
-
-        <tbody>
-          ${data.map(r => `
-            <tr>
-              <td>${r.tanggal}</td>
-              <td>${r.waktu_masuk || '-'}</td>
-              <td>${r.waktu_pulang || '-'}</td>
-              <td>
-                <span style="color:${
-                  r.status_masuk === 'Terlambat' ? 'red' : 'green'
-                }">
-                  ${r.status_masuk || '-'}
-                </span>
-              </td>
-              <td>${r.shift_id || '-'}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-
+        `).join('')}
       </table>
     </div>
   `
