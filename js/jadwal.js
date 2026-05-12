@@ -219,3 +219,15 @@ window.syncFromSheet = async function () {
   alert("Gunakan Google Apps Script untuk sync otomatis")
 
 }
+
+function mapShiftCode(code, shifts) {
+
+  const shiftMap = {
+    "2": shifts.find(s => s.nama_shift.toLowerCase().includes("pagi"))?.id,
+    "3": shifts.find(s => s.nama_shift.toLowerCase().includes("sore"))?.id,
+    "4": shifts.find(s => s.nama_shift.toLowerCase().includes("malam"))?.id,
+    "8": null // OFF = tidak masuk jadwal
+  }
+
+  return shiftMap[code] || null
+}
