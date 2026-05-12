@@ -96,7 +96,8 @@ function renderMenu(role) {
       { key: 'dashboard', name: 'Dashboard', icon: 'fa-house' },
       { key: 'absensi', name: 'Absensi', icon: 'fa-clock' },
       { key: 'pengajuan', name: 'Pengajuan', icon: 'fa-file' },
-      { key: 'riwayat', name: 'Riwayat', icon: 'fa-list' }
+      { key: 'riwayat', name: 'Riwayat', icon: 'fa-list' },
+      { key: 'kalender', name: 'Kalender HR', icon: 'fa-calendar-alt' }
     ]
   }
 
