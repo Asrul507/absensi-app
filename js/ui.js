@@ -26,7 +26,7 @@ function renderMenu(role) {
   sidebar.innerHTML = `
     <div class="sidebar-nav">
       ${menu.map(m => `
-        <a href="#" onclick="navigate('${m.key}')">
+       <a href="javascript:void(0)" onclick="navigate('${m.key}')">
           ${m.name}
         </a>
       `).join('')}
