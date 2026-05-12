@@ -1,77 +1,108 @@
+/* ===================== ROOT SYSTEM ===================== */
+:root {
+  --bg: #0f172a;
+  --surface: #111827;
+  --card: #1f2937;
+  --card2: #111827;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
 
-/* ================= RESET ================= */
+  --primary: #3b82f6;
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+
+  --radius: 14px;
+  --shadow: 0 10px 25px rgba(0,0,0,.25);
+}
+
+/* ===================== RESET ===================== */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: "Inter", sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
-html, body {
-  height: 100%;
-  background: #f1f5f9;
-  color: #111827;
+body {
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
 }
 
-/* ================= APP WRAPPER ================= */
-#appPage {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #f1f5f9;
-}
-
-/* ================= CONTENT AREA ================= */
-#content {
-  flex: 1;
-  padding: 70px 12px 80px;
-  background: #f1f5f9;
-  overflow-y: auto;
-}
-
-/* ================= LOGIN ================= */
+/* ===================== LOGIN ===================== */
 #loginPage {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  padding: 20px;
 }
 
 .login-box {
-  width: 90%;
+  width: 100%;
   max-width: 380px;
-  background: white;
-  padding: 20px;
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  background: var(--card);
+  padding: 25px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.login-logo {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.login-icon {
+  font-size: 40px;
+  margin-bottom: 10px;
 }
 
 .login-field {
   margin-bottom: 12px;
 }
 
+.login-field label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .login-field input {
   width: 100%;
   padding: 12px;
+  margin-top: 5px;
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border: none;
+  background: #0b1220;
+  color: white;
+  outline: none;
 }
 
-/* ================= TOPBAR ================= */
+.btn-login {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ===================== TOPBAR ===================== */
 .topbar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   height: 55px;
-  background: white;
+  background: var(--surface);
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 12px;
-  border-bottom: 1px solid #eee;
-  z-index: 2000;
+  z-index: 1000;
+  border-bottom: 1px solid #1f2937;
 }
 
 .topbar-left {
@@ -84,113 +115,126 @@ html, body {
   font-weight: 700;
 }
 
-.btn-menu {
-  font-size: 20px;
+.btn-menu,
+.btn-logout-top {
   background: none;
   border: none;
+  color: white;
+  font-size: 18px;
 }
 
-/* ================= SIDEBAR ================= */
+/* ===================== SIDEBAR ===================== */
 #sidebar {
   position: fixed;
   top: 0;
-  left: -270px;
-  width: 270px;
-  height: 100%;
-  background: #111827;
-  color: white;
-  padding: 15px;
+  left: -260px;
+  width: 260px;
+  height: 100vh;
+  background: var(--surface);
+  z-index: 1100;
   transition: 0.3s;
-  z-index: 3000;
+  padding: 20px;
 }
 
 #sidebar.open {
   left: 0;
 }
 
+.sidebar-header {
+  margin-bottom: 20px;
+}
+
+.sb-name {
+  font-weight: 700;
+}
+
+.sb-role {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .sidebar-nav a {
-  display: block;
-  padding: 12px;
-  border-radius: 10px;
+  display: flex;
+  gap: 10px;
+  padding: 10px;
   color: white;
   text-decoration: none;
+  border-radius: 10px;
 }
 
 .sidebar-nav a:hover {
   background: #1f2937;
 }
 
-/* ================= OVERLAY ================= */
+/* ===================== OVERLAY ===================== */
 #overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0,0,0,.5);
   display: none;
-  z-index: 2500;
+  z-index: 1000;
 }
 
 #overlay.active {
   display: block;
 }
 
-/* ================= CARD SYSTEM ================= */
-.card {
-  background: white;
-  padding: 14px;
-  border-radius: 14px;
-  margin-bottom: 12px;
-  border: 1px solid #eef2f7;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.05);
+/* ===================== CONTENT ===================== */
+#appPage {
+  padding-top: 60px;
 }
 
-/* ================= INPUT & FORM ================= */
+#content {
+  padding: 15px;
+}
+
+/* ===================== CARD ===================== */
+.card {
+  background: var(--card);
+  padding: 15px;
+  border-radius: var(--radius);
+  margin-bottom: 15px;
+  box-shadow: var(--shadow);
+}
+
+/* ===================== TABLE ===================== */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow-x: auto;
+  display: block;
+}
+
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ===================== INPUT ===================== */
 input, select, textarea {
   width: 100%;
   padding: 10px;
-  margin-top: 6px;
+  margin-top: 8px;
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
-  outline: none;
-  background: white;
+  border: none;
+  background: #0b1220;
+  color: white;
 }
 
-/* ================= BUTTON ================= */
+/* ===================== BUTTON ===================== */
 button {
-  padding: 10px;
-  border: none;
+  padding: 10px 12px;
   border-radius: 10px;
-  background: #2563eb;
+  border: none;
+  background: var(--primary);
   color: white;
   cursor: pointer;
   font-weight: 600;
 }
 
-button:disabled {
-  background: #9ca3af;
-}
-
-/* ================= TABLE (FIX TELANJANG ISSUE) ================= */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  font-size: 13px;
-}
-
-th {
-  background: #f8fafc;
-  text-align: left;
-  padding: 10px;
-}
-
-td {
-  padding: 10px;
-  border-bottom: 1px solid #eee;
-}
-
-/* ================= KPI DASHBOARD ================= */
+/* ===================== DASHBOARD ===================== */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -198,42 +242,25 @@ td {
 }
 
 .kpi-card {
-  background: white;
-  padding: 14px;
-  border-radius: 14px;
-  border: 1px solid #eef2f7;
-}
-
-.kpi-card h4 {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.kpi-card h1 {
-  font-size: 22px;
-}
-
-/* warna border KPI */
-.kpi-card.blue { border-left: 4px solid #2563eb; }
-.kpi-card.green { border-left: 4px solid #10b981; }
-.kpi-card.orange { border-left: 4px solid #f59e0b; }
-.kpi-card.red { border-left: 4px solid #ef4444; }
-
-/* ================= SHIFT BOX ================= */
-.shift-box {
-  background: #f3f4f6;
+  background: var(--card);
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--radius);
 }
 
-/* ================= BADGE ================= */
+/* ===================== BADGE ===================== */
 .badge {
   padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: 8px;
+  font-size: 12px;
 }
 
-.badge-green { background: #dcfce7; color: #166534; }
-.badge-red { background: #fee2e2; color: #991b1b; }
-.badge-yellow { background: #fef9c3; color: #854d0e; }
-.badge-gray { background: #e5e7eb; color: #374151; }
+.badge-green { background: var(--green); }
+.badge-red { background: var(--red); }
+.badge-yellow { background: var(--yellow); }
+
+/* ===================== RESPONSIVE ===================== */
+@media (min-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
