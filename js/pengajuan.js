@@ -190,26 +190,56 @@ export async function renderPengajuan(user) {
 /* ================= APPROVE ================= */
 window.approvePengajuan = async function (id) {
 
-  const keterangan = prompt("Keterangan admin (opsional)")
-
-  const { data: p } = await supabase
-    .from("pengajuan")
-    .select("*")
-    .eq("id", id)
-    .single()
-
-  await supabase
+  // 1. update status pengajuan
+  const { data: pengajuan, error } = await supabase
     .from("pengajuan")
     .update({
-      status: "approved",
-      keterangan_admin: keterangan || null
+      status: "approved"
     })
     .eq("id", id)
+    .select()
+    .single()
 
-  // 🔥 INI INTI NYA
-  await updateJadwalCuti(p)
+  if (error) {
+    alert("Gagal approve")
+    return
+  }
 
-  alert("Approved & jadwal diperbarui ✔")
+  // 2. ambil data detail pengajuan
+  const user_id = pengajuan.user_id
+  const jenis = pengajuan.jenis
+  const tanggalMulai = pengajuan.tanggal_mulai
+  const jumlahHari = pengajuan.jumlah_hari || 1
+
+  // 3. generate jadwal otomatis (loop hari)
+  let insertData = []
+
+  for (let i = 0; i < jumlahHari; i++) {
+
+    let date = new Date(tanggalMulai)
+    date.setDate(date.getDate() + i)
+
+    insertData.push({
+      user_id: user_id,
+      tanggal: date.toISOString().split('T')[0],
+      shift_id: null,
+      status_override: jenis, // cuti / sakit / izin
+      pengajuan_id: id
+    })
+  }
+
+  // 4. insert ke jadwal
+  const { error: insertError } = await supabase
+    .from("jadwal")
+    .insert(insertData)
+
+  if (insertError) {
+    console.log(insertError)
+    alert("Approved tapi gagal generate jadwal")
+    return
+  }
+
+  alert("Pengajuan di-approve & jadwal otomatis dibuat")
 
   renderPengajuan(window.currentUser)
 }
