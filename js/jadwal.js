@@ -11,8 +11,8 @@ export async function renderJadwalManagement() {
     .select('*')
     .eq('status_akun', 'Aktif')
 
-  // SHIFTS
-  const { data: shifts } = await supabase
+  // SHIFTS (optional, tidak dipakai kalau pakai kode 2/3/4/8)
+  const { data: s } = await supabase
     .from('shift')
     .select('*')
 
@@ -21,22 +21,26 @@ export async function renderJadwalManagement() {
     .from('jadwal')
     .select(`
       *,
-      profiles:user_id(nama_lengkap),
-      shift:shift_id(nama_shift,jam_masuk,jam_pulang)
+      profiles:user_id(nama_lengkap)
     `)
     .order('tanggal', { ascending: false })
+
+
+  // ================= STATUS LABEL =================
   let getStatusLabel = (j) => {
 
-  let statusText = j.status_override
+    let statusText = j.status_override
 
-  if (!statusText) return j.shift?.nama_shift || '-'
+    if (!statusText) return j.shift_code || '-'
 
-  if (statusText === "cuti") return "🟢 CUTI"
-  if (statusText === "sakit") return "🟡 SAKIT"
-  if (statusText === "izin") return "🔵 IZIN"
+    if (statusText === "cuti") return "🟢 CUTI"
+    if (statusText === "sakit") return "🟡 SAKIT"
+    if (statusText === "izin") return "🔵 IZIN"
+    if (statusText === "off") return "⚫ OFF"
 
-  return statusText
-}
+    return statusText
+  }
+
 
   content.innerHTML = `
 
@@ -50,9 +54,7 @@ export async function renderJadwalManagement() {
 
         <select id="userJadwal">
 
-          <option value="">
-            Pilih Staff
-          </option>
+          <option value="">Pilih Staff</option>
 
           ${users.map(u => `
             <option value="${u.id}">
@@ -64,16 +66,13 @@ export async function renderJadwalManagement() {
 
         <select id="shiftJadwal">
 
-  <option value="">
-    Pilih Shift
-  </option>
+          <option value="">Pilih Shift</option>
+          <option value="2">Shift Pagi</option>
+          <option value="3">Shift Sore</option>
+          <option value="4">Shift Malam</option>
+          <option value="8">OFF</option>
 
-  <option value="2">Shift Pagi</option>
-  <option value="3">Shift Sore</option>
-  <option value="4">Shift Malam</option>
-  <option value="8">OFF</option>
-
-</select>
+        </select>
 
         <button onclick="createJadwal()">
           Simpan Jadwal
@@ -101,61 +100,82 @@ export async function renderJadwalManagement() {
 
         <tbody>
 
-          ${jadwal.map(j => `
-            <tr>
+          ${jadwal.map(j => {
 
-              <td>${j.tanggal}</td>
+            // SHIFT MANUAL CODE SYSTEM
+            let shiftText = '-'
+            let jamText = '-'
 
-              <td>
-                ${j.profiles?.nama_lengkap || '-'}
-              </td>
+            if (j.shift_id == "2") {
+              shiftText = "Shift Pagi"
+              jamText = "07:00 - 15:00"
+            }
 
-              <td>
-               <td>
-  ${
-    j.status_override
-      ? `<span style="
-          padding:4px 10px;
-          border-radius:8px;
-          font-weight:600;
-          font-size:12px;
-          background:#111827;
-          color:#fff;
-          display:inline-block;
-        ">
-        ${getStatusLabel(j)}
-      </span>`
-      : (j.shift?.nama_shift || '-')
-  }
-</td>
-              </td>
+            if (j.shift_id == "3") {
+              shiftText = "Shift Sore"
+              jamText = "15:00 - 23:00"
+            }
 
-              <td>
+            if (j.shift_id == "4") {
+              shiftText = "Shift Malam"
+              jamText = "23:00 - 07:00"
+            }
 
-                <button
-                  onclick="deleteJadwal('${j.id}')">
+            if (j.shift_id == "8") {
+              shiftText = "OFF"
+              jamText = "-"
+            }
 
-                  Hapus
+            // OVERRIDE CUTI / SAKIT / IZIN
+            if (j.status_override === "cuti") {
+              shiftText = "🟢 CUTI"
+              jamText = "-"
+            }
 
-                </button>
+            if (j.status_override === "sakit") {
+              shiftText = "🟡 SAKIT"
+              jamText = "-"
+            }
 
-              </td>
+            if (j.status_override === "izin") {
+              shiftText = "🔵 IZIN"
+              jamText = "-"
+            }
 
-            </tr>
-          `).join('')}
+            return `
+              <tr>
+
+                <td>${j.tanggal}</td>
+
+                <td>${j.profiles?.nama_lengkap || '-'}</td>
+
+                <td>${shiftText}</td>
+
+                <td>${jamText}</td>
+
+                <td>
+                  <button onclick="deleteJadwal('${j.id}')">
+                    Hapus
+                  </button>
+                </td>
+
+              </tr>
+            `
+          }).join('')}
 
         </tbody>
 
       </table>
+
       <div class="card">
-  <h3>Upload Jadwal Excel</h3>
+        <h3>Upload Jadwal Excel</h3>
 
-  <input type="file" id="excelFile" />
+        <input type="file" id="excelFile" />
 
-  <button onclick="uploadJadwalExcel()">
-    Upload
-  </button>
-</div>
+        <button onclick="uploadJadwalExcel()">
+          Upload
+        </button>
+      </div>
 
     </div>
   `
