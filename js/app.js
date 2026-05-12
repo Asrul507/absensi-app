@@ -5,6 +5,7 @@ import { renderAbsensi } from './ui.js'
 import { renderDashboard } from './dashboard.js'
 import { renderShiftManagement } from './shift.js'
 import { renderJadwalManagement } from './jadwal.js'
+import { renderRiwayat } from './ui.js'
 
 /* ================= GLOBAL STATE ================= */
 window.currentUser = null
