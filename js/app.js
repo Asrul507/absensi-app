@@ -186,7 +186,7 @@ function renderMenu(role) {
 }
 
 /* ================= NAVIGATE ================= */
-window.navigate = function(page) {
+window.navigate = async function(page) {
 
   if (!window.currentUser) {
     alert("Silakan login dulu")
