@@ -81,16 +81,24 @@ export async function renderPengajuan(user) {
                 ? `<a href="${i.file}" target="_blank">📎 Lihat File</a>`
                 : ""}
 
-              ${
-                isAdmin
-                  ? `
-                    <div style="margin-top:10px; display:flex; gap:8px;">
-                      <button onclick="approvePengajuan('${i.id}')">Approve</button>
-                      <button onclick="rejectPengajuan('${i.id}')">Reject</button>
-                    </div>
-                  `
-                  : ""
-              }
+             ${
+  isAdmin && i.status === "pending"
+    ? `
+      <div style="margin-top:10px; display:flex; gap:8px;">
+        <button onclick="approvePengajuan('${i.id}')">Approve</button>
+        <button onclick="rejectPengajuan('${i.id}')">Reject</button>
+      </div>
+    `
+    : `
+      <div style="margin-top:10px;">
+        <span class="badge ${
+          i.status === "approved"
+            ? "badge-green"
+            : i.status === "rejected"
+              ? "badge-red"
+              : "badge-yellow"
+        }">
+          ${i.status.toUpperCase()}
 
             </div>
           `).join("")
