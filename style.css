@@ -1336,32 +1336,65 @@ tr:hover {
   }
 }
 
-/*# Tambahan HTML penting
+.dashboard-container {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
 
-Pastikan di `index.html` ada:
+.dash-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
 
-```html
-<button class="menu-toggle" onclick="toggleSidebar()">
-  ☰
-</button>
+.dash-header p {
+  margin-top: 5px;
+  color: #777;
+}
 
-<div id="overlay" onclick="closeSidebar()"></div>
-```
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
+}
 
-Dan tambahkan Font Awesome di `<head>`:
+.kpi-card {
+  padding: 20px;
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
 
-```html
-<link
-  rel="stylesheet"
-  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-/>
-```
+.kpi-card h1 {
+  font-size: 28px;
+  margin: 10px 0;
+}
 
-Serta font Inter:
+.kpi-card.blue { background: linear-gradient(135deg,#2196F3,#1E88E5); }
+.kpi-card.green { background: linear-gradient(135deg,#4CAF50,#2E7D32); }
+.kpi-card.orange { background: linear-gradient(135deg,#FF9800,#F57C00); }
+.kpi-card.red { background: linear-gradient(135deg,#F44336,#C62828); }
 
-```html
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-```
-/*
+.status-bar {
+  margin-top: 20px;
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot.green { background: #4CAF50; }
+.dot.orange { background: #FF9800; }
+.dot.red { background: #F44336; }
