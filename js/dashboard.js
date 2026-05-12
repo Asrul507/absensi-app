@@ -5,71 +5,87 @@ export async function renderDashboard() {
   const content = document.getElementById('content')
 
   content.innerHTML = `
-    <div class="card">
-      <h3>Loading dashboard...</h3>
+    <div class="dashboard-container">
+
+      <!-- HEADER -->
+      <div class="dash-header">
+        <h2>Hotel Operation Dashboard</h2>
+        <p>Real-time KPI & Attendance Overview</p>
+      </div>
+
+      <!-- GRID KPI -->
+      <div class="kpi-grid">
+
+        <div class="kpi-card blue">
+          <h4>Total Staff</h4>
+          <h1 id="totalUser">0</h1>
+          <small>Active employees</small>
+        </div>
+
+        <div class="kpi-card green">
+          <h4>Present Today</h4>
+          <h1 id="hadir">0</h1>
+          <small>Checked in today</small>
+        </div>
+
+        <div class="kpi-card orange">
+          <h4>Not Yet Check-in</h4>
+          <h1 id="belum">0</h1>
+          <small>Pending attendance</small>
+        </div>
+
+        <div class="kpi-card red">
+          <h4>Late Arrival</h4>
+          <h1 id="telat">0</h1>
+          <small>Late check-in</small>
+        </div>
+
+      </div>
+
+      <!-- STATUS BAR -->
+      <div class="status-bar">
+
+        <div class="status-item">
+          <span class="dot green"></span>
+          On Time
+        </div>
+
+        <div class="status-item">
+          <span class="dot orange"></span>
+          Late
+        </div>
+
+        <div class="status-item">
+          <span class="dot red"></span>
+          Absent Risk
+        </div>
+
+      </div>
+
     </div>
   `
 
+  /* ================= DATA ================= */
   const today = new Date().toISOString().split('T')[0]
 
-  /* ================= TOTAL USER ================= */
-  const { data: users, error } = await supabase
-  .from('profiles')
-  .select('id')
+  const { count: totalUser } = await supabase
+    .from('profiles')
+    .select('*', { count: 'exact', head: true })
 
-console.log('USERS:', users, error)
-
-const totalUser = users?.length || 0
-
-  /* ================= ABSENSI HARI INI ================= */
   const { data: absensi } = await supabase
     .from('absensi')
     .select('*')
     .eq('tanggal', today)
 
   const totalAbsen = absensi?.length || 0
-
   const hadir = absensi?.filter(a => a.waktu_masuk).length || 0
-
   const telat = absensi?.filter(a => a.status_masuk === 'Terlambat').length || 0
-  const tepatWaktu = absensi?.filter(a => a.status_masuk === 'Tepat Waktu').length || 0
+  const tepat = absensi?.filter(a => a.status_masuk === 'Tepat Waktu').length || 0
+  const belum = (totalUser || 0) - totalAbsen
 
-  const belumAbsen = Math.max((totalUser || 0) - totalAbsen, 0)
-
-  /* ================= RENDER UI ================= */
-  content.innerHTML = `
-    <div class="dashboard-grid">
-
-      <div class="card">
-        <h3>Total User</h3>
-        <h1>${totalUser || 0}</h1>
-      </div>
-
-      <div class="card">
-        <h3>Hadir Hari Ini</h3>
-        <h1>${hadir}</h1>
-      </div>
-
-      <div class="card">
-        <h3>Belum Absen</h3>
-        <h1 style="color:orange">${belumAbsen}</h1>
-      </div>
-
-      <div class="card">
-        <h3>Tepat Waktu</h3>
-        <h1 style="color:green">${tepatWaktu}</h1>
-      </div>
-
-      <div class="card">
-        <h3>Terlambat</h3>
-        <h1 style="color:red">${telat}</h1>
-      </div>
-
-    </div>
-  `
+  /* ================= UPDATE UI ================= */
+  document.getElementById('totalUser').innerText = totalUser || 0
+  document.getElementById('hadir').innerText = hadir
+  document.getElementById('belum').innerText = belum
+  document.getElementById('telat').innerText = telat
 }
-const test = await supabase
-  .from('profiles')
-  .select('*')
-
-console.log('PROFILES DATA:', test)
