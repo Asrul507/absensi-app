@@ -241,3 +241,41 @@ button:hover {
     max-width: 1400px;
   }
 }
+
+/* ===================== GLOBAL SAFE WRAPPER FIX ===================== */
+#content > * {
+  margin-bottom: 15px;
+}
+
+/* semua grid inline dipaksa modern */
+div[style*="display:grid"] {
+  display: grid !important;
+  gap: 12px !important;
+}
+
+/* semua table auto modern */
+table {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(17,24,39,.6);
+}
+
+th {
+  text-align: left;
+  background: rgba(255,255,255,.05);
+}
+
+tr:hover {
+  background: rgba(255,255,255,.03);
+}
+
+/* semua button biar konsisten */
+button {
+  width: auto;
+}
+
+/* safety text biar gak putih polos */
+p, span, small {
+  color: var(--text);
+}
