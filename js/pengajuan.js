@@ -192,7 +192,13 @@ window.approvePengajuan = async function (id) {
 
   const keterangan = prompt("Keterangan admin (opsional)")
 
-  const { error } = await supabase
+  const { data: p } = await supabase
+    .from("pengajuan")
+    .select("*")
+    .eq("id", id)
+    .single()
+
+  await supabase
     .from("pengajuan")
     .update({
       status: "approved",
@@ -200,12 +206,11 @@ window.approvePengajuan = async function (id) {
     })
     .eq("id", id)
 
-  if (error) {
-    alert("Gagal approve")
-    return
-  }
+  // 🔥 INI INTI NYA
+  await updateJadwalCuti(p)
 
-  alert("Approved")
+  alert("Approved & jadwal diperbarui ✔")
+
   renderPengajuan(window.currentUser)
 }
 
@@ -227,6 +232,42 @@ window.rejectPengajuan = async function (id) {
     return
   }
 
+  
   alert("Rejected")
   renderPengajuan(window.currentUser)
+}
+
+
+async function updateJadwalCuti(pengajuan) {
+
+  if (!pengajuan.tanggal_mulai || !pengajuan.tanggal_selesai) return
+
+  const start = new Date(pengajuan.tanggal_mulai)
+  const end = new Date(pengajuan.tanggal_selesai)
+
+  let current = new Date(start)
+
+  const updates = []
+
+  while (current <= end) {
+
+    const tanggal = current.toISOString().split('T')[0]
+
+    updates.push({
+      user_id: pengajuan.user_id,
+      tanggal,
+      status_override: pengajuan.jenis, // cuti / sakit / izin
+      shift_id: null // kosongkan shift karena libur
+    })
+
+    current.setDate(current.getDate() + 1)
+  }
+
+  const { error } = await supabase
+    .from("jadwal")
+    .upsert(updates, {
+      onConflict: ['user_id', 'tanggal']
+    })
+
+  if (error) console.error(error)
 }
