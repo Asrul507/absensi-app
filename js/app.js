@@ -214,6 +214,12 @@ window.navigate = async function(page) {
     return
   }
 
+  //=============Pengajuan================
+  if (page === 'pengajuan') {
+  renderPengajuan(window.currentUser)
+  return
+}
+
   // ================= JADWAL =================
   if (page === 'jadwal') {
     renderJadwalManagement()
