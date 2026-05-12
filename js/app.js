@@ -42,7 +42,12 @@ console.log('SIDEBAR:', document.getElementById('sidebar'))
 console.log('CONTENT:', document.getElementById('content'))
 
   if (!profile) {
+
   console.log('PROFILE TIDAK ADA')
+
+  loginPage.style.display = 'flex'
+  appPage.style.display = 'none'
+
   return
 }
   window.currentShift = null // nanti diisi dari shift table
