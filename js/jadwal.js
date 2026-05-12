@@ -205,3 +205,6 @@ window.deleteJadwal = async function(id) {
 
   renderJadwalManagement()
 }
+<button onclick="syncFromSheet()">
+  🔄 Sync Jadwal Bulanan
+</button>
