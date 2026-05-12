@@ -214,9 +214,6 @@ window.deleteJadwal = async function(id) {
 
   renderJadwalManagement()
 }
-<button onclick="syncFromSheet()">
-  🔄 Sync Jadwal Bulanan
-</button>
 window.syncFromSheet = async function () {
 
   alert("Gunakan Google Apps Script untuk sync otomatis")
