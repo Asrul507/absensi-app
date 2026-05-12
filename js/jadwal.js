@@ -165,17 +165,25 @@ export async function renderJadwalManagement() {
 /* ================= CREATE ================= */
 window.createJadwal = async function () {
 
-  const tanggal =
-    document.getElementById('tanggalJadwal').value
+  const tanggal = document.getElementById('tanggalJadwal').value
+  const user_id = document.getElementById('userJadwal').value
+  const shift_code = document.getElementById('shiftJadwal').value
 
-  const user_id =
-    document.getElementById('userJadwal').value
-
-  const shift_id =
-    document.getElementById('shiftJadwal').value
-
-  if (!tanggal || !user_id || !shift_id) {
+  if (!tanggal || !user_id || !shift_code) {
     alert('Lengkapi data')
+    return
+  }
+
+  // ambil semua shift dulu
+  const { data: shifts } = await supabase
+    .from('shift')
+    .select('*')
+
+  const shift_id = mapShiftCode(shift_code, shifts)
+
+  // OFF = tidak masuk jadwal
+  if (shift_code === "8") {
+    alert("Hari OFF tidak disimpan ke jadwal")
     return
   }
 
@@ -196,10 +204,8 @@ window.createJadwal = async function () {
   }
 
   alert('Jadwal berhasil dibuat')
-
   renderJadwalManagement()
 }
-
 /* ================= DELETE ================= */
 window.deleteJadwal = async function(id) {
 
