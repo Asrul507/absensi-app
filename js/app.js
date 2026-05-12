@@ -12,6 +12,8 @@ import { renderPengajuan } from "./pengajuan.js"
 window.currentUser = null
 window.currentShift = null
 
+window.supabase = supabase
+
 /* ================= INIT ================= */
 window.addEventListener('DOMContentLoaded', () => {
   checkUser()
@@ -359,7 +361,7 @@ window.createProfile = async function () {
     return
   }
 
-  await signup(email, password, role)
+  await doSignup(email, password, role)
 
   alert('Profile berhasil dibuat')
 
