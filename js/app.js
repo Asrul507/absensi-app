@@ -109,7 +109,9 @@ function renderMenu(role) {
       { key: 'jadwal', name: 'Jadwal', icon: 'fa-calendar-days' },
       { key: 'pengajuan', name: 'Approval', icon: 'fa-inbox' },
       { key: 'users', name: 'Users', icon: 'fa-users' },
-      { key: 'rekap', name: 'Rekap', icon: 'fa-chart-bar' }
+      { key: 'rekap', name: 'Rekap', icon: 'fa-chart-bar' },
+      { key: 'riwayat', name: 'Riwayat', icon: 'fa-list' },
+      { key: 'kalender', name: 'Kalender HR', icon: 'fa-calendar' }
     ]
   }
 
@@ -122,7 +124,9 @@ function renderMenu(role) {
       { key: 'pengajuan', name: 'Approval', icon: 'fa-inbox' },
       { key: 'users', name: 'User Management', icon: 'fa-users' },
       { key: 'rekap', name: 'Rekap', icon: 'fa-chart-line' },
-      { key: 'settings', name: 'Settings', icon: 'fa-gear' }
+      { key: 'settings', name: 'Settings', icon: 'fa-gear' },
+      { key: 'riwayat', name: 'Riwayat', icon: 'fa-list' },
+      { key: 'kalender', name: 'Kalender HR', icon: 'fa-calendar' }
     ]
   }
 
