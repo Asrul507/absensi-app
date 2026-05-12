@@ -63,11 +63,15 @@ export async function renderKalenderHR() {
     }
 
     html += `
-      <div class="cal-day" style="background:${color}">
-        <div class="cal-date">${d}</div>
-        <div class="cal-label">${label}</div>
-      </div>
-    `
+  <div class="cal-day"
+    onclick="openCalendarDetail('${key}')"
+    style="background:${color};cursor:pointer">
+
+    <div class="cal-date">${d}</div>
+    <div class="cal-label">${label}</div>
+
+  </div>
+`
   }
 
   html += `
