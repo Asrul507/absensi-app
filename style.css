@@ -1,165 +1,183 @@
-/* =========================
-   FIX GLOBAL MOBILE OVERFLOW
-========================= */
-html, body {
-  width: 100%;
-  overflow-x: hidden;
+/* =========================================
+   1. DASAR & VARIABLE (KONTRAS TINGGI)
+   ========================================= */
+:root {
+  --bg-main: #0f172a;        /* Gelap Midnight */
+  --bg-card: #1e293b;        /* Abu-abu Gelap */
+  --primary: #3b82f6;        /* Biru Terang */
+  --accent: #60a5fa;         /* Biru Muda Glow */
+  --text-main: #f8fafc;      /* Putih Kristal */
+  --text-muted: #94a3b8;     /* Abu-abu Soft */
+  
+  /* Efek 3D/4D Depth */
+  --shadow-3d: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.4),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1); /* Cahaya tepi atas */
 }
 
-/* =========================
-   CONTENT RESPONSIVE FIX
-========================= */
-#content {
-  margin-left: 0;
-  padding: 12px;
-  padding-bottom: 80px;
+* {
+  box-sizing: border-box;
+  margin: 0; padding: 0;
 }
 
-/* desktop sidebar tetap jalan */
-@media(min-width: 900px) {
-  #content {
-    margin-left: 260px;
-    padding: 20px;
-  }
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-main);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+  color: var(--text-main);
+  min-height: 100vh;
 }
 
-/* =========================
-   SIDEBAR FIX MOBILE
-========================= */
-#sidebar {
-  width: 260px;
-  transform: translateX(-100%);
-  transition: 0.3s ease;
-  z-index: 999;
-}
-
-#sidebar.open {
-  transform: translateX(0);
-}
-
-/* overlay wajib */
-#overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  display: none;
-  z-index: 998;
-}
-
-#overlay.active {
-  display: block;
-}
-
-/* =========================
-   CARD FIX MOBILE
-========================= */
-.card {
-  width: 100%;
-  padding: 14px;
-  margin-bottom: 10px;
-  border-radius: 14px;
-}
-
-/* =========================
-   BUTTON FIX MOBILE
-========================= */
-button {
-  width: auto;
-  max-width: 100%;
-  padding: 10px 12px;
-  font-size: 14px;
-}
-
-@media(max-width: 600px) {
-  button {
-    width: 100%;
-  }
-}
-
-/* =========================
-   FORM FIX MOBILE
-========================= */
-input, select, textarea {
-  font-size: 14px;
-  padding: 10px;
-}
-
-/* =========================
-   TABLE FIX (INI PENTING)
-========================= */
-table {
-  width: 100%;
-  min-width: 600px;
-  border-collapse: collapse;
-}
-
-.table-wrapper {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* bikin scroll horizontal aman */
-@media(max-width: 768px) {
-  table {
-    min-width: 700px;
-  }
-
-  th, td {
-    font-size: 12px;
-    padding: 8px;
-    white-space: nowrap;
-  }
-}
-
-/* =========================
-   PENGAJUAN CARD FIX
-========================= */
-.pengajuan-card {
+/* =========================================
+   2. LOGIN PAGE (EFEK MELAYANG/3D)
+   ========================================= */
+#loginPage {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
 }
 
-.pengajuan-card .pq-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* tombol approve/reject di mobile */
-@media(max-width: 600px) {
-  .pq-actions button {
-    flex: 1;
-    width: 100%;
-  }
-}
-
-/* =========================
-   DASHBOARD GRID FIX
-========================= */
-.stats-grid {
-  grid-template-columns: 1fr;
-}
-
-@media(min-width: 700px) {
-  .stats-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-/* =========================
-   LOGIN FIX MOBILE
-========================= */
 .login-box {
+  background: var(--bg-card);
   width: 100%;
-  padding: 18px;
+  max-width: 380px;
+  padding: 40px 30px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-3d);
+  text-align: center;
 }
 
-/* =========================
-   PREVENT OVERLAP TEXT
-========================= */
-.card, .pengajuan-card {
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+.login-icon {
+  font-size: 50px;
+  margin-bottom: 15px;
+  filter: drop-shadow(0 0 10px var(--accent));
+}
+
+.login-logo h1 {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.login-logo p {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-bottom: 35px;
+}
+
+/* =========================================
+   3. INPUT FIELD (NEUMORPHISM STYLE)
+   ========================================= */
+.login-field {
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.login-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.login-field input {
+  width: 100%;
+  padding: 15px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  color: #fff;
+  font-size: 15px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+  transition: 0.3s;
+}
+
+.login-field input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: rgba(15, 23, 42, 0.8);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+/* =========================================
+   4. TOMBOL 3D (TACTILE BUTTON)
+   ========================================= */
+.btn-login, #btnSignup {
+  width: 100%;
+  padding: 16px;
+  margin-top: 10px;
+  border: none;
+  border-radius: 15px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #fff;
+  background: linear-gradient(145deg, #3b82f6, #2563eb);
+  /* Efek Tebal 3D */
+  box-shadow: 0 6px 0 #1d4ed8, 0 10px 20px rgba(0,0,0,0.4);
+  transition: all 0.1s;
+}
+
+.btn-login:active, #btnSignup:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 #1d4ed8, 0 5px 10px rgba(0,0,0,0.4);
+}
+
+#btnSignup {
+  background: rgba(255,255,255,0.05);
+  box-shadow: 0 6px 0 #334155;
+  margin-top: 15px;
+}
+
+/* =========================================
+   5. APP PAGE & TOPBAR
+   ========================================= */
+.topbar {
+  background: rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(10px);
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.topbar-title {
+  font-weight: 800;
+  color: var(--primary);
+  font-size: 18px;
+  letter-spacing: 2px;
+}
+
+.card {
+  background: var(--bg-card);
+  padding: 25px;
+  border-radius: 25px;
+  box-shadow: var(--shadow-3d);
+  margin-top: 20px;
+}
+
+.card-title {
+  font-weight: 700;
+  margin-bottom: 15px;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
