@@ -1,257 +1,98 @@
-/* =========================
-   HR MOBILE 3D UI FINAL
-========================= */
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Genius HR App</title>
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+  <!-- ICON -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
 
-:root {
-  --bg: #0b1220;
-  --card: rgba(255,255,255,0.06);
-  --card2: rgba(255,255,255,0.08);
-  --text: #e5e7eb;
-  --muted: #9ca3af;
+  <!-- FONT -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  --primary: #3b82f6;
-  --success: #22c55e;
-  --danger: #ef4444;
-  --warning: #f59e0b;
+  <!-- CSS -->
+  <link rel="stylesheet" href="style.css"/>
+</head>
 
-  --radius: 18px;
-  --shadow: 0 12px 30px rgba(0,0,0,0.4);
-}
+<body>
 
-body {
-  font-family: 'Inter', sans-serif;
-  background: radial-gradient(circle at top, #111827, #0b1220);
-  color: var(--text);
-  overflow-x: hidden;
-}
+<!-- ================= LOGIN ================= -->
+<div id="loginPage">
 
-/* ================= LOGIN ================= */
-#loginPage {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
+  <div class="login-box">
 
-.login-box {
-  width: 100%;
-  max-width: 380px;
-  background: var(--card);
-  backdrop-filter: blur(18px);
-  border-radius: 24px;
-  padding: 28px;
-  box-shadow: var(--shadow);
-}
+    <div class="login-logo">
+      <div class="login-icon">🏢</div>
+      <h1>GENIUS APP</h1>
+      <p>HR & Attendance System</p>
+    </div>
 
-.login-icon {
-  font-size: 48px;
-  text-align: center;
-}
+    <div class="login-field">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="email@company.com"/>
+    </div>
 
-.login-logo h1 {
-  text-align: center;
-  margin-top: 10px;
-  font-size: 22px;
-}
+    <div class="login-field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Password"/>
+    </div>
 
-.login-logo p {
-  text-align: center;
-  color: var(--muted);
-  font-size: 13px;
-}
+    <button class="btn-login" onclick="login()">
+      <i class="fa-solid fa-right-to-bracket"></i> Login
+    </button>
 
-.login-field {
-  margin-top: 14px;
-}
+    <button id="btnSignup" class="btn-login" style="background:#059669;margin-top:10px;" onclick="signup()">
+      Sign Up
+    </button>
 
-.login-field label {
-  font-size: 12px;
-  color: var(--muted);
-}
+  </div>
 
-.login-field input {
-  width: 100%;
-  margin-top: 6px;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.05);
-  color: white;
-}
+</div>
 
-.btn-login {
-  width: 100%;
-  margin-top: 14px;
-  padding: 12px;
-  border: none;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--primary), #6366f1);
-  color: white;
-  font-weight: 600;
-  cursor: pointer;
-}
+<!-- ================= APP ================= -->
+<div id="appPage" style="display:none;">
 
-/* ================= APP ================= */
-#appPage {
-  display: none;
-}
+  <!-- TOPBAR -->
+  <div class="topbar">
 
-/* ================= TOPBAR ================= */
-.topbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 56px;
-  background: rgba(0,0,0,0.4);
-  backdrop-filter: blur(12px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 14px;
-  z-index: 100;
-}
+    <div class="topbar-left">
+      <button class="btn-menu" onclick="toggleSidebar()">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="topbar-title">GENIUS HR</div>
+    </div>
 
-.topbar-title {
-  font-weight: 700;
-}
+    <div class="topbar-right">
+      <span id="userName">User</span>
+      <button class="btn-logout-top" onclick="logout()">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </button>
+    </div>
 
-/* ================= SIDEBAR ================= */
-#sidebar {
-  position: fixed;
-  top: 0;
-  left: -280px;
-  width: 260px;
-  height: 100%;
-  background: #0f172a;
-  transition: 0.3s;
-  z-index: 200;
-  padding-top: 60px;
-}
+  </div>
 
-#sidebar.open {
-  left: 0;
-}
+  <!-- OVERLAY (WAJIB) -->
+  <div id="overlay" onclick="closeSidebar()"></div>
 
-.sidebar-nav a {
-  display: block;
-  padding: 12px 16px;
-  color: white;
-  text-decoration: none;
-}
+  <!-- SIDEBAR -->
+  <div id="sidebar"></div>
 
-/* ================= CONTENT ================= */
-#content {
-  padding: 70px 14px 80px;
-}
+  <!-- CONTENT -->
+  <div id="content">
 
-/* ================= CARD ================= */
-.card {
-  background: var(--card);
-  backdrop-filter: blur(16px);
-  border-radius: var(--radius);
-  padding: 14px;
-  margin-bottom: 12px;
-  box-shadow: var(--shadow);
-}
+    <div class="card">
+      <h3>Dashboard</h3>
+      <p>Selamat datang di HR System</p>
+    </div>
 
-/* ================= BUTTON ================= */
-button {
-  border: none;
-  border-radius: 12px;
-  padding: 10px 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
+  </div>
 
-.btn-primary {
-  background: var(--primary);
-  color: white;
-}
+</div>
 
-.btn-success {
-  background: var(--success);
-  color: white;
-}
+<!-- ================= SCRIPT ================= -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script type="module" src="js/app.js"></script>
 
-.btn-danger {
-  background: var(--danger);
-  color: white;
-}
-
-/* ================= INPUT ================= */
-input, select, textarea {
-  width: 100%;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.05);
-  color: white;
-  margin-top: 6px;
-}
-
-/* ================= TABLE (AUTO MOBILE FIX) ================= */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  overflow-x: auto;
-  display: block;
-}
-
-th, td {
-  padding: 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  white-space: nowrap;
-}
-
-/* ================= BADGE ================= */
-.badge {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  display: inline-block;
-}
-
-.badge-green { background: rgba(34,197,94,0.2); color: #22c55e; }
-.badge-red { background: rgba(239,68,68,0.2); color: #ef4444; }
-.badge-yellow { background: rgba(245,158,11,0.2); color: #f59e0b; }
-
-/* ================= BOTTOM NAV ================= */
-#bottomNav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(14px);
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  border-top: 1px solid rgba(255,255,255,0.08);
-}
-
-.bottom-nav-item {
-  background: none;
-  color: var(--muted);
-  font-size: 11px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.bottom-nav-item i {
-  font-size: 16px;
-}
-
-.bottom-nav-item.active {
-  color: var(--primary);
-}
+</body>
+</html>
