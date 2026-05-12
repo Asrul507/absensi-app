@@ -363,18 +363,23 @@ export async function renderAbsensi(user, shift) {
 export async function renderRiwayat() {
 
   const content = document.getElementById('content')
-
   const user = window.currentUser
 
+  // 🔥 SAFE GUARD
   if (!user) {
     content.innerHTML = `
       <div class="card">
-        <h3>⚠️ User belum login</h3>
+        <h3>Silakan login terlebih dahulu</h3>
       </div>
     `
     return
   }
-  
+
+  content.innerHTML = `
+    <div class="card">
+      <h3>Loading Riwayat...</h3>
+    </div>
+  `
 
   const { data, error } = await supabase
     .from('absensi')
@@ -382,8 +387,15 @@ export async function renderRiwayat() {
     .eq('nama', user.nama_lengkap)
     .order('tanggal', { ascending: false })
 
+  console.log("RIWAYAT:", data, error)
+
   if (error) {
-    content.innerHTML = `<div class="card">Error load riwayat</div>`
+    content.innerHTML = `<div class="card">Gagal load riwayat</div>`
+    return
+  }
+
+  if (!data || data.length === 0) {
+    content.innerHTML = `<div class="card">Belum ada riwayat</div>`
     return
   }
 
