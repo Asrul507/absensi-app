@@ -1398,3 +1398,18 @@ tr:hover {
 .dot.green { background: #4CAF50; }
 .dot.orange { background: #FF9800; }
 .dot.red { background: #F44336; }
+
+table {
+  width: 100%;
+  font-size: 14px;
+}
+
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+th {
+  background: #f8f8f8;
+}
