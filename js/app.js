@@ -8,6 +8,7 @@ import { renderShiftManagement } from './shift.js'
 import { renderJadwalManagement } from './jadwal.js'
 import { renderRiwayat } from './ui.js'
 import { renderPengajuan } from './pengajuan.js'
+import { renderKalenderHR } from './kalender.js'
 
 /* ================= GLOBAL STATE ================= */
 window.currentUser = null
