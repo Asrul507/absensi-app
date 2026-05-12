@@ -1,6 +1,15 @@
 import { supabase } from './supabase.js'
 
 /* ================= RENDER ================= */
+function getShiftInfo(code) {
+
+  if (code == "2") return { nama: "Pagi", jam: "07:00 - 15:00" }
+  if (code == "3") return { nama: "Sore", jam: "15:00 - 23:00" }
+  if (code == "4") return { nama: "Malam", jam: "23:00 - 07:00" }
+  if (code == "8") return { nama: "OFF", jam: "-" }
+
+  return { nama: "-", jam: "-" }
+}
 export async function renderJadwalManagement() {
 
   const content = document.getElementById('content')
