@@ -112,13 +112,23 @@ export async function renderJadwalManagement() {
               </td>
 
               <td>
-                ${j.shift?.nama_shift || '-'}
-              </td>
-
-              <td>
-                ${j.shift?.jam_masuk || '-'}
-                -
-                ${j.shift?.jam_pulang || '-'}
+               <td>
+  ${
+    j.status_override
+      ? `<span style="
+          padding:4px 10px;
+          border-radius:8px;
+          font-weight:600;
+          font-size:12px;
+          background:#111827;
+          color:#fff;
+          display:inline-block;
+        ">
+        ${getStatusLabel(j)}
+      </span>`
+      : (j.shift?.nama_shift || '-')
+  }
+</td>
               </td>
 
               <td>
