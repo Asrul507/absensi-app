@@ -3,33 +3,52 @@ import { openCamera, takePhoto, getLocation, checkStatus } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
 
 /* ================= MENU ================= */
-export function renderMenu(role) {
+function renderMenu(role) {
 
   const sidebar = document.getElementById('sidebar')
 
-  let menus = []
+  let menu = []
+
+  if (role === 'staff') {
+    menu = [
+      { key: 'dashboard', name: 'Dashboard', icon: 'fa-house' },
+      { key: 'absensi', name: 'Absensi', icon: 'fa-clock' },
+      { key: 'riwayat', name: 'Riwayat', icon: 'fa-list' } // ✔ PASTIKAN ADA
+    ]
+  }
+
+  if (role === 'admin') {
+    menu = [
+      { key: 'dashboard' },
+      { key: 'absensi' },
+      { key: 'shift' },
+      { key: 'users' },
+      { key: 'riwayat' } // ✔ TAMBAHKAN JUGA
+    ]
+  }
 
   if (role === 'super_admin') {
-    menus = ['dashboard','absensi','pengajuan','jadwal','shift','users','laporan']
-  } 
-  else if (role === 'admin') {
-    menus = ['dashboard','absensi','pengajuan','jadwal','users','laporan']
-  } 
-  else {
-    menus = ['dashboard','absensi','pengajuan']
+    menu = [
+      { key: 'dashboard' },
+      { key: 'absensi' },
+      { key: 'shift' },
+      { key: 'users' },
+      { key: 'rekap' },
+      { key: 'settings' },
+      { key: 'riwayat' } // ✔ TAMBAHKAN JUGA
+    ]
   }
 
   sidebar.innerHTML = `
     <div class="sidebar-nav">
-      ${menus.map(menu => `
-        <a href="#" onclick="navigate('${menu}')">
-          ${menu}
+      ${menu.map(m => `
+        <a href="#" onclick="navigate('${m.key}')">
+          ${m.name}
         </a>
       `).join('')}
     </div>
   `
 }
-
 /* ================= GLOBAL CAMERA ================= */
 window.activeVideoStream = null
 
