@@ -158,7 +158,6 @@ export async function renderPengajuan(user) {
 }
 
 window.approvePengajuan = async function (id) {
-
   const { error } = await supabase
     .from("pengajuan")
     .update({ status: "approved" })
@@ -170,6 +169,21 @@ window.approvePengajuan = async function (id) {
   }
 
   alert("Pengajuan di-approve")
+  renderPengajuan(window.currentUser)
+}
 
+
+window.rejectPengajuan = async function (id) {
+  const { error } = await supabase
+    .from("pengajuan")
+    .update({ status: "rejected" })
+    .eq("id", id)
+
+  if (error) {
+    alert("Gagal reject")
+    return
+  }
+
+  alert("Pengajuan ditolak")
   renderPengajuan(window.currentUser)
 }
