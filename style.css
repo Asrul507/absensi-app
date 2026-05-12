@@ -276,6 +276,47 @@ button {
 }
 
 /* safety text biar gak putih polos */
+
+
 p, span, small {
   color: var(--text);
+}
+#overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 1100;
+  display: none;
+}
+
+#overlay.active {
+  display: block;
+}
+
+#sidebar {
+  z-index: 1200;
+}
+
+.topbar {
+  z-index: 1300;
+}
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.sidebar-nav a {
+  padding: 12px;
+  border-radius: 12px;
+  color: #e5e7eb;
+  text-decoration: none;
+  background: rgba(255,255,255,0.03);
+  transition: .2s;
+}
+
+.sidebar-nav a:hover {
+  background: rgba(99,102,241,0.2);
+  transform: translateX(3px);
 }
