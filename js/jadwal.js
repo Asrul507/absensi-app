@@ -25,6 +25,18 @@ export async function renderJadwalManagement() {
       shift:shift_id(nama_shift,jam_masuk,jam_pulang)
     `)
     .order('tanggal', { ascending: false })
+  let getStatusLabel = (j) => {
+
+  let statusText = j.status_override
+
+  if (!statusText) return j.shift?.nama_shift || '-'
+
+  if (statusText === "cuti") return "🟢 CUTI"
+  if (statusText === "sakit") return "🟡 SAKIT"
+  if (statusText === "izin") return "🔵 IZIN"
+
+  return statusText
+}
 
   content.innerHTML = `
 
