@@ -7,36 +7,20 @@ function renderMenu(role) {
 
   const sidebar = document.getElementById('sidebar')
 
-  let menu = []
+  let menu = [
+    { key: 'dashboard', name: 'Dashboard' },
+    { key: 'absensi', name: 'Absensi' },
+    { key: 'riwayat', name: 'Riwayat' } // 🔥 PAKSA ADA
+  ]
 
-  if (role === 'staff') {
-    menu = [
-      { key: 'dashboard', name: 'Dashboard', icon: 'fa-house' },
-      { key: 'absensi', name: 'Absensi', icon: 'fa-clock' },
-      { key: 'riwayat', name: 'Riwayat', icon: 'fa-list' } // ✔ PASTIKAN ADA
-    ]
-  }
-
-  if (role === 'admin') {
-    menu = [
-      { key: 'dashboard' },
-      { key: 'absensi' },
-      { key: 'shift' },
-      { key: 'users' },
-      { key: 'riwayat' } // ✔ TAMBAHKAN JUGA
-    ]
-  }
-
-  if (role === 'super_admin') {
-    menu = [
-      { key: 'dashboard' },
-      { key: 'absensi' },
-      { key: 'shift' },
-      { key: 'users' },
-      { key: 'rekap' },
-      { key: 'settings' },
-      { key: 'riwayat' } // ✔ TAMBAHKAN JUGA
-    ]
+  if (role === 'admin' || role === 'super_admin') {
+    menu.push(
+      { key: 'shift', name: 'Shift' },
+      { key: 'jadwal', name: 'Jadwal' },
+      { key: 'users', name: 'Users' },
+      { key: 'rekap', name: 'Rekap' },
+      { key: 'settings', name: 'Settings' }
+    )
   }
 
   sidebar.innerHTML = `
