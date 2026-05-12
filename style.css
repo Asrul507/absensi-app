@@ -1,19 +1,23 @@
-/* ===================== ROOT SYSTEM ===================== */
+/* ===================== ROOT THEME ===================== */
 :root {
-  --bg: #0f172a;
+  --bg: #0b1220;
   --surface: #111827;
   --card: #1f2937;
-  --card2: #111827;
+  --card2: #0f172a;
+
   --text: #e5e7eb;
   --muted: #9ca3af;
 
-  --primary: #3b82f6;
+  --primary: #6366f1;
+  --primary2: #3b82f6;
+
   --green: #22c55e;
   --red: #ef4444;
   --yellow: #f59e0b;
 
-  --radius: 14px;
-  --shadow: 0 10px 25px rgba(0,0,0,.25);
+  --radius: 16px;
+  --shadow: 0 10px 30px rgba(0,0,0,.35);
+  --shadow2: 0 20px 60px rgba(0,0,0,.45);
 }
 
 /* ===================== RESET ===================== */
@@ -25,9 +29,23 @@
 }
 
 body {
-  background: var(--bg);
+  background: radial-gradient(circle at top, #111827, var(--bg));
   color: var(--text);
   overflow-x: hidden;
+}
+
+/* ===================== APP WRAPPER (IMPORTANT FIX PC WIDTH) ===================== */
+#appPage {
+  display: flex;
+  justify-content: center;
+}
+
+/* semua content dibatasi biar gak full lebar di PC */
+#content {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 80px 15px 100px;
 }
 
 /* ===================== LOGIN ===================== */
@@ -42,97 +60,49 @@ body {
 .login-box {
   width: 100%;
   max-width: 380px;
-  background: var(--card);
+  background: linear-gradient(145deg, var(--card), var(--card2));
   padding: 25px;
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow2);
+  transform: translateY(-5px);
 }
 
-.login-logo {
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.login-icon {
-  font-size: 40px;
-  margin-bottom: 10px;
-}
-
-.login-field {
-  margin-bottom: 12px;
-}
-
-.login-field label {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.login-field input {
-  width: 100%;
-  padding: 12px;
-  margin-top: 5px;
-  border-radius: 10px;
-  border: none;
-  background: #0b1220;
-  color: white;
-  outline: none;
-}
-
-.btn-login {
-  width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: 10px;
-  background: var(--primary);
-  color: white;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* ===================== TOPBAR ===================== */
+/* ===================== TOPBAR (GLASS EFFECT) ===================== */
 .topbar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 55px;
-  background: var(--surface);
+
+  height: 60px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 12px;
+
+  padding: 0 15px;
+
+  background: rgba(17, 24, 39, 0.8);
+  backdrop-filter: blur(12px);
+
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+
   z-index: 1000;
-  border-bottom: 1px solid #1f2937;
-}
-
-.topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.topbar-title {
-  font-weight: 700;
-}
-
-.btn-menu,
-.btn-logout-top {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 18px;
 }
 
 /* ===================== SIDEBAR ===================== */
 #sidebar {
   position: fixed;
   top: 0;
-  left: -260px;
-  width: 260px;
+  left: -280px;
+  width: 280px;
   height: 100vh;
-  background: var(--surface);
-  z-index: 1100;
-  transition: 0.3s;
+
+  background: linear-gradient(180deg, #111827, #0b1220);
+  box-shadow: var(--shadow2);
+
+  z-index: 1200;
+
+  transition: .3s;
   padding: 20px;
 }
 
@@ -140,127 +110,134 @@ body {
   left: 0;
 }
 
-.sidebar-header {
-  margin-bottom: 20px;
-}
-
-.sb-name {
-  font-weight: 700;
-}
-
-.sb-role {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.sidebar-nav a {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  color: white;
-  text-decoration: none;
-  border-radius: 10px;
-}
-
-.sidebar-nav a:hover {
-  background: #1f2937;
-}
-
-/* ===================== OVERLAY ===================== */
+/* overlay lebih smooth */
 #overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.5);
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(3px);
   display: none;
-  z-index: 1000;
+  z-index: 1100;
 }
 
 #overlay.active {
   display: block;
 }
 
-/* ===================== CONTENT ===================== */
-#appPage {
-  padding-top: 60px;
-}
-
-#content {
-  padding: 15px;
-}
-
-/* ===================== CARD ===================== */
+/* ===================== CARD (3D EFFECT) ===================== */
 .card {
-  background: var(--card);
-  padding: 15px;
+  background: linear-gradient(145deg, var(--card), var(--card2));
+  padding: 16px;
   border-radius: var(--radius);
   margin-bottom: 15px;
+
   box-shadow: var(--shadow);
+  transform: translateZ(0);
+  transition: .2s;
 }
 
-/* ===================== TABLE ===================== */
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow2);
+}
+
+/* ===================== DASHBOARD KPI ===================== */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.kpi-card {
+  background: linear-gradient(145deg, #1f2937, #0f172a);
+  padding: 14px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: .2s;
+}
+
+.kpi-card:hover {
+  transform: translateY(-4px);
+}
+
+/* ===================== TABLE (MODERN GLASS) ===================== */
 table {
   width: 100%;
   border-collapse: collapse;
-  overflow-x: auto;
+  overflow: hidden;
+  border-radius: 12px;
   display: block;
+  background: rgba(17,24,39,.6);
 }
 
 th, td {
-  padding: 10px;
-  border-bottom: 1px solid #374151;
+  padding: 12px;
   font-size: 13px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
   white-space: nowrap;
 }
 
 /* ===================== INPUT ===================== */
 input, select, textarea {
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   margin-top: 8px;
-  border-radius: 10px;
-  border: none;
+
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.08);
+
   background: #0b1220;
   color: white;
+
+  outline: none;
 }
 
 /* ===================== BUTTON ===================== */
 button {
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
   border: none;
-  background: var(--primary);
+
+  background: linear-gradient(135deg, var(--primary), var(--primary2));
   color: white;
-  cursor: pointer;
+
   font-weight: 600;
+  cursor: pointer;
+
+  transition: .2s;
 }
 
-/* ===================== DASHBOARD ===================== */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.kpi-card {
-  background: var(--card);
-  padding: 12px;
-  border-radius: var(--radius);
+button:hover {
+  transform: scale(1.03);
 }
 
 /* ===================== BADGE ===================== */
 .badge {
-  padding: 4px 8px;
-  border-radius: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
   font-size: 12px;
 }
 
-.badge-green { background: var(--green); }
-.badge-red { background: var(--red); }
-.badge-yellow { background: var(--yellow); }
+.badge-green { background: rgba(34,197,94,.2); color: var(--green); }
+.badge-red { background: rgba(239,68,68,.2); color: var(--red); }
+.badge-yellow { background: rgba(245,158,11,.2); color: var(--yellow); }
 
 /* ===================== RESPONSIVE ===================== */
 @media (min-width: 768px) {
   .kpi-grid {
     grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ===================== PC FIX CENTER FEEL ===================== */
+@media (min-width: 1200px) {
+  body {
+    display: flex;
+    justify-content: center;
+  }
+
+  #appPage {
+    width: 100%;
+    max-width: 1400px;
   }
 }
