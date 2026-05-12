@@ -1,3 +1,15 @@
+import { supabase } from './supabase.js'
+
+/* ================= HITUNG TANGGAL SELESAI ================= */
+function hitungTanggalSelesai(startDate, hari) {
+  if (!startDate || !hari) return null
+
+  const date = new Date(startDate)
+  date.setDate(date.getDate() + (parseInt(hari) - 1))
+  return date.toISOString().split('T')[0]
+}
+
+/* ================= RENDER ================= */
 export async function renderPengajuan(user) {
 
   const content = document.getElementById("content")
@@ -6,7 +18,6 @@ export async function renderPengajuan(user) {
     user.role === "admin" ||
     user.role === "super_admin"
 
-  // ================= FETCH DATA =================
   const { data: list, error } = await supabase
     .from("pengajuan")
     .select("*")
@@ -17,12 +28,10 @@ export async function renderPengajuan(user) {
     return
   }
 
-  // ================= FILTER DATA =================
   const myList = isAdmin
     ? list
     : list.filter(i => i.user_id === user.id)
 
-  // ================= UI =================
   content.innerHTML = `
     <div class="card">
       <h3>📩 Pengajuan ${isAdmin ? "Management" : "Saya"}</h3>
@@ -42,6 +51,16 @@ export async function renderPengajuan(user) {
       </div>
 
       <div class="field">
+        <label>Jumlah Hari</label>
+        <input type="number" id="jumlahHari" min="1">
+      </div>
+
+      <div class="field">
+        <label>Tanggal Mulai</label>
+        <input type="date" id="tanggalMulai">
+      </div>
+
+      <div class="field">
         <label>Upload Surat (opsional)</label>
         <input type="file" id="fileSurat">
       </div>
@@ -56,14 +75,16 @@ export async function renderPengajuan(user) {
         myList.length === 0
           ? `<div class="empty-state">Belum ada pengajuan</div>`
           : myList.map(i => `
-
               <div class="card">
 
                 <b>Jenis:</b> ${i.jenis || "-"} <br>
-
                 <b>Nama:</b> ${i.nama || "Unknown"} <br>
-
                 <b>Alasan:</b> ${i.alasan || "-"} <br>
+
+                <b>Tgl Pengajuan:</b> ${i.tanggal_pengajuan || "-"} <br>
+                <b>Tgl Mulai:</b> ${i.tanggal_mulai || "-"} <br>
+                <b>Tgl Selesai:</b> ${i.tanggal_selesai || "-"} <br>
+                <b>Jumlah Hari:</b> ${i.jumlah_hari || "-"} <br>
 
                 <b>Status:</b>
                 <span class="badge ${
@@ -78,9 +99,7 @@ export async function renderPengajuan(user) {
 
                 <br>
 
-                ${i.file
-                  ? `<a href="${i.file}" target="_blank">📎 Lihat File</a>`
-                  : ""}
+                ${i.file ? `<a href="${i.file}" target="_blank">📎 Lihat File</a>` : ""}
 
                 ${
                   isAdmin && i.status === "pending"
@@ -90,23 +109,10 @@ export async function renderPengajuan(user) {
                         <button onclick="rejectPengajuan('${i.id}')">Reject</button>
                       </div>
                     `
-                    : `
-                      <div style="margin-top:10px;">
-                        <span class="badge ${
-                          i.status === "approved"
-                            ? "badge-green"
-                            : i.status === "rejected"
-                              ? "badge-red"
-                              : "badge-yellow"
-                        }">
-                          ${i.status.toUpperCase()}
-                        </span>
-                      </div>
-                    `
+                    : ""
                 }
 
               </div>
-
             `).join("")
       }
 
@@ -118,6 +124,8 @@ export async function renderPengajuan(user) {
 
     const jenis = document.getElementById("jenis").value
     const alasan = document.getElementById("alasan").value
+    const jumlahHari = document.getElementById("jumlahHari").value
+    const tanggalMulai = document.getElementById("tanggalMulai").value
     const file = document.getElementById("fileSurat").files[0]
 
     if (!alasan) {
@@ -127,9 +135,8 @@ export async function renderPengajuan(user) {
 
     let fileUrl = null
 
-    // ================= UPLOAD FILE =================
+    // upload file
     if (file) {
-
       const fileName = `${Date.now()}-${file.name}`
 
       const { error: uploadError } = await supabase
@@ -147,7 +154,11 @@ export async function renderPengajuan(user) {
         .getPublicUrl(fileName).data.publicUrl
     }
 
-    // ================= INSERT DATA =================
+    const tanggal_pengajuan = new Date().toISOString().split('T')[0]
+
+    const tanggal_selesai =
+      hitungTanggalSelesai(tanggalMulai, jumlahHari)
+
     const { error: insertError } = await supabase
       .from("pengajuan")
       .insert([{
@@ -156,7 +167,13 @@ export async function renderPengajuan(user) {
         jenis,
         alasan,
         file: fileUrl,
-        status: "pending"
+        status: "pending",
+
+        // NEW FIELD
+        tanggal_pengajuan,
+        jumlah_hari: jumlahHari,
+        tanggal_mulai: tanggalMulai,
+        tanggal_selesai
       }])
 
     if (insertError) {
@@ -166,18 +183,21 @@ export async function renderPengajuan(user) {
     }
 
     alert("Pengajuan berhasil")
-
     renderPengajuan(user)
   }
 }
 
-
 /* ================= APPROVE ================= */
 window.approvePengajuan = async function (id) {
 
+  const keterangan = prompt("Keterangan admin (opsional)")
+
   const { error } = await supabase
     .from("pengajuan")
-    .update({ status: "approved" })
+    .update({
+      status: "approved",
+      keterangan_admin: keterangan || null
+    })
     .eq("id", id)
 
   if (error) {
@@ -185,18 +205,21 @@ window.approvePengajuan = async function (id) {
     return
   }
 
-  alert("Pengajuan di-approve")
-
+  alert("Approved")
   renderPengajuan(window.currentUser)
 }
-
 
 /* ================= REJECT ================= */
 window.rejectPengajuan = async function (id) {
 
+  const keterangan = prompt("Alasan reject:")
+
   const { error } = await supabase
     .from("pengajuan")
-    .update({ status: "rejected" })
+    .update({
+      status: "rejected",
+      keterangan_admin: keterangan || null
+    })
     .eq("id", id)
 
   if (error) {
@@ -204,7 +227,6 @@ window.rejectPengajuan = async function (id) {
     return
   }
 
-  alert("Pengajuan ditolak")
-
+  alert("Rejected")
   renderPengajuan(window.currentUser)
 }
