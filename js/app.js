@@ -28,40 +28,39 @@ async function checkUser() {
 
   // ❌ BELUM LOGIN
   if (!user) {
+    window.currentUser = null
     loginPage.style.display = 'flex'
     appPage.style.display = 'none'
     return
   }
 
-  // ✅ SUDAH LOGIN
+  // GET PROFILE
   const profile = await getProfile(user.id)
 
   console.log('PROFILE:', profile)
-  console.log('ROLE:', profile.role)
-console.log('SIDEBAR:', document.getElementById('sidebar'))
-console.log('CONTENT:', document.getElementById('content'))
 
+  // ❌ PROFILE TIDAK ADA
   if (!profile) {
+    console.log('PROFILE NOT FOUND')
+    window.currentUser = null
+    loginPage.style.display = 'flex'
+    appPage.style.display = 'none'
+    return
+  }
 
-  console.log('PROFILE TIDAK ADA')
-
-  loginPage.style.display = 'flex'
-  appPage.style.display = 'none'
-
-  return
-}
-  window.currentShift = null // nanti diisi dari shift table
+  // ✅ SET GLOBAL USER
+  window.currentUser = profile
+  window.currentShift = null
 
   loginPage.style.display = 'none'
   appPage.style.display = 'block'
 
   document.getElementById('userName').innerText =
-    profile?.nama_lengkap || user.email
+    profile.nama_lengkap || user.email
 
   renderMenu(profile.role)
 
   navigate('dashboard')
-  updateAuthUI(profile.role)
 }
 
 window.checkUser = checkUser
