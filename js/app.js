@@ -188,12 +188,14 @@ function renderMenu(role) {
 /* ================= NAVIGATE ================= */
 window.navigate = async function(page) {
 
+  const content = document.getElementById('content')
+
+  // 🔥 GUARD LOGIN (HANYA SEKALI)
   if (!window.currentUser) {
     alert("Silakan login dulu")
     return
   }
 
-  const content = document.getElementById('content')
   // ================= DASHBOARD =================
   if (page === 'dashboard') {
     renderDashboard()
@@ -205,156 +207,111 @@ window.navigate = async function(page) {
     renderAbsensi(window.currentUser, window.currentShift)
     return
   }
+
+  // ================= SHIFT =================
   if (page === 'shift') {
-  renderShiftManagement()
+    renderShiftManagement()
+    return
   }
+
+  // ================= JADWAL =================
   if (page === 'jadwal') {
-  renderJadwalManagement()
-  return
-}
-
+    renderJadwalManagement()
+    return
+  }
 
   // ================= USERS =================
-  // ================= USERS =================
-  if (!window.currentUser) {
-  alert("Silakan login dulu")
-  return
-}
-if (page === 'users') {
+  if (page === 'users') {
 
-  const { data: users, error } = await supabase
-    .from('profiles')
-    .select('*')
+    const { data: users, error } = await supabase
+      .from('profiles')
+      .select('*')
 
-  if (error) {
+    if (error) {
+      content.innerHTML = `
+        <div class="card">
+          Error load users
+        </div>
+      `
+      return
+    }
+
     content.innerHTML = `
       <div class="card">
-        Error load users
+
+        <h3>Create Profile</h3>
+
+        <input id="newEmail" placeholder="email">
+        <input id="newPassword" placeholder="password">
+
+        <select id="newRole">
+          <option value="staff">Staff</option>
+          <option value="admin">Admin</option>
+          <option value="super_admin">Super Admin</option>
+        </select>
+
+        <button onclick="createProfile()">
+          Create Profile
+        </button>
+
+      </div>
+
+      <div class="card">
+        <h2>User Management</h2>
+
+        <table style="width:100%;border-collapse:collapse;margin-top:10px">
+
+          <thead>
+            <tr>
+              <th>Nama</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${users.map(u => `
+              <tr>
+                <td>${u.nama_lengkap || '-'}</td>
+                <td>${u.email}</td>
+
+                <td>
+                  <select onchange="updateRole('${u.id}', this.value)">
+                    <option value="staff" ${u.role === 'staff' ? 'selected' : ''}>staff</option>
+                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
+                    <option value="super_admin" ${u.role === 'super_admin' ? 'selected' : ''}>super admin</option>
+                  </select>
+                </td>
+
+                <td>${u.status_akun || 'Aktif'}</td>
+
+                <td>
+                  <button onclick="toggleStatus('${u.id}', '${u.status_akun}')">
+                    Toggle
+                  </button>
+                </td>
+
+              </tr>
+            `).join('')}
+          </tbody>
+
+        </table>
+
       </div>
     `
     return
   }
 
-  content.innerHTML = `
+  // ================= RIWAYAT =================
+  if (page === 'riwayat') {
+    renderRiwayat()
+    return
+  }
 
-    <div class="card">
-
-      <h3>Create Profile</h3>
-
-      <input 
-        id="newEmail" 
-        placeholder="email"
-      >
-
-      <input 
-        id="newPassword" 
-        placeholder="password"
-      >
-
-      <select id="newRole">
-
-        <option value="staff">
-          Staff
-        </option>
-
-        <option value="admin">
-          Admin
-        </option>
-
-        <option value="super_admin">
-          Super Admin
-        </option>
-
-      </select>
-
-      <button onclick="createProfile()">
-        Create Profile
-      </button>
-
-    </div>
-
-    <div class="card">
-
-      <h2>User Management</h2>
-
-      <table style="width:100%;border-collapse:collapse;margin-top:10px">
-
-        <thead>
-          <tr>
-            <th>Nama</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Aksi</th>
-          </tr>
-        </thead>
-
-        <tbody>
-
-          ${users.map(u => `
-            <tr>
-
-              <td>${u.nama_lengkap || '-'}</td>
-
-              <td>${u.email}</td>
-
-              <td>
-
-                <select onchange="updateRole('${u.id}', this.value)">
-
-                  <option value="staff"
-                    ${u.role === 'staff' ? 'selected' : ''}>
-                    staff
-                  </option>
-
-                  <option value="admin"
-                    ${u.role === 'admin' ? 'selected' : ''}>
-                    admin
-                  </option>
-
-                  <option value="super_admin"
-                    ${u.role === 'super_admin' ? 'selected' : ''}>
-                    super admin
-                  </option>
-
-                </select>
-
-              </td>
-
-              <td>
-                ${u.status_akun || 'Aktif'}
-              </td>
-
-              <td>
-
-                <button
-                  onclick="toggleStatus('${u.id}', '${u.status_akun}')">
-
-                  Toggle
-
-                </button>
-
-              </td>
-
-            </tr>
-          `).join('')}
-
-        </tbody>
-
-      </table>
-
-    </div>
-  `
-
-  return
+  content.innerHTML = `<h2>${page}</h2>`
 }
-
-//==================Riwayat===============
-if (page === 'riwayat') {
-  renderRiwayat()
-  return
-}
-
   // ================= DEFAULT =================
   content.innerHTML = `<h2>${page}</h2>`
 }
