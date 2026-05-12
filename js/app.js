@@ -259,16 +259,6 @@ window.createProfile = async function () {
 }
 
 /* ================= SIDEBAR ================= */
-window.toggleSidebar = function () {
-  document.getElementById('sidebar').classList.toggle('open')
-  document.getElementById('overlay').classList.toggle('active')
-}
-
-window.closeSidebar = function () {
-  document.getElementById('sidebar')?.classList.remove('open')
-  document.getElementById('overlay')?.classList.remove('active')
-}
-
 window.toggleSidebar = () => {
   document.getElementById('sidebar').classList.toggle('open')
   document.getElementById('overlay').classList.toggle('active')
