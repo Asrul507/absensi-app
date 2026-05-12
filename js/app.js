@@ -40,7 +40,10 @@ async function checkUser() {
 console.log('SIDEBAR:', document.getElementById('sidebar'))
 console.log('CONTENT:', document.getElementById('content'))
 
-  window.currentUser = profile
+  if (!profile) {
+  console.log('PROFILE TIDAK ADA')
+  return
+}
   window.currentShift = null // nanti diisi dari shift table
 
   loginPage.style.display = 'none'
