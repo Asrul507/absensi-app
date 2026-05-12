@@ -1,257 +1,270 @@
 /* =========================
-   HR MOBILE 3D UI FINAL
+   RESET
 ========================= */
-
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-}
-
-:root {
-  --bg: #0b1220;
-  --card: rgba(255,255,255,0.06);
-  --card2: rgba(255,255,255,0.08);
-  --text: #e5e7eb;
-  --muted: #9ca3af;
-
-  --primary: #3b82f6;
-  --success: #22c55e;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-
-  --radius: 18px;
-  --shadow: 0 12px 30px rgba(0,0,0,0.4);
+  font-family: "Inter", sans-serif;
 }
 
 body {
-  font-family: 'Inter', sans-serif;
-  background: radial-gradient(circle at top, #111827, #0b1220);
-  color: var(--text);
-  overflow-x: hidden;
-}
-
-/* ================= LOGIN ================= */
-#loginPage {
+  background: #0b1220;
+  color: #e5e7eb;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
 }
 
-.login-box {
-  width: 100%;
-  max-width: 380px;
-  background: var(--card);
-  backdrop-filter: blur(18px);
-  border-radius: 24px;
-  padding: 28px;
-  box-shadow: var(--shadow);
-}
-
-.login-icon {
-  font-size: 48px;
-  text-align: center;
-}
-
-.login-logo h1 {
-  text-align: center;
-  margin-top: 10px;
-  font-size: 22px;
-}
-
-.login-logo p {
-  text-align: center;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.login-field {
-  margin-top: 14px;
-}
-
-.login-field label {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.login-field input {
-  width: 100%;
-  margin-top: 6px;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.05);
-  color: white;
-}
-
-.btn-login {
-  width: 100%;
-  margin-top: 14px;
-  padding: 12px;
-  border: none;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--primary), #6366f1);
-  color: white;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* ================= APP ================= */
+/* =========================
+   LAYOUT
+========================= */
 #appPage {
-  display: none;
-}
-
-/* ================= TOPBAR ================= */
-.topbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 56px;
-  background: rgba(0,0,0,0.4);
-  backdrop-filter: blur(12px);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 14px;
-  z-index: 100;
+  min-height: 100vh;
 }
 
-.topbar-title {
-  font-weight: 700;
+/* =========================
+   OVERLAY
+========================= */
+#overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.3s;
+  z-index: 900;
 }
 
-/* ================= SIDEBAR ================= */
+#overlay.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
 #sidebar {
   position: fixed;
   top: 0;
   left: -280px;
-  width: 260px;
-  height: 100%;
-  background: #0f172a;
-  transition: 0.3s;
-  z-index: 200;
-  padding-top: 60px;
+  width: 280px;
+  height: 100vh;
+  background: #111827;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  transition: 0.3s ease;
+  z-index: 1000;
+  padding-top: 20px;
 }
 
 #sidebar.open {
   left: 0;
 }
 
+.sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.sb-name {
+  font-size: 20px;
+  font-weight: 800;
+  color: #60a5fa;
+}
+
+.sb-role {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 5px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 8px;
+}
+
 .sidebar-nav a {
-  display: block;
-  padding: 12px 16px;
-  color: white;
+  padding: 12px 14px;
+  border-radius: 10px;
   text-decoration: none;
+  color: #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: 0.2s;
+  background: rgba(255,255,255,0.03);
 }
 
-/* ================= CONTENT ================= */
-#content {
-  padding: 70px 14px 80px;
+.sidebar-nav a:hover {
+  background: #2563eb;
+  transform: translateX(4px);
 }
 
-/* ================= CARD ================= */
-.card {
-  background: var(--card);
-  backdrop-filter: blur(16px);
-  border-radius: var(--radius);
-  padding: 14px;
-  margin-bottom: 12px;
-  box-shadow: var(--shadow);
+/* =========================
+   TOPBAR
+========================= */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  z-index: 800;
 }
 
-/* ================= BUTTON ================= */
-button {
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-title {
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.btn-menu,
+.btn-logout-top {
+  background: #1f2937;
   border: none;
-  border-radius: 12px;
-  padding: 10px 12px;
-  font-weight: 600;
+  color: white;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+/* =========================
+   CONTENT
+========================= */
+#content {
+  margin-top: 56px;
+  width: 100%;
+  padding: 15px;
+}
+
+/* =========================
+   CARD
+========================= */
+.card {
+  background: #111827;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 15px;
+  margin-bottom: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+}
+
+/* =========================
+   BUTTON
+========================= */
+button {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 10px;
   cursor: pointer;
+  transition: 0.2s;
+  font-weight: 600;
 }
 
-.btn-primary {
-  background: var(--primary);
-  color: white;
+button:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
 }
 
-.btn-success {
-  background: var(--success);
-  color: white;
+button:active {
+  transform: scale(0.97);
 }
 
-.btn-danger {
-  background: var(--danger);
-  color: white;
-}
-
-/* ================= INPUT ================= */
+/* =========================
+   INPUT
+========================= */
 input, select, textarea {
   width: 100%;
   padding: 10px;
+  margin-top: 8px;
+  margin-bottom: 12px;
   border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.05);
+  background: #0f172a;
   color: white;
-  margin-top: 6px;
+  outline: none;
 }
 
-/* ================= TABLE (AUTO MOBILE FIX) ================= */
+/* =========================
+   LOGIN
+========================= */
+#loginPage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #1e293b, #0b1220);
+}
+
+.login-box {
+  width: 100%;
+  max-width: 380px;
+  background: #111827;
+  padding: 25px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* =========================
+   TABLE
+========================= */
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  overflow-x: auto;
-  display: block;
 }
 
 th, td {
   padding: 10px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
-  white-space: nowrap;
+  text-align: left;
 }
 
-/* ================= BADGE ================= */
+th {
+  color: #93c5fd;
+}
+
+/* =========================
+   BADGE
+========================= */
 .badge {
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: 4px 8px;
+  border-radius: 20px;
   font-size: 11px;
-  display: inline-block;
+  font-weight: 600;
 }
 
-.badge-green { background: rgba(34,197,94,0.2); color: #22c55e; }
-.badge-red { background: rgba(239,68,68,0.2); color: #ef4444; }
-.badge-yellow { background: rgba(245,158,11,0.2); color: #f59e0b; }
+.badge-green { background: #14532d; color: #22c55e; }
+.badge-red { background: #450a0a; color: #ef4444; }
+.badge-yellow { background: #422006; color: #facc15; }
 
-/* ================= BOTTOM NAV ================= */
-#bottomNav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(14px);
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  border-top: 1px solid rgba(255,255,255,0.08);
-}
+/* =========================
+   RESPONSIVE
+========================= */
+@media (max-width: 768px) {
 
-.bottom-nav-item {
-  background: none;
-  color: var(--muted);
-  font-size: 11px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
+  #sidebar {
+    width: 260px;
+  }
 
-.bottom-nav-item i {
-  font-size: 16px;
-}
+  .card {
+    padding: 12px;
+  }
 
-.bottom-nav-item.active {
-  color: var(--primary);
+  table {
+    font-size: 12px;
+  }
 }
