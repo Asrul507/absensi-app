@@ -334,6 +334,12 @@ if (page === 'users') {
   return
 }
 
+//==================Riwayat===============
+if (page === 'riwayat') {
+  renderRiwayat()
+  return
+}
+
   // ================= DEFAULT =================
   content.innerHTML = `<h2>${page}</h2>`
 }
