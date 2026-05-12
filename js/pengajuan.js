@@ -156,3 +156,20 @@ export async function renderPengajuan(user) {
     renderPengajuan(user)
   }
 }
+
+window.approvePengajuan = async function (id) {
+
+  const { error } = await supabase
+    .from("pengajuan")
+    .update({ status: "approved" })
+    .eq("id", id)
+
+  if (error) {
+    alert("Gagal approve")
+    return
+  }
+
+  alert("Pengajuan di-approve")
+
+  renderPengajuan(window.currentUser)
+}
