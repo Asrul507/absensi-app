@@ -364,14 +364,17 @@ export async function renderRiwayat() {
 
   const content = document.getElementById('content')
 
-  content.innerHTML = `
-    <div class="card">
-      <h2>Riwayat Absensi</h2>
-      <p>Loading data...</p>
-    </div>
-  `
-
   const user = window.currentUser
+
+  if (!user) {
+    content.innerHTML = `
+      <div class="card">
+        <h3>⚠️ User belum login</h3>
+      </div>
+    `
+    return
+  }
+  
 
   const { data, error } = await supabase
     .from('absensi')
