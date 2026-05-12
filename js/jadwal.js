@@ -29,8 +29,10 @@ export async function renderJadwalManagement() {
     `)
     .order('tanggal', { ascending: false })
 
-  content.innerHTML = `
+  const safeJadwal = jadwal || []
+  const safeUsers = users || []
 
+  content.innerHTML = `
     <div class="card">
       <h2>Jadwal Management</h2>
 
@@ -40,7 +42,7 @@ export async function renderJadwalManagement() {
 
         <select id="userJadwal">
           <option value="">Pilih Staff</option>
-          ${users.map(u => `
+          ${safeUsers.map(u => `
             <option value="${u.id}">
               ${u.nama_lengkap}
             </option>
@@ -63,6 +65,7 @@ export async function renderJadwalManagement() {
     </div>
 
     <div class="card">
+
       <h3>List Jadwal</h3>
 
       <table style="width:100%;border-collapse:collapse;">
@@ -71,81 +74,72 @@ export async function renderJadwalManagement() {
             <th>Tanggal</th>
             <th>Nama</th>
             <th>Shift</th>
-            <th>Jam</th>
             <th>Aksi</th>
           </tr>
         </thead>
 
         <tbody>
-          ${jadwal.map(j => {
+          ${safeJadwal.map(j => {
 
-            let shiftInfo = getShiftInfo(j.shift_code || j.shift_id)
+            let shiftText = "-"
+            let jamText = "-"
 
-            // override cuti/sakit/izin
-            if (j.status_override === "cuti") shiftInfo = { nama: "🟢 CUTI", jam: "-" }
-            if (j.status_override === "sakit") shiftInfo = { nama: "🟡 SAKIT", jam: "-" }
-            if (j.status_override === "izin") shiftInfo = { nama: "🔵 IZIN", jam: "-" }
+            if (j.shift_code == "2") {
+              shiftText = "Shift Pagi"
+              jamText = "07:00 - 15:00"
+            }
+
+            if (j.shift_code == "3") {
+              shiftText = "Shift Sore"
+              jamText = "15:00 - 23:00"
+            }
+
+            if (j.shift_code == "4") {
+              shiftText = "Shift Malam"
+              jamText = "23:00 - 07:00"
+            }
+
+            if (j.shift_code == "8") {
+              shiftText = "OFF"
+              jamText = "-"
+            }
+
+            // override cuti
+            if (j.status_override) {
+              shiftText = j.status_override.toUpperCase()
+              jamText = "-"
+            }
 
             return `
               <tr>
-
                 <td>${j.tanggal}</td>
-
                 <td>${j.profiles?.nama_lengkap || '-'}</td>
-
-                <td>${shiftInfo.nama}</td>
-
-                <td>${shiftInfo.jam}</td>
-
+                <td>${shiftText}</td>
+                <td>${jamText}</td>
                 <td>
                   <button onclick="deleteJadwal('${j.id}')">
                     Hapus
                   </button>
                 </td>
-
               </tr>
             `
           }).join('')}
         </tbody>
       </table>
+
+      <!-- 🔥 UPLOAD SECTION (INI YANG KAMU KATA TIDAK MUNCUL) -->
+      <div class="card" style="margin-top:15px;">
+        <h3>Upload Jadwal Excel</h3>
+
+        <input type="file" id="excelFile">
+
+        <button onclick="uploadJadwalExcel()">
+          Upload
+        </button>
+      </div>
+
     </div>
   `
-}
-
-/* ================= CREATE ================= */
-window.createJadwal = async function () {
-
-  const tanggal = document.getElementById('tanggalJadwal').value
-  const user_id = document.getElementById('userJadwal').value
-  const shift_code = document.getElementById('shiftJadwal').value
-
-  if (!tanggal || !user_id || !shift_code) {
-    alert('Lengkapi data')
-    return
-  }
-
-  // OFF tidak disimpan ke jadwal
-  if (shift_code === "8") {
-    alert("Hari OFF tidak disimpan")
-    return
-  }
-
-  const { error } = await supabase
-    .from('jadwal')
-    .insert([{
-      tanggal,
-      user_id,
-      shift_code
-    }])
-
-  if (error) {
-    console.error(error)
-    alert('Gagal simpan jadwal')
-    return
-  }
-
-  alert('Jadwal berhasil dibuat')
-  renderJadwalManagement()
 }
 
 /* ================= DELETE ================= */
