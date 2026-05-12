@@ -183,6 +183,10 @@ window.navigate = async function(page) {
       renderRiwayat()
       return
 
+      case 'kalender':
+  renderKalenderHR()
+  return
+
     case 'users': {
 
       const { data: users, error } = await window.supabase
