@@ -2287,3 +2287,36 @@ td.td-truncate {
   font-size: 11px;
   opacity: 0.9;
 }
+
+.cal-day {
+  transition: 0.2s;
+}
+
+.cal-day:hover {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.badge-green {
+  background: #22c55e;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.badge-yellow {
+  background: #facc15;
+  color: black;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.badge-blue {
+  background: #3b82f6;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
