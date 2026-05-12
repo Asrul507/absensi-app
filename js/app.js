@@ -209,6 +209,10 @@ window.navigate = async function(page) {
 
   // ================= USERS =================
   // ================= USERS =================
+  if (!window.currentUser) {
+  alert("Silakan login dulu")
+  return
+}
 if (page === 'users') {
 
   const { data: users, error } = await supabase
