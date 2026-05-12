@@ -190,7 +190,6 @@ window.navigate = async function(page) {
 
   const content = document.getElementById('content')
 
-  // 🔥 GUARD LOGIN (HANYA SEKALI)
   if (!window.currentUser) {
     alert("Silakan login dulu")
     return
@@ -310,11 +309,10 @@ window.navigate = async function(page) {
     return
   }
 
-  content.innerHTML = `<h2>${page}</h2>`
-}
   // ================= DEFAULT =================
   content.innerHTML = `<h2>${page}</h2>`
 }
+
 window.toggleSidebar = function () {
 
   const sidebar = document.getElementById('sidebar')
