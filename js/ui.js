@@ -354,3 +354,73 @@ export async function renderAbsensi(user, shift) {
 
   stopCamera(video)
 }
+
+//===========Riwayat===================
+
+export async function renderRiwayat() {
+
+  const content = document.getElementById('content')
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Riwayat Absensi</h2>
+      <p>Loading data...</p>
+    </div>
+  `
+
+  const user = window.currentUser
+
+  const { data, error } = await supabase
+    .from('absensi')
+    .select('*')
+    .eq('nama', user.nama_lengkap)
+    .order('tanggal', { ascending: false })
+
+  if (error) {
+    content.innerHTML = `<div class="card">Gagal load riwayat</div>`
+    return
+  }
+
+  if (!data || data.length === 0) {
+    content.innerHTML = `<div class="card">Belum ada riwayat absensi</div>`
+    return
+  }
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Riwayat Absensi</h2>
+
+      <table style="width:100%;border-collapse:collapse;margin-top:10px">
+
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Masuk</th>
+            <th>Pulang</th>
+            <th>Status</th>
+            <th>Shift</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${data.map(r => `
+            <tr>
+              <td>${r.tanggal}</td>
+              <td>${r.waktu_masuk || '-'}</td>
+              <td>${r.waktu_pulang || '-'}</td>
+              <td>
+                <span style="color:${
+                  r.status_masuk === 'Terlambat' ? 'red' : 'green'
+                }">
+                  ${r.status_masuk || '-'}
+                </span>
+              </td>
+              <td>${r.shift_id || '-'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+
+      </table>
+    </div>
+  `
+}
