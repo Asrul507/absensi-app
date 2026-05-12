@@ -6,12 +6,10 @@ export async function getProfile(userId) {
     .from('profiles')
     .select('*')
     .eq('id', userId)
-    .single()
-
-  console.log('PROFILE DATA:', data)
-  console.log('PROFILE ERROR:', error)
+    .maybeSingle() // 🔥 GANTI single()
 
   if (error) {
+    console.log('PROFILE ERROR:', error)
     return null
   }
 
