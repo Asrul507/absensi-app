@@ -268,3 +268,14 @@ window.closeSidebar = function () {
   document.getElementById('sidebar')?.classList.remove('open')
   document.getElementById('overlay')?.classList.remove('active')
 }
+
+window.toggleSidebar = () => {
+  document.getElementById('sidebar').classList.toggle('open')
+  document.getElementById('overlay').classList.toggle('active')
+}
+
+window.closeSidebar = () => {
+  document.getElementById('sidebar').classList.remove('open')
+  document.getElementById('overlay').classList.remove('active')
+}
+
