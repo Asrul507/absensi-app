@@ -64,17 +64,16 @@ export async function renderJadwalManagement() {
 
         <select id="shiftJadwal">
 
-          <option value="">
-            Pilih Shift
-          </option>
+  <option value="">
+    Pilih Shift
+  </option>
 
-          ${shifts.map(s => `
-            <option value="${s.id}">
-              ${s.nama_shift}
-            </option>
-          `).join('')}
+  <option value="2">Shift Pagi</option>
+  <option value="3">Shift Sore</option>
+  <option value="4">Shift Malam</option>
+  <option value="8">OFF</option>
 
-        </select>
+</select>
 
         <button onclick="createJadwal()">
           Simpan Jadwal
