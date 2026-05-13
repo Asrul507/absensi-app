@@ -2354,3 +2354,144 @@ td.td-truncate {
   border-bottom:1px solid #eee;
   text-align:left;
 }
+
+/* =====================================================
+   DASHBOARD
+===================================================== */
+
+.dashboard-container{
+  display:grid;
+  gap:20px;
+}
+
+/* LIVE CLOCK */
+
+.live-clock-card{
+  background:#111827;
+  color:#fff;
+  border-radius:16px;
+  padding:25px;
+  text-align:center;
+  box-shadow:0 4px 15px rgba(0,0,0,0.15);
+}
+
+.live-clock{
+  font-size:42px;
+  font-weight:700;
+}
+
+.live-date{
+  margin-top:8px;
+  opacity:.8;
+  font-size:14px;
+}
+
+/* HEADER */
+
+.dash-header{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+
+.dash-header h2{
+  margin:0;
+  font-size:28px;
+}
+
+.dash-header p{
+  margin:0;
+  color:#666;
+}
+
+/* KPI GRID */
+
+.kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:15px;
+}
+
+/* KPI CARD */
+
+.kpi-card{
+  border-radius:18px;
+  padding:20px;
+  color:#fff;
+  box-shadow:0 4px 12px rgba(0,0,0,0.08);
+}
+
+.kpi-card h4{
+  margin:0;
+  font-size:15px;
+  opacity:.9;
+}
+
+.kpi-card h1{
+  margin:10px 0;
+  font-size:36px;
+}
+
+.kpi-card h3{
+  margin-top:12px;
+}
+
+.kpi-card small{
+  opacity:.8;
+}
+
+/* COLORS */
+
+.kpi-card.blue{
+  background:#2563eb;
+}
+
+.kpi-card.green{
+  background:#16a34a;
+}
+
+.kpi-card.orange{
+  background:#ea580c;
+}
+
+.kpi-card.red{
+  background:#dc2626;
+}
+
+/* ABSEN RECORD */
+
+.absen-record{
+  background:#fff;
+  border-radius:12px;
+  padding:15px;
+  border:1px solid #e5e7eb;
+  box-shadow:0 2px 6px rgba(0,0,0,0.05);
+}
+
+/* BUTTON */
+
+button{
+  border:none;
+  border-radius:10px;
+  padding:10px 16px;
+  cursor:pointer;
+  font-weight:600;
+}
+
+/* MOBILE */
+
+@media(max-width:768px){
+
+  .live-clock{
+    font-size:32px;
+  }
+
+  .dash-header h2{
+    font-size:22px;
+  }
+
+  .kpi-card h1{
+    font-size:28px;
+  }
+
+}
