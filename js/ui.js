@@ -331,20 +331,17 @@ export async function renderAbsensi(user) {
   /* ================= SUDAH CUTI / IZIN / SAKIT ================= */
 
   if (
-    todayShift.nama_shift === "CUTI" ||
-    todayShift.nama_shift === "SAKIT" ||
-    todayShift.nama_shift === "IZIN" ||
-    todayShift.nama_shift === "OFF"
-  ) {
+  todayShift.nama_shift === "CUTI" ||
+  todayShift.nama_shift === "SAKIT" ||
+  todayShift.nama_shift === "IZIN" ||
+  todayShift.nama_shift === "OFF"
+) {
 
-    actionBox.innerHTML = `
-      <button disabled>
-        ${todayShift.nama_shift}
-      </button>
-    `
+  status =
+    "⚠ Jadwal hari ini: " +
+    todayShift.nama_shift
 
-    return
-  }
+}
 
   /* ================= BELUM ABSEN ================= */
 
@@ -381,33 +378,78 @@ export async function renderAbsensi(user) {
       const loc =
         await getLocation()
 
-      await submitAbsen({
+      let status_absensi = "open"
 
-        nama:
-          user.nama_lengkap,
+// ================= SALAH ABSEN =================
 
-        tanggal:
-          new Date()
-          .toISOString()
-          .split('T')[0],
+if (
+  todayShift.nama_shift === "OFF" ||
+  todayShift.nama_shift === "CUTI" ||
+  todayShift.nama_shift === "SAKIT" ||
+  todayShift.nama_shift === "IZIN"
+) {
+  status_absensi = "salah absen"
+}
 
-        waktu_masuk:
-          new Date().toISOString(),
+// ================= CEK KEMARIN =================
 
-        lat_masuk:
-          loc.lat,
+const yesterday = new Date()
 
-        lng_masuk:
-          loc.lng,
+yesterday.setDate(
+  yesterday.getDate() - 1
+)
 
-        foto_masuk:
-          window.photo || null,
+const yDate =
+  yesterday.toISOString()
+  .split('T')[0]
 
-        status_masuk:
-          checkStatus(
-            todayShift.jam_masuk
-          )
-      })
+const { data: lastAbsen } =
+  await supabase
+    .from('absensi')
+    .select('*')
+    .eq('nama', user.nama_lengkap)
+    .eq('tanggal', yDate)
+    .maybeSingle()
+
+if (
+  lastAbsen &&
+  lastAbsen.waktu_masuk &&
+  !lastAbsen.waktu_pulang
+) {
+  status_absensi =
+    "lupa absen pulang"
+}
+
+await submitAbsen({
+
+  nama:
+    user.nama_lengkap,
+
+  tanggal:
+    new Date()
+    .toISOString()
+    .split('T')[0],
+
+  waktu_masuk:
+    new Date().toISOString(),
+
+  lat_masuk:
+    loc.lat,
+
+  lng_masuk:
+    loc.lng,
+
+  foto_masuk:
+    window.photo || null,
+
+  status_masuk:
+    checkStatus(
+      todayShift.jam_masuk
+    ),
+
+  status_absensi
+
+})
 
       stopCamera(video)
 
