@@ -80,10 +80,11 @@ async function getTodayShift(user_id) {
     return null
   }
 
-  if (!data) return null
+  if (!data) {
+    return null
+  }
 
-  // ================= SHIFT =================
-
+  // ================= SHIFT PAGI =================
   if (data.shift_code == "2") {
     return {
       nama_shift: "Shift Pagi",
@@ -92,6 +93,7 @@ async function getTodayShift(user_id) {
     }
   }
 
+  // ================= SHIFT SORE =================
   if (data.shift_code == "3") {
     return {
       nama_shift: "Shift Sore",
@@ -100,6 +102,7 @@ async function getTodayShift(user_id) {
     }
   }
 
+  // ================= SHIFT MALAM =================
   if (data.shift_code == "4") {
     return {
       nama_shift: "Shift Malam",
@@ -108,6 +111,7 @@ async function getTodayShift(user_id) {
     }
   }
 
+  // ================= OFF =================
   if (data.shift_code == "8") {
     return {
       nama_shift: "OFF",
@@ -116,6 +120,35 @@ async function getTodayShift(user_id) {
     }
   }
 
+  // ================= CUTI =================
+  if (data.status_override === "cuti") {
+    return {
+      nama_shift: "CUTI",
+      jam_masuk: "-",
+      jam_pulang: "-"
+    }
+  }
+
+  // ================= SAKIT =================
+  if (data.status_override === "sakit") {
+    return {
+      nama_shift: "SAKIT",
+      jam_masuk: "-",
+      jam_pulang: "-"
+    }
+  }
+
+  // ================= IZIN =================
+  if (data.status_override === "izin") {
+    return {
+      nama_shift: "IZIN",
+      jam_masuk: "-",
+      jam_pulang: "-"
+    }
+  }
+
+  return null
+}
   // ================= OVERRIDE =================
 
   if (data.status_override === "cuti") {
