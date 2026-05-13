@@ -1,19 +1,34 @@
 import { supabase } from './supabase.js'
-import { openCamera, takePhoto, getLocation, checkStatus } from './absensi.js'
-import { submitAbsen } from './submit_absensi.js'
+
+import {
+  openCamera,
+  takePhoto,
+  getLocation,
+  checkStatus
+} from './absensi.js'
+
+import {
+  submitAbsen
+} from './submit_absensi.js'
+
 
 /* ================= MENU ================= */
 function renderMenu(role) {
 
-  const sidebar = document.getElementById('sidebar')
+  const sidebar =
+    document.getElementById('sidebar')
 
   let menu = [
     { key: 'dashboard', name: 'Dashboard' },
     { key: 'absensi', name: 'Absensi' },
-    { key: 'riwayat', name: 'Riwayat' } // 🔥 PAKSA ADA
+    { key: 'riwayat', name: 'Riwayat' }
   ]
 
-  if (role === 'admin' || role === 'super_admin') {
+  if (
+    role === 'admin' ||
+    role === 'super_admin'
+  ) {
+
     menu.push(
       { key: 'shift', name: 'Shift' },
       { key: 'jadwal', name: 'Jadwal' },
@@ -25,33 +40,49 @@ function renderMenu(role) {
 
   sidebar.innerHTML = `
     <div class="sidebar-nav">
+
       ${menu.map(m => `
-       <a href="javascript:void(0)" onclick="navigate('${m.key}')">
+        <a href="#"
+          onclick="navigate('${m.key}')">
+
           ${m.name}
+
         </a>
       `).join('')}
+
     </div>
   `
 }
-/* ================= GLOBAL CAMERA ================= */
+
+
+/* ================= CAMERA ================= */
 window.activeVideoStream = null
 
 function stopCamera(video) {
 
-  const stream = video?.srcObject || window.activeVideoStream
+  const stream =
+    video?.srcObject ||
+    window.activeVideoStream
 
   if (stream) {
-    stream.getTracks().forEach(track => track.stop())
+    stream
+      .getTracks()
+      .forEach(track => track.stop())
   }
 
-  if (video) video.srcObject = null
+  if (video) {
+    video.srcObject = null
+  }
+
   window.activeVideoStream = null
 }
 
-/* ================= CEK ABSEN HARI INI ================= */
+
+/* ================= ABSEN HARI INI ================= */
 async function getTodayAbsen(nama) {
 
-  const today = new Date().toISOString().split('T')[0]
+  const today =
+    new Date().toISOString().split('T')[0]
 
   const { data } = await supabase
     .from('absensi')
@@ -62,7 +93,9 @@ async function getTodayAbsen(nama) {
 
   return data
 }
-/* ================= GET SHIFT HARI INI ================= */
+
+
+/* ================= SHIFT HARI INI ================= */
 async function getTodayShift(user_id) {
 
   const today =
@@ -84,7 +117,7 @@ async function getTodayShift(user_id) {
     return null
   }
 
-  // ================= SHIFT PAGI =================
+  // SHIFT PAGI
   if (data.shift_code == "2") {
     return {
       nama_shift: "Shift Pagi",
@@ -93,7 +126,7 @@ async function getTodayShift(user_id) {
     }
   }
 
-  // ================= SHIFT SORE =================
+  // SHIFT SORE
   if (data.shift_code == "3") {
     return {
       nama_shift: "Shift Sore",
@@ -102,7 +135,7 @@ async function getTodayShift(user_id) {
     }
   }
 
-  // ================= SHIFT MALAM =================
+  // SHIFT MALAM
   if (data.shift_code == "4") {
     return {
       nama_shift: "Shift Malam",
@@ -111,7 +144,7 @@ async function getTodayShift(user_id) {
     }
   }
 
-  // ================= OFF =================
+  // OFF
   if (data.shift_code == "8") {
     return {
       nama_shift: "OFF",
@@ -120,7 +153,7 @@ async function getTodayShift(user_id) {
     }
   }
 
-  // ================= CUTI =================
+  // CUTI
   if (data.status_override === "cuti") {
     return {
       nama_shift: "CUTI",
@@ -129,7 +162,7 @@ async function getTodayShift(user_id) {
     }
   }
 
-  // ================= SAKIT =================
+  // SAKIT
   if (data.status_override === "sakit") {
     return {
       nama_shift: "SAKIT",
@@ -138,97 +171,7 @@ async function getTodayShift(user_id) {
     }
   }
 
-  // ================= IZIN =================
-  if (data.status_override === "izin") {
-    return {
-      nama_shift: "IZIN",
-      jam_masuk: "-",
-      jam_pulang: "-"
-    }
-  }
-
-  return null
-}
-  // ================= OVERRIDE =================
-
-  if (data.status_override === "cuti") {
-    return {
-      nama_shift: "CUTI",
-      jam_masuk: "-",
-      jam_pulang: "-"
-    }
-  }
-
-  if (data.status_override === "sakit") {
-    return {
-      nama_shift: "SAKIT",
-      jam_masuk: "-",
-      jam_pulang: "-"
-    }
-  }
-
-  if (data.status_override === "izin") {
-    return {
-      nama_shift: "IZIN",
-      jam_masuk: "-",
-      jam_pulang: "-"
-    }
-  }
-
-  return null
-}
-  // ================= SHIFT MANUAL =================
-
-  if (data.shift_code == "2") {
-    return {
-      nama_shift: "Shift Pagi",
-      jam_masuk: "07:00",
-      jam_pulang: "15:00"
-    }
-  }
-
-  if (data.shift_code == "3") {
-    return {
-      nama_shift: "Shift Sore",
-      jam_masuk: "15:00",
-      jam_pulang: "23:00"
-    }
-  }
-
-  if (data.shift_code == "4") {
-    return {
-      nama_shift: "Shift Malam",
-      jam_masuk: "23:00",
-      jam_pulang: "07:00"
-    }
-  }
-
-  if (data.shift_code == "8") {
-    return {
-      nama_shift: "OFF",
-      jam_masuk: "-",
-      jam_pulang: "-"
-    }
-  }
-
-  // ================= OVERRIDE =================
-
-  if (data.status_override === "cuti") {
-    return {
-      nama_shift: "CUTI",
-      jam_masuk: "-",
-      jam_pulang: "-"
-    }
-  }
-
-  if (data.status_override === "sakit") {
-    return {
-      nama_shift: "SAKIT",
-      jam_masuk: "-",
-      jam_pulang: "-"
-    }
-  }
-
+  // IZIN
   if (data.status_override === "izin") {
     return {
       nama_shift: "IZIN",
@@ -240,28 +183,38 @@ async function getTodayShift(user_id) {
   return null
 }
 
-  return data?.shift || null
-}
 
 /* ================= RENDER ABSENSI ================= */
-export async function renderAbsensi(user, shift) {
+export async function renderAbsensi(user) {
 
-  const content = document.getElementById('content')
+  const content =
+    document.getElementById('content')
 
   const data =
-    await getTodayAbsen(user.nama_lengkap)
+    await getTodayAbsen(
+      user.nama_lengkap
+    )
 
   const todayShift =
     await getTodayShift(user.id)
 
-  let status = "❌ Belum absen masuk"
+  let status =
+    "❌ Belum absen masuk"
 
-  if (data?.waktu_masuk && !data?.waktu_pulang) {
-    status = "🟡 Sudah masuk, belum pulang"
+  if (
+    data?.waktu_masuk &&
+    !data?.waktu_pulang
+  ) {
+    status =
+      "🟡 Sudah masuk, belum pulang"
   }
 
-  if (data?.waktu_masuk && data?.waktu_pulang) {
-    status = "🟢 Sudah selesai hari ini"
+  if (
+    data?.waktu_masuk &&
+    data?.waktu_pulang
+  ) {
+    status =
+      "🟢 Sudah selesai hari ini"
   }
 
   content.innerHTML = `
@@ -274,7 +227,6 @@ export async function renderAbsensi(user, shift) {
         ${status}
       </p>
 
-      <!-- SHIFT INFO -->
       <div class="shift-info">
 
         ${
@@ -292,10 +244,6 @@ export async function renderAbsensi(user, shift) {
                 ${todayShift.jam_pulang}
               </p>
 
-              <small>
-                ${todayShift.keterangan || ''}
-              </small>
-
             </div>
           `
           : `
@@ -305,17 +253,12 @@ export async function renderAbsensi(user, shift) {
                 Tidak Ada Shift
               </h4>
 
-              <p>
-                Hubungi Admin
-              </p>
-
             </div>
           `
         }
 
       </div>
 
-      <!-- CAMERA -->
       <video
         id="video"
         autoplay
@@ -332,7 +275,6 @@ export async function renderAbsensi(user, shift) {
         style="display:none;">
       </canvas>
 
-      <!-- BUTTON -->
       <div
         id="actionBox"
         style="
@@ -355,27 +297,57 @@ export async function renderAbsensi(user, shift) {
   const actionBox =
     document.getElementById('actionBox')
 
-  if (video) {
+  /* ================= CAMERA SAFE ================= */
+
+  try {
+
     await openCamera(video)
+
+  } catch (err) {
+
+    console.log(
+      'Camera Error:',
+      err
+    )
+
+    video.style.display = 'none'
   }
 
   let photo = null
 
-  /* ================= NO SHIFT ================= */
+  /* ================= TIDAK ADA SHIFT ================= */
+
   if (!todayShift) {
 
     actionBox.innerHTML = `
-
       <button disabled>
         Tidak Ada Shift Hari Ini
       </button>
+    `
 
+    return
+  }
+
+  /* ================= SUDAH CUTI / IZIN / SAKIT ================= */
+
+  if (
+    todayShift.nama_shift === "CUTI" ||
+    todayShift.nama_shift === "SAKIT" ||
+    todayShift.nama_shift === "IZIN" ||
+    todayShift.nama_shift === "OFF"
+  ) {
+
+    actionBox.innerHTML = `
+      <button disabled>
+        ${todayShift.nama_shift}
+      </button>
     `
 
     return
   }
 
   /* ================= BELUM ABSEN ================= */
+
   if (!data) {
 
     actionBox.innerHTML = `
@@ -390,32 +362,43 @@ export async function renderAbsensi(user, shift) {
 
     `
 
-    document.getElementById('btnPhoto').onclick = () => {
+    document.getElementById(
+      'btnPhoto'
+    ).onclick = () => {
 
-      photo = takePhoto(video, canvas)
+      photo =
+        takePhoto(video, canvas)
 
       window.photo = photo
 
       alert('Foto berhasil diambil')
     }
 
-    document.getElementById('btnMasuk').onclick = async () => {
+    document.getElementById(
+      'btnMasuk'
+    ).onclick = async () => {
 
-      const loc = await getLocation()
+      const loc =
+        await getLocation()
 
       await submitAbsen({
 
-        nama: user.nama_lengkap,
+        nama:
+          user.nama_lengkap,
 
         tanggal:
-          new Date().toISOString().split('T')[0],
+          new Date()
+          .toISOString()
+          .split('T')[0],
 
         waktu_masuk:
           new Date().toISOString(),
 
-        lat_masuk: loc.lat,
+        lat_masuk:
+          loc.lat,
 
-        lng_masuk: loc.lng,
+        lng_masuk:
+          loc.lng,
 
         foto_masuk:
           window.photo || null,
@@ -423,25 +406,25 @@ export async function renderAbsensi(user, shift) {
         status_masuk:
           checkStatus(
             todayShift.jam_masuk
-          ),
-
-        shift_id:
-          todayShift.id
-
+          )
       })
 
       stopCamera(video)
 
       alert('Absen masuk berhasil')
 
-      renderAbsensi(user, shift)
+      renderAbsensi(user)
     }
 
     return
   }
 
   /* ================= BELUM PULANG ================= */
-  if (data && !data.waktu_pulang) {
+
+  if (
+    data &&
+    !data.waktu_pulang
+  ) {
 
     actionBox.innerHTML = `
 
@@ -455,18 +438,24 @@ export async function renderAbsensi(user, shift) {
 
     `
 
-    document.getElementById('btnPhoto').onclick = () => {
+    document.getElementById(
+      'btnPhoto'
+    ).onclick = () => {
 
-      photo = takePhoto(video, canvas)
+      photo =
+        takePhoto(video, canvas)
 
       window.photo = photo
 
       alert('Foto berhasil diambil')
     }
 
-    document.getElementById('btnPulang').onclick = async () => {
+    document.getElementById(
+      'btnPulang'
+    ).onclick = async () => {
 
-      const loc = await getLocation()
+      const loc =
+        await getLocation()
 
       await supabase
         .from('absensi')
@@ -491,38 +480,43 @@ export async function renderAbsensi(user, shift) {
 
       alert('Absen pulang berhasil')
 
-      renderAbsensi(user, shift)
+      renderAbsensi(user)
     }
 
     return
   }
 
   /* ================= DONE ================= */
-  actionBox.innerHTML = `
 
+  actionBox.innerHTML = `
     <button disabled>
       ✔ Sudah Absen Hari Ini
     </button>
-
   `
 
   stopCamera(video)
 }
 
-//===========Riwayat===================
 
+/* ================= RIWAYAT ================= */
 export async function renderRiwayat() {
 
-  const content = document.getElementById('content')
-  const user = window.currentUser
+  const content =
+    document.getElementById('content')
 
-  // 🔥 SAFE GUARD
+  const user =
+    window.currentUser
+
   if (!user) {
+
     content.innerHTML = `
       <div class="card">
-        <h3>Silakan login terlebih dahulu</h3>
+        <h3>
+          Silakan login terlebih dahulu
+        </h3>
       </div>
     `
+
     return
   }
 
@@ -532,29 +526,45 @@ export async function renderRiwayat() {
     </div>
   `
 
-  const { data, error } = await supabase
-    .from('absensi')
-    .select('*')
-    .eq('nama', user.nama_lengkap)
-    .order('tanggal', { ascending: false })
-
-  console.log("RIWAYAT:", data, error)
+  const { data, error } =
+    await supabase
+      .from('absensi')
+      .select('*')
+      .eq('nama', user.nama_lengkap)
+      .order('tanggal', {
+        ascending: false
+      })
 
   if (error) {
-    content.innerHTML = `<div class="card">Gagal load riwayat</div>`
+
+    content.innerHTML = `
+      <div class="card">
+        Gagal load riwayat
+      </div>
+    `
+
     return
   }
 
   if (!data || data.length === 0) {
-    content.innerHTML = `<div class="card">Belum ada riwayat</div>`
+
+    content.innerHTML = `
+      <div class="card">
+        Belum ada riwayat
+      </div>
+    `
+
     return
   }
 
   content.innerHTML = `
+
     <div class="card">
+
       <h2>Riwayat Absensi</h2>
 
       <table>
+
         <tr>
           <th>Tanggal</th>
           <th>Masuk</th>
@@ -563,68 +573,31 @@ export async function renderRiwayat() {
         </tr>
 
         ${data.map(r => `
+
           <tr>
-            <td>${r.tanggal}</td>
-            <td>${r.waktu_masuk || '-'}</td>
-            <td>${r.waktu_pulang || '-'}</td>
-            <td>${r.status_masuk || '-'}</td>
+
+            <td>
+              ${r.tanggal}
+            </td>
+
+            <td>
+              ${r.waktu_masuk || '-'}
+            </td>
+
+            <td>
+              ${r.waktu_pulang || '-'}
+            </td>
+
+            <td>
+              ${r.status_masuk || '-'}
+            </td>
+
           </tr>
+
         `).join('')}
+
       </table>
+
     </div>
   `
-}
-
-window.uploadJadwalExcel = async function () {
-
-  const file = document.getElementById('excelFile').files[0]
-
-  if (!file) {
-    alert("Pilih file Excel dulu")
-    return
-  }
-
-  const buffer = await file.arrayBuffer()
-
-  const workbook = XLSX.read(buffer)
-
-  const sheet = workbook.Sheets[workbook.SheetNames[0]]
-
-  const json = XLSX.utils.sheet_to_json(sheet)
-
-  let result = []
-
-  json.forEach(row => {
-
-    const nama = row.nama
-
-    Object.keys(row).forEach(key => {
-
-      if (key === "nama") return
-
-      result.push({
-        nama: nama,
-        tanggal: key,
-        status: row[key]
-      })
-
-    })
-
-  })
-
-  console.log("DATA:", result)
-
-  // 🔥 INSERT KE SUPABASE
-  for (let item of result) {
-
-    await supabase.from('jadwal').insert({
-      nama: item.nama,
-      tanggal: item.tanggal,
-      status_override: item.status
-    })
-
-  }
-
-  alert("Upload jadwal berhasil ✔")
-
 }
