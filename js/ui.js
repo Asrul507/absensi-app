@@ -70,24 +70,80 @@ async function getTodayShift(user_id) {
 
   const { data, error } = await supabase
     .from('jadwal')
-    .select(`
-      *,
-      shift:shift_id(
-        id,
-        nama_shift,
-        jam_masuk,
-        jam_pulang,
-        keterangan
-      )
-    `)
+    .select('*')
     .eq('user_id', user_id)
     .eq('tanggal', today)
     .maybeSingle()
 
   if (error) {
-    console.error(error)
+    console.log(error)
     return null
   }
+
+  if (!data) return null
+
+  // ================= SHIFT MANUAL =================
+
+  if (data.shift_code == "2") {
+    return {
+      nama_shift: "Shift Pagi",
+      jam_masuk: "07:00",
+      jam_pulang: "15:00"
+    }
+  }
+
+  if (data.shift_code == "3") {
+    return {
+      nama_shift: "Shift Sore",
+      jam_masuk: "15:00",
+      jam_pulang: "23:00"
+    }
+  }
+
+  if (data.shift_code == "4") {
+    return {
+      nama_shift: "Shift Malam",
+      jam_masuk: "23:00",
+      jam_pulang: "07:00"
+    }
+  }
+
+  if (data.shift_code == "8") {
+    return {
+      nama_shift: "OFF",
+      jam_masuk: "-",
+      jam_pulang: "-"
+    }
+  }
+
+  // ================= OVERRIDE =================
+
+  if (data.status_override === "cuti") {
+    return {
+      nama_shift: "CUTI",
+      jam_masuk: "-",
+      jam_pulang: "-"
+    }
+  }
+
+  if (data.status_override === "sakit") {
+    return {
+      nama_shift: "SAKIT",
+      jam_masuk: "-",
+      jam_pulang: "-"
+    }
+  }
+
+  if (data.status_override === "izin") {
+    return {
+      nama_shift: "IZIN",
+      jam_masuk: "-",
+      jam_pulang: "-"
+    }
+  }
+
+  return null
+}
 
   return data?.shift || null
 }
