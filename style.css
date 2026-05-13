@@ -2157,3 +2157,292 @@ table {
   transition:
     all .2s ease;
 }
+
+
+/* =========================================================
+   GLOBAL RESPONSIVE FIX SYSTEM
+========================================================= */
+
+/* ===== GLOBAL SPACING SYSTEM ===== */
+
+form > * + *,
+.card > * + *,
+.modal-box > * + *,
+.popup-box > * + * {
+  margin-top: 16px;
+}
+
+/* khusus button area */
+
+button,
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  margin-top: 10px;
+}
+
+/* spacing antar field */
+
+.field + .field {
+  margin-top: 16px;
+}
+
+/* ===== FORM LAYOUT ===== */
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== INPUT FIX ===== */
+
+input,
+select,
+textarea {
+  min-height: 46px;
+}
+
+/* textarea */
+
+textarea {
+  min-height: 100px;
+}
+
+/* ===== BUTTON FIX ===== */
+
+button,
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+
+  min-height: 44px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  white-space: nowrap;
+}
+
+/* ===== BUTTON GROUP ===== */
+
+.form-actions,
+.button-group,
+.btn-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+/* ===== CARD FIX ===== */
+
+.card,
+.box,
+.panel,
+.widget,
+form {
+
+  width: 100%;
+
+  overflow: hidden;
+}
+
+/* ===== TABLE RESPONSIVE ===== */
+
+.tbl-wrap,
+.table-wrap,
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* table tidak rusak */
+
+table {
+  min-width: 600px;
+}
+
+/* ===== IMAGE ===== */
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ===== FLEXIBLE GRID ===== */
+
+.grid-auto {
+  display: grid;
+
+  grid-template-columns:
+    repeat(auto-fit, minmax(220px,1fr));
+
+  gap: 16px;
+}
+
+/* ===== FLEX ROW ===== */
+
+.row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.row > * {
+  flex: 1;
+  min-width: 220px;
+}
+
+/* ===== PAGE CONTENT ===== */
+
+#content,
+.content,
+.page,
+.container {
+
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* ===== MOBILE ===== */
+
+@media (max-width: 768px) {
+
+  /* padding mobile */
+
+  #content,
+  .content,
+  .container {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  /* form full width */
+
+  form,
+  .card,
+  .modal-box,
+  .popup-box {
+    padding: 16px;
+  }
+
+  /* button full width */
+
+  button,
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    width: 100%;
+  }
+
+  /* action buttons */
+
+  .form-actions,
+  .button-group,
+  .btn-group {
+    flex-direction: column;
+  }
+
+  /* table */
+
+  table {
+    min-width: 520px;
+  }
+
+  /* heading */
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+  }
+
+  h3 {
+    font-size: 1.05rem;
+  }
+
+}
+
+/* ===== SMALL MOBILE ===== */
+
+@media (max-width: 480px) {
+
+  body {
+    font-size: 13px;
+  }
+
+  #content,
+  .content,
+  .container {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .card,
+  form {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* anti zoom ios */
+
+  button {
+    font-size: .85rem;
+  }
+
+}
+
+/* ===== TABLET ===== */
+
+@media (min-width: 769px) and (max-width: 1024px) {
+
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: repeat(2,1fr);
+  }
+
+}
+
+/* ===== LARGE DESKTOP ===== */
+
+@media (min-width: 1400px) {
+
+  #content,
+  .container {
+
+    max-width: 1400px;
+    margin-inline: auto;
+  }
+
+}
+
+/* ===== SAFE OVERFLOW ===== */
+
+* {
+  max-width: 100%;
+}
+
+/* ===== RESPONSIVE IFRAME ===== */
+
+iframe {
+  max-width: 100%;
+  border: none;
+}
