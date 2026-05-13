@@ -463,6 +463,76 @@ await submitAbsen({
 
   /* ================= BELUM PULANG ================= */
 
+if (!data) {
+
+  actionBox.innerHTML = `
+
+    <button id="btnPhoto">
+      📸 Foto
+    </button>
+
+    <button id="btnPulangLangsung">
+      Absen Pulang
+    </button>
+
+  `
+
+  document.getElementById(
+    'btnPhoto'
+  ).onclick = () => {
+
+    photo =
+      takePhoto(video, canvas)
+
+    window.photo = photo
+
+    alert('Foto berhasil diambil')
+  }
+
+  document.getElementById(
+    'btnPulangLangsung'
+  ).onclick = async () => {
+
+    const loc =
+      await getLocation()
+
+    await supabase
+      .from('absensi')
+      .insert([{
+
+        nama:
+          user.nama_lengkap,
+
+        tanggal:
+          new Date()
+          .toISOString()
+          .split('T')[0],
+
+        waktu_pulang:
+          new Date().toISOString(),
+
+        lat_pulang:
+          loc.lat,
+
+        lng_pulang:
+          loc.lng,
+
+        foto_pulang:
+          window.photo || null,
+
+        status_absensi:
+          "lupa absen datang"
+
+      }])
+
+    alert(
+      "Tercatat lupa absen datang"
+    )
+
+    renderAbsensi(user)
+  }
+}
+  
   if (
     data &&
     !data.waktu_pulang
@@ -612,6 +682,7 @@ export async function renderRiwayat() {
           <th>Masuk</th>
           <th>Pulang</th>
           <th>Status</th>
+          <th>Keterangan</th>
         </tr>
 
         ${data.map(r => `
@@ -630,9 +701,13 @@ export async function renderRiwayat() {
               ${r.waktu_pulang || '-'}
             </td>
 
-            <td>
-              ${r.status_masuk || '-'}
-            </td>
+           <td>
+  ${r.status_masuk || '-'}
+</td>
+
+<td>
+  ${r.status_absensi || 'open'}
+</td>
 
           </tr>
 
