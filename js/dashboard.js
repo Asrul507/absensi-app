@@ -39,7 +39,7 @@ export async function renderDashboard() {
       <div class="dash-header">
 
         <h2>
-          Hotel Operation Dashboard
+          Dashboard
         </h2>
 
         <p>
