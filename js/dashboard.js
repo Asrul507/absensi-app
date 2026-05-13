@@ -14,10 +14,6 @@ export async function renderDashboard() {
   const today =
     new Date().toISOString().split('T')[0]
 
-  /* ======================================================
-     RENDER BASE
-  ====================================================== */
-
   content.innerHTML = `
 
     <div class="dashboard-container">
@@ -91,9 +87,7 @@ export async function renderDashboard() {
     </div>
   `
 
-  /* ======================================================
-     LIVE CLOCK
-  ====================================================== */
+  /* ================= LIVE CLOCK ================= */
 
   function updateClock() {
 
@@ -127,9 +121,7 @@ export async function renderDashboard() {
 
   setInterval(updateClock, 1000)
 
-  /* ======================================================
-     LOAD GLOBAL DATA
-  ====================================================== */
+  /* ================= LOAD KPI ================= */
 
   const { count: totalUser } =
     await supabase
@@ -174,9 +166,9 @@ export async function renderDashboard() {
     'telat'
   ).innerText = telat
 
-  /* ======================================================
-     STAFF SECTION
-  ====================================================== */
+  /* =================================================
+     STAFF DASHBOARD
+  ================================================= */
 
   if (role === 'staff') {
 
@@ -276,13 +268,7 @@ export async function renderDashboard() {
 
         <h3>Quick Access</h3>
 
-        <div
-          style="
-            display:flex;
-            gap:10px;
-            flex-wrap:wrap;
-            margin-top:15px;
-          ">
+        <div class="quick-action">
 
           <button onclick="navigate('absensi')">
             📸 Absensi
@@ -302,9 +288,9 @@ export async function renderDashboard() {
     `
   }
 
-  /* ======================================================
-     ADMIN / SUPER ADMIN
-  ====================================================== */
+  /* =================================================
+     ADMIN / SUPER ADMIN DASHBOARD
+  ================================================= */
 
   if (
     role === 'admin' ||
@@ -340,7 +326,6 @@ export async function renderDashboard() {
       'adminSection'
     ).innerHTML = `
 
-      <!-- MONITORING -->
       <div class="card">
 
         <h3>Live Monitoring</h3>
@@ -371,17 +356,11 @@ export async function renderDashboard() {
 
       </div>
 
-      <!-- STAFF SHIFT -->
       <div class="card">
 
         <h3>Jadwal Hari Ini</h3>
 
-        <div
-          style="
-            display:grid;
-            gap:10px;
-            margin-top:15px;
-          ">
+        <div class="jadwal-list">
 
           ${jadwal?.map(j => {
 
@@ -429,18 +408,11 @@ export async function renderDashboard() {
 
       </div>
 
-      <!-- QUICK ACTION -->
       <div class="card">
 
         <h3>Quick Action</h3>
 
-        <div
-          style="
-            display:flex;
-            gap:10px;
-            flex-wrap:wrap;
-            margin-top:15px;
-          ">
+        <div class="quick-action">
 
           <button onclick="navigate('jadwal')">
             📅 Jadwal
