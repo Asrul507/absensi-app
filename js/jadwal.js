@@ -331,6 +331,147 @@ window.deleteJadwal = async function (id) {
   renderJadwalManagement()
 }
 
+
+window.showCalendarDetail = async function(tanggal) {
+
+  const user = window.currentUser
+
+  const isAdmin =
+    user.role === 'admin' ||
+    user.role === 'super_admin'
+
+  let query = supabase
+    .from('jadwal')
+    .select(`
+      *,
+      profiles:user_id(
+        nama_lengkap
+      )
+    `)
+    .eq('tanggal', tanggal)
+
+  // STAFF hanya lihat dirinya
+  if (!isAdmin) {
+    query = query.eq(
+      'user_id',
+      user.id
+    )
+  }
+
+  const { data, error } =
+    await query
+
+  if (error) {
+    alert('Gagal load detail')
+    return
+  }
+
+  let html = `
+    <div class="popup-overlay"
+      onclick="closePopup()">
+
+      <div class="popup-box"
+        onclick="event.stopPropagation()">
+
+        <h3>
+          Jadwal ${tanggal}
+        </h3>
+  `
+
+  if (!data || data.length === 0) {
+
+    html += `
+      <p>Tidak ada jadwal</p>
+    `
+
+  } else {
+
+    html += `
+      <table style="
+        width:100%;
+        margin-top:15px;
+      ">
+        <tr>
+          <th>Nama</th>
+          <th>Shift</th>
+        </tr>
+    `
+
+    data.forEach(j => {
+
+      let shift = '-'
+
+      if (j.shift_code == "2")
+        shift = "🌅 Pagi"
+
+      if (j.shift_code == "3")
+        shift = "🌇 Sore"
+
+      if (j.shift_code == "4")
+        shift = "🌙 Malam"
+
+      if (j.shift_code == "8")
+        shift = "⚫ OFF"
+
+      if (j.status_override === "cuti")
+        shift = "🟢 CUTI"
+
+      if (j.status_override === "sakit")
+        shift = "🟡 SAKIT"
+
+      if (j.status_override === "izin")
+        shift = "🔵 IZIN"
+
+      html += `
+        <tr>
+
+          <td>
+            ${j.profiles?.nama_lengkap || '-'}
+          </td>
+
+          <td>
+            ${shift}
+          </td>
+
+        </tr>
+      `
+    })
+
+    html += `</table>`
+  }
+
+  html += `
+
+        <button
+          onclick="closePopup()"
+          style="margin-top:15px;">
+
+          Tutup
+
+        </button>
+
+      </div>
+
+    </div>
+  `
+
+  document.body.insertAdjacentHTML(
+    'beforeend',
+    html
+  )
+}
+
+
+/* ================= CLOSE POPUP ================= */
+window.closePopup = function () {
+
+  const popup =
+    document.querySelector(
+      '.popup-overlay'
+    )
+
+  if (popup) popup.remove()
+}
 /* ================= UPLOAD EXCEL ================= */
 window.uploadJadwalExcel = async function () {
 
