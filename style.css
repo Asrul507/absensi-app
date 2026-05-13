@@ -2320,3 +2320,37 @@ td.td-truncate {
   border-radius: 6px;
   font-size: 12px;
 }
+
+
+/* ===== Tambahan fitur ===== */
+.popup-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.5);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:9999;
+}
+
+.popup-box{
+  background:#fff;
+  width:90%;
+  max-width:500px;
+  border-radius:16px;
+  padding:20px;
+  max-height:80vh;
+  overflow:auto;
+}
+
+.popup-box table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+.popup-box th,
+.popup-box td{
+  padding:10px;
+  border-bottom:1px solid #eee;
+  text-align:left;
+}
