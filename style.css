@@ -2446,3 +2446,271 @@ iframe {
   max-width: 100%;
   border: none;
 }
+
+/* =========================================================
+   UNIVERSAL WIDTH & OVERFLOW FIX
+========================================================= */
+
+/* ===== GLOBAL SAFE WIDTH ===== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* ===== BODY FIX ===== */
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* ===== APP CONTAINER ===== */
+
+#appPage,
+#content,
+.container,
+.page,
+.content {
+
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* ===== FLEX FIX ===== */
+
+.row,
+.flex,
+.form-actions,
+.button-group,
+.btn-group {
+
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+/* FLEX CHILD */
+
+.row > *,
+.flex > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* ===== GRID FIX ===== */
+
+.grid,
+.grid-2,
+.grid-3,
+.grid-4,
+.grid-auto {
+
+  width: 100%;
+  max-width: 100%;
+}
+
+/* ===== CARD FIX ===== */
+
+.card,
+.box,
+.panel,
+.widget,
+form {
+
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* ===== INPUT FIX ===== */
+
+input,
+select,
+textarea,
+button {
+
+  max-width: 100%;
+}
+
+/* ===== TEXT FIX ===== */
+
+h1,h2,h3,h4,h5,h6,
+p,
+span,
+label,
+td,
+th,
+div {
+
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ===== IMAGE ===== */
+
+img,
+video,
+canvas,
+iframe {
+
+  max-width: 100%;
+  height: auto;
+}
+
+/* ===== TABLE FIX ===== */
+
+.tbl-wrap,
+.table-wrap,
+.table-responsive {
+
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+
+  -webkit-overflow-scrolling: touch;
+}
+
+/* table jangan paksa layar */
+
+table {
+  width: 100%;
+  min-width: unset !important;
+}
+
+/* table mobile */
+
+@media (max-width: 768px) {
+
+  table {
+    font-size: .78rem;
+  }
+
+  th,
+  td {
+    padding: 10px 8px;
+  }
+
+}
+
+/* ===== SIDEBAR FIX ===== */
+
+#sidebar {
+  max-width: 85vw;
+}
+
+/* ===== CONTENT FIX ===== */
+
+#content {
+
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+}
+
+/* desktop sidebar spacing */
+
+@media (min-width: 900px) {
+
+  #content {
+    margin-left: var(--sidebar-w);
+    width: calc(100% - var(--sidebar-w));
+  }
+
+}
+
+/* ===== BUTTON FIX ===== */
+
+button,
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+
+  white-space: normal;
+  text-align: center;
+}
+
+/* ===== MODAL FIX ===== */
+
+.modal-box,
+.popup-box {
+
+  width: calc(100% - 20px);
+  max-width: 600px;
+}
+
+/* ===== GRID RESPONSIVE ===== */
+
+@media (max-width: 1024px) {
+
+  .grid-4 {
+    grid-template-columns: repeat(2,1fr);
+  }
+
+}
+
+@media (max-width: 768px) {
+
+  .grid-2,
+  .grid-3,
+  .grid-4,
+  .grid-auto {
+
+    grid-template-columns: 1fr !important;
+  }
+
+}
+
+/* ===== SMALL MOBILE ===== */
+
+@media (max-width: 480px) {
+
+  body {
+    overflow-x: hidden;
+  }
+
+  #content,
+  .content,
+  .container {
+
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .card,
+  form {
+
+    padding: 14px;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+  }
+
+  h2 {
+    font-size: 1.15rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+  }
+
+}
+
+/* ===== PREVENT 100VW BUG ===== */
+
+[style*="100vw"] {
+  width: 100% !important;
+}
+
+/* ===== SAFE PRE ===== */
+
+pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
