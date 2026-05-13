@@ -1840,3 +1840,320 @@ td.td-num, th.td-num { width: 42px; text-align: center; color: var(--text-muted)
   .calendar-grid { grid-template-columns: repeat(4, 1fr); gap: 7px; }
   .login-box   { padding: 32px 22px; }
 }
+
+
+/* ================perubahan=============== */
+/* =========================================================
+   AUTO GLOBAL UI SYSTEM
+   Flexible Styling for ALL HTML
+========================================================= */
+
+/* ===== GLOBAL SPACING ===== */
+
+section,
+.card,
+form,
+table,
+.tbl-wrap,
+fieldset {
+  margin-bottom: 16px;
+}
+
+/* ===== AUTO CARD ===== */
+
+div:not(:empty) {
+  border-radius: var(--r-md);
+}
+
+/* ===== FORM AUTO STYLE ===== */
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--r-md);
+  background: var(--white);
+  color: var(--text);
+  font-size: .92rem;
+  font-family: inherit;
+  outline: none;
+  transition: .2s;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,.04),
+    inset 0 1px 2px rgba(0,0,0,.03);
+}
+
+/* focus */
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary);
+  box-shadow:
+    0 0 0 4px var(--primary-glow),
+    0 2px 6px rgba(0,0,0,.05);
+}
+
+/* placeholder */
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--gray-400);
+}
+
+/* ===== LABEL ===== */
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--gray-600);
+}
+
+/* ===== BUTTON GENERAL ===== */
+
+button,
+.btn {
+  padding: 11px 18px;
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: .85rem;
+  transition: .2s;
+  background:
+    linear-gradient(
+      180deg,
+      #4f8ef7 0%,
+      var(--primary) 50%,
+      var(--primary-dark) 100%
+    );
+
+  color: white;
+
+  box-shadow:
+    0 4px 14px rgba(37,99,235,.22),
+    inset 0 1px 0 rgba(255,255,255,.18);
+}
+
+/* hover */
+
+button:hover,
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 24px rgba(37,99,235,.28);
+}
+
+/* active */
+
+button:active,
+.btn:active {
+  transform: scale(.98);
+}
+
+/* ===== SECONDARY BUTTON ===== */
+
+button.secondary,
+.btn-secondary {
+  background: white;
+  color: var(--text);
+  border: 1.5px solid var(--gray-200);
+}
+
+/* ===== DANGER BUTTON ===== */
+
+button.danger,
+.btn-danger {
+  background:
+    linear-gradient(
+      180deg,
+      #ef4444 0%,
+      #dc2626 100%
+    );
+}
+
+/* ===== TABLE AUTO ===== */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+/* table header */
+
+thead {
+  background:
+    linear-gradient(
+      180deg,
+      var(--gray-50),
+      var(--gray-100)
+    );
+}
+
+thead th {
+  padding: 14px;
+  text-align: left;
+  font-size: .74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--gray-600);
+  border-bottom: 2px solid var(--gray-200);
+}
+
+/* body */
+
+tbody td {
+  padding: 14px;
+  border-bottom: 1px solid var(--gray-100);
+  font-size: .86rem;
+}
+
+tbody tr:hover {
+  background: var(--primary-light);
+}
+
+/* ===== TABLE WRAP ===== */
+
+.tbl-wrap,
+.table-wrap,
+.table-responsive {
+  overflow-x: auto;
+  border-radius: var(--r-lg);
+}
+
+/* ===== CARD AUTO ===== */
+
+.card,
+.box,
+.panel,
+.widget,
+form,
+fieldset {
+  background: white;
+  border-radius: var(--r-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(226,232,240,.7);
+}
+
+/* ===== HEADINGS ===== */
+
+h1,h2,h3,h4,h5,h6 {
+  color: var(--text);
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+
+h1 {
+  font-size: 1.8rem;
+}
+
+h2 {
+  font-size: 1.4rem;
+}
+
+h3 {
+  font-size: 1.1rem;
+}
+
+/* ===== LINKS ===== */
+
+a {
+  color: var(--primary);
+  transition: .2s;
+}
+
+a:hover {
+  opacity: .8;
+}
+
+/* ===== LIST ===== */
+
+ul,
+ol {
+  padding-left: 20px;
+}
+
+/* ===== IMAGE ===== */
+
+img {
+  max-width: 100%;
+  border-radius: var(--r-md);
+}
+
+/* ===== FLEX AUTO ===== */
+
+.row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.col {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* ===== GRID AUTO ===== */
+
+.grid {
+  display: grid;
+  gap: 14px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2,1fr);
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3,1fr);
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4,1fr);
+}
+
+/* ===== MOBILE ===== */
+
+@media (max-width: 768px) {
+
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .row {
+    flex-direction: column;
+  }
+
+  button {
+    width: 100%;
+  }
+
+  table {
+    min-width: 600px;
+  }
+
+}
+
+/* ===== SMOOTH ANIMATION ===== */
+
+.card,
+button,
+input,
+select,
+textarea,
+table {
+  transition:
+    all .2s ease;
+}
