@@ -2495,3 +2495,440 @@ button{
   }
 
 }
+
+
+/* ======================================================
+   GLOBAL UI SYSTEM
+====================================================== */
+
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:0;
+  padding:0;
+  font-family:
+    Inter,
+    system-ui,
+    sans-serif;
+
+  background:#f3f4f6;
+  color:#111827;
+}
+
+/* ======================================================
+   LAYOUT
+====================================================== */
+
+.main-layout{
+  display:flex;
+  min-height:100vh;
+}
+
+/* ======================================================
+   SIDEBAR
+====================================================== */
+
+#sidebar{
+  width:260px;
+  background:#111827;
+  color:#fff;
+  padding:20px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+
+  position:fixed;
+  top:0;
+  left:0;
+  bottom:0;
+
+  overflow-y:auto;
+}
+
+.sidebar-nav{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.sidebar-nav a{
+  text-decoration:none;
+  color:#fff;
+
+  padding:14px 16px;
+
+  border-radius:14px;
+
+  transition:.2s ease;
+
+  font-weight:500;
+}
+
+.sidebar-nav a:hover{
+  background:#1f2937;
+  transform:translateX(3px);
+}
+
+/* ======================================================
+   CONTENT
+====================================================== */
+
+#content{
+  margin-left:260px;
+  padding:25px;
+  width:100%;
+}
+
+/* ======================================================
+   CARD
+====================================================== */
+
+.card{
+  background:#fff;
+
+  border-radius:18px;
+
+  padding:20px;
+
+  margin-bottom:20px;
+
+  box-shadow:
+    0 4px 14px rgba(0,0,0,.06);
+
+  border:1px solid #e5e7eb;
+}
+
+/* ======================================================
+   BUTTON
+====================================================== */
+
+button{
+  border:none;
+
+  background:#2563eb;
+  color:#fff;
+
+  padding:12px 18px;
+
+  border-radius:12px;
+
+  cursor:pointer;
+
+  font-weight:600;
+
+  transition:.2s ease;
+}
+
+button:hover{
+  transform:translateY(-2px);
+
+  opacity:.92;
+}
+
+button:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+/* ======================================================
+   INPUT
+====================================================== */
+
+input,
+select,
+textarea{
+
+  width:100%;
+
+  padding:12px 14px;
+
+  border-radius:12px;
+
+  border:1px solid #d1d5db;
+
+  background:#fff;
+
+  outline:none;
+
+  transition:.2s;
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+
+  border-color:#2563eb;
+
+  box-shadow:
+    0 0 0 4px rgba(37,99,235,.15);
+}
+
+/* ======================================================
+   TABLE
+====================================================== */
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+table thead{
+  background:#f9fafb;
+}
+
+table th{
+  text-align:left;
+
+  padding:14px;
+
+  font-size:14px;
+
+  color:#374151;
+
+  border-bottom:1px solid #e5e7eb;
+}
+
+table td{
+  padding:14px;
+
+  border-bottom:1px solid #f3f4f6;
+}
+
+table tr:hover{
+  background:#f9fafb;
+}
+
+/* ======================================================
+   BADGE
+====================================================== */
+
+.badge{
+  display:inline-block;
+
+  padding:6px 12px;
+
+  border-radius:999px;
+
+  font-size:12px;
+
+  font-weight:700;
+}
+
+.badge-green{
+  background:#dcfce7;
+  color:#166534;
+}
+
+.badge-yellow{
+  background:#fef9c3;
+  color:#854d0e;
+}
+
+.badge-red{
+  background:#fee2e2;
+  color:#991b1b;
+}
+
+.badge-blue{
+  background:#dbeafe;
+  color:#1d4ed8;
+}
+
+.badge-gray{
+  background:#e5e7eb;
+  color:#374151;
+}
+
+/* ======================================================
+   QUICK ACTION
+====================================================== */
+
+.quick-action{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+/* ======================================================
+   SHIFT BOX
+====================================================== */
+
+.shift-box{
+  background:#eff6ff;
+
+  border:1px solid #bfdbfe;
+
+  padding:15px;
+
+  border-radius:14px;
+
+  margin-top:10px;
+}
+
+/* ======================================================
+   CALENDAR
+====================================================== */
+
+.calendar-grid{
+
+  display:grid;
+
+  grid-template-columns:
+    repeat(auto-fill,minmax(120px,1fr));
+
+  gap:10px;
+
+  margin-top:20px;
+}
+
+.cal-day{
+
+  border-radius:16px;
+
+  padding:14px;
+
+  min-height:100px;
+
+  position:relative;
+
+  transition:.2s ease;
+}
+
+.cal-day:hover{
+  transform:translateY(-2px);
+}
+
+.cal-date{
+  font-size:22px;
+  font-weight:700;
+}
+
+.cal-label{
+  margin-top:10px;
+  font-size:12px;
+  font-weight:600;
+}
+
+/* ======================================================
+   ABSEN RECORD
+====================================================== */
+
+.absen-record{
+
+  background:#fff;
+
+  border-radius:14px;
+
+  padding:16px;
+
+  border:1px solid #e5e7eb;
+
+  margin-bottom:12px;
+}
+
+/* ======================================================
+   KPI
+====================================================== */
+
+.kpi-grid{
+
+  display:grid;
+
+  grid-template-columns:
+    repeat(auto-fit,minmax(220px,1fr));
+
+  gap:15px;
+}
+
+.kpi-card{
+
+  border-radius:20px;
+
+  padding:22px;
+
+  color:#fff;
+
+  box-shadow:
+    0 8px 20px rgba(0,0,0,.08);
+}
+
+.kpi-card h1{
+  margin:10px 0;
+  font-size:38px;
+}
+
+.kpi-card.blue{
+  background:#2563eb;
+}
+
+.kpi-card.green{
+  background:#16a34a;
+}
+
+.kpi-card.orange{
+  background:#ea580c;
+}
+
+.kpi-card.red{
+  background:#dc2626;
+}
+
+/* ======================================================
+   LIVE CLOCK
+====================================================== */
+
+.live-clock-card{
+
+  background:#111827;
+
+  color:#fff;
+
+  border-radius:24px;
+
+  padding:30px;
+
+  text-align:center;
+}
+
+.live-clock{
+  font-size:48px;
+  font-weight:700;
+}
+
+.live-date{
+  margin-top:8px;
+  opacity:.8;
+}
+
+/* ======================================================
+   MOBILE
+====================================================== */
+
+@media(max-width:768px){
+
+  #sidebar{
+    width:100%;
+    height:auto;
+    position:relative;
+  }
+
+  #content{
+    margin-left:0;
+    padding:15px;
+  }
+
+  .live-clock{
+    font-size:32px;
+  }
+
+  .kpi-card h1{
+    font-size:28px;
+  }
+
+  table{
+    display:block;
+    overflow-x:auto;
+  }
+}
