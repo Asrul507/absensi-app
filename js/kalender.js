@@ -212,3 +212,4 @@ window.openCalendarDetail = async function (tanggal) {
     </div>
   `
 }
+window.renderKalenderHR = renderKalenderHR
