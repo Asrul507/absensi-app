@@ -1,9 +1,9 @@
 import { supabase } from './supabase.js'
+import { isEligibleCuti, getSisaCuti, hitungMasaKerja, syncSisaCutiProfile } from './cuti.js'
 
 /* ================= HITUNG TANGGAL SELESAI ================= */
 function hitungTanggalSelesai(startDate, hari) {
   if (!startDate || !hari) return null
-
   const date = new Date(startDate)
   date.setDate(date.getDate() + (parseInt(hari) - 1))
   return date.toISOString().split('T')[0]
@@ -11,305 +11,300 @@ function hitungTanggalSelesai(startDate, hari) {
 
 /* ================= RENDER ================= */
 export async function renderPengajuan(user) {
+  const content = document.getElementById('content')
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
 
-  const content = document.getElementById("content")
-
-  const isAdmin =
-    user.role === "admin" ||
-    user.role === "super_admin"
-
-  const { data: list, error } = await supabase
-    .from("pengajuan")
-    .select("*")
-    .order("created_at", { ascending: false })
-
+  // Load pengajuan list
+  let query = supabase.from('pengajuan').select('*').order('created_at', { ascending: false })
+  const { data: list, error } = await query
   if (error) {
-    content.innerHTML = `<div class="card">❌ Gagal load data</div>`
+    content.innerHTML = `<div class="card"><p class="text-danger">❌ Gagal load data</p></div>`
     return
   }
 
-  const myList = isAdmin
-    ? list
-    : list.filter(i => i.user_id === user.id)
+  const myList = isAdmin ? list : list.filter(i => i.user_id === user.id)
+
+  // Info cuti user
+  const masaKerja = hitungMasaKerja(user.tanggal_bergabung)
+  const eligible = isEligibleCuti(user.tanggal_bergabung)
+  const { jatah, terpakai, sisa } = await getSisaCuti(user.id, user.tanggal_bergabung)
 
   content.innerHTML = `
-    <div class="card">
-      <h3>📩 Pengajuan ${isAdmin ? "Management" : "Saya"}</h3>
+    <div class="page-header">
+      <h2><i class="fa fa-file-alt"></i> Pengajuan</h2>
+    </div>
+
+    <!-- INFO CUTI CARD (staff only) -->
+    ${!isAdmin ? `
+    <div class="card fade-up" style="background:linear-gradient(135deg,#1e3a8a,#0891b2);color:#fff;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-size:.7rem;opacity:.75;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;">Status Cuti Anda</div>
+          <div style="font-size:1rem;font-weight:800;">Masa Kerja: ${masaKerja} bulan</div>
+          <div style="font-size:.85rem;opacity:.85;margin-top:2px;">
+            ${!eligible ? '⚠ Belum eligible cuti (min. 6 bulan kerja)' : '✅ Eligible mengajukan cuti'}
+          </div>
+        </div>
+        <div style="display:flex;gap:20px;text-align:center;">
+          <div>
+            <div style="font-size:1.8rem;font-weight:900;">${jatah}</div>
+            <div style="font-size:.65rem;opacity:.75;text-transform:uppercase;">Jatah</div>
+          </div>
+          <div>
+            <div style="font-size:1.8rem;font-weight:900;color:#fbbf24;">${terpakai}</div>
+            <div style="font-size:.65rem;opacity:.75;text-transform:uppercase;">Terpakai</div>
+          </div>
+          <div>
+            <div style="font-size:1.8rem;font-weight:900;color:${sisa < 0 ? '#f87171' : '#4ade80'};">${sisa}</div>
+            <div style="font-size:.65rem;opacity:.75;text-transform:uppercase;">Sisa</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    ` : ''}
+
+    <!-- FORM PENGAJUAN -->
+    <div class="card fade-up-1">
+      <h3 style="font-size:.9rem;font-weight:800;margin-bottom:16px;">
+        <i class="fa fa-plus-circle" style="color:var(--primary);"></i>
+        Buat Pengajuan Baru
+      </h3>
 
       <div class="field">
-        <label>Jenis</label>
-        <select id="jenis">
-          <option value="cuti">Cuti</option>
+        <label><i class="fa fa-tag"></i> Jenis Pengajuan</label>
+        <select id="jenis" onchange="onJenisChange()">
+          <option value="cuti">Cuti Tahunan</option>
           <option value="sakit">Sakit</option>
           <option value="izin">Izin</option>
         </select>
       </div>
 
-      <div class="field">
-        <label>Alasan</label>
-        <textarea id="alasan"></textarea>
+      <div id="infoEligible" style="display:none;" class="alert warning">
+        <i class="fa fa-exclamation-triangle"></i>
+        <span id="infoEligibleMsg"></span>
       </div>
 
       <div class="field">
-        <label>Jumlah Hari</label>
-        <input type="number" id="jumlahHari" min="1">
+        <label><i class="fa fa-pen"></i> Alasan / Keterangan <span class="req">*</span></label>
+        <textarea id="alasan" placeholder="Tuliskan alasan pengajuan..."></textarea>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field">
+          <label><i class="fa fa-calendar"></i> Tanggal Mulai <span class="req">*</span></label>
+          <input type="date" id="tanggalMulai">
+        </div>
+        <div class="field">
+          <label><i class="fa fa-hashtag"></i> Jumlah Hari <span class="req">*</span></label>
+          <input type="number" id="jumlahHari" min="1" placeholder="1" oninput="updateTanggalSelesai()">
+        </div>
       </div>
 
       <div class="field">
-        <label>Tanggal Mulai</label>
-        <input type="date" id="tanggalMulai">
+        <label><i class="fa fa-calendar-check"></i> Tanggal Selesai</label>
+        <input type="date" id="tanggalSelesai" disabled style="background:var(--gray-100);">
       </div>
 
       <div class="field">
-        <label>Upload Surat (opsional)</label>
-        <input type="file" id="fileSurat">
+        <label><i class="fa fa-paperclip"></i> Upload Surat (opsional)</label>
+        <input type="file" id="fileSurat" accept=".pdf,.jpg,.jpeg,.png">
       </div>
 
-      <button id="btnSubmit">Ajukan</button>
+      <button id="btnSubmit" class="btn-primary w-full" style="margin-top:8px;">
+        <i class="fa fa-paper-plane"></i> Ajukan Sekarang
+      </button>
     </div>
 
-    <div class="card">
-      <h3>📜 Riwayat Pengajuan</h3>
+    <!-- RIWAYAT PENGAJUAN -->
+    <div class="card fade-up-2">
+      <h3 style="font-size:.9rem;font-weight:800;margin-bottom:16px;">
+        <i class="fa fa-history" style="color:var(--primary);"></i>
+        ${isAdmin ? 'Semua Pengajuan' : 'Riwayat Pengajuan Saya'}
+      </h3>
 
-      ${
-        myList.length === 0
-          ? `<div class="empty-state">Belum ada pengajuan</div>`
-          : myList.map(i => `
-              <div class="card">
-
-                <b>Jenis:</b> ${i.jenis || "-"} <br>
-                <b>Nama:</b> ${i.nama || "Unknown"} <br>
-                <b>Alasan:</b> ${i.alasan || "-"} <br>
-
-                <b>Tgl Pengajuan:</b> ${i.tanggal_pengajuan || "-"} <br>
-                <b>Tgl Mulai:</b> ${i.tanggal_mulai || "-"} <br>
-                <b>Tgl Selesai:</b> ${i.tanggal_selesai || "-"} <br>
-                <b>Jumlah Hari:</b> ${i.jumlah_hari || "-"} <br>
-
-                <b>Status:</b>
-                <span class="badge ${
-                  i.status === "approved"
-                    ? "badge-green"
-                    : i.status === "rejected"
-                      ? "badge-red"
-                      : "badge-yellow"
-                }">
-                  ${i.status}
-                </span>
-
-                <br>
-
-                ${i.file ? `<a href="${i.file}" target="_blank">📎 Lihat File</a>` : ""}
-
-                ${
-                  isAdmin && i.status === "pending"
-                    ? `
-                      <div style="margin-top:10px; display:flex; gap:8px;">
-                        <button onclick="approvePengajuan('${i.id}')">Approve</button>
-                        <button onclick="rejectPengajuan('${i.id}')">Reject</button>
-                      </div>
-                    `
-                    : ""
-                }
-
+      ${myList.length === 0
+        ? `<div class="empty-state"><i class="fa fa-inbox"></i><p>Belum ada pengajuan</p></div>`
+        : myList.map(i => `
+          <div class="pengajuan-card ${i.status === 'approved' ? 'approved' : i.status === 'rejected' ? 'rejected' : 'pending'}">
+            <div class="pq-header">
+              <div>
+                <div class="pq-name">${i.nama || 'Unknown'}</div>
+                <div class="pq-type">${labelJenis(i.jenis)} • ${i.jumlah_hari || '-'} hari</div>
               </div>
-            `).join("")
-      }
-
+              <span class="badge ${i.status === 'approved' ? 'badge-green' : i.status === 'rejected' ? 'badge-red' : 'badge-yellow'}">
+                ${i.status?.toUpperCase()}
+              </span>
+            </div>
+            <div class="pq-ket">${i.alasan || '-'}</div>
+            <div class="pq-date">
+              📅 ${i.tanggal_mulai || '-'} s/d ${i.tanggal_selesai || '-'}
+              &nbsp;·&nbsp; Diajukan: ${i.tanggal_pengajuan || '-'}
+            </div>
+            ${i.file ? `<a href="${i.file}" target="_blank" style="font-size:.8rem;color:var(--primary);"><i class="fa fa-paperclip"></i> Lihat Surat</a>` : ''}
+            ${isAdmin && i.status === 'pending' ? `
+              <div class="pq-actions">
+                <button class="btn-primary btn-sm" onclick="approvePengajuan('${i.id}')">
+                  <i class="fa fa-check"></i> Approve
+                </button>
+                <button class="btn-danger btn-sm" onclick="rejectPengajuan('${i.id}')">
+                  <i class="fa fa-times"></i> Tolak
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `).join('')}
     </div>
   `
 
-  // ================= SUBMIT =================
-  document.getElementById("btnSubmit").onclick = async () => {
+  // ===== EVENT: JENIS CHANGE =====
+  window.onJenisChange = function() {
+    const jenis = document.getElementById('jenis').value
+    const infoEl = document.getElementById('infoEligible')
+    const msgEl = document.getElementById('infoEligibleMsg')
 
-    const jenis = document.getElementById("jenis").value
-    const alasan = document.getElementById("alasan").value
-    const jumlahHari = document.getElementById("jumlahHari").value
-    const tanggalMulai = document.getElementById("tanggalMulai").value
-    const file = document.getElementById("fileSurat").files[0]
-
-    if (!alasan) {
-      alert("Alasan wajib diisi")
-      return
+    if (jenis === 'cuti') {
+      if (!eligible) {
+        infoEl.style.display = 'flex'
+        infoEl.className = 'alert warning'
+        msgEl.textContent = `Anda belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`
+      } else if (masaKerja < 12) {
+        infoEl.style.display = 'flex'
+        infoEl.className = 'alert info'
+        msgEl.textContent = `Anda eligible cuti izin (masa kerja 6-11 bulan). Jatah 12 hari/tahun didapat setelah 12 bulan kerja.`
+      } else if (sisa <= 0) {
+        infoEl.style.display = 'flex'
+        infoEl.className = 'alert warning'
+        msgEl.textContent = `Sisa cuti Anda ${sisa} hari. Pengajuan akan mencatat minus.`
+      } else {
+        infoEl.style.display = 'none'
+      }
+    } else {
+      infoEl.style.display = 'none'
     }
+  }
 
-    let fileUrl = null
+  window.onJenisChange() // trigger saat load
 
-    // upload file
-    if (file) {
-      const fileName = `${Date.now()}-${file.name}`
+  // ===== EVENT: UPDATE TANGGAL SELESAI =====
+  window.updateTanggalSelesai = function() {
+    const mulai = document.getElementById('tanggalMulai').value
+    const jumlah = document.getElementById('jumlahHari').value
+    const selesai = hitungTanggalSelesai(mulai, jumlah)
+    if (selesai) document.getElementById('tanggalSelesai').value = selesai
+  }
 
-      const { error: uploadError } = await supabase
-        .storage
-        .from("surat")
-        .upload(fileName, file)
+  document.getElementById('tanggalMulai').addEventListener('change', window.updateTanggalSelesai)
 
-      if (uploadError) {
-        alert("Upload gagal")
+  // ===== SUBMIT =====
+  document.getElementById('btnSubmit').onclick = async () => {
+    const jenis = document.getElementById('jenis').value
+    const alasan = document.getElementById('alasan').value.trim()
+    const jumlahHari = parseInt(document.getElementById('jumlahHari').value)
+    const tanggalMulai = document.getElementById('tanggalMulai').value
+    const file = document.getElementById('fileSurat').files[0]
+
+    if (!alasan) { alert('Alasan wajib diisi'); return }
+    if (!tanggalMulai) { alert('Tanggal mulai wajib diisi'); return }
+    if (!jumlahHari || jumlahHari < 1) { alert('Jumlah hari tidak valid'); return }
+
+    // Validasi cuti
+    if (jenis === 'cuti') {
+      if (!eligible) {
+        alert(`Anda belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`)
         return
       }
-
-      fileUrl = supabase.storage
-        .from("surat")
-        .getPublicUrl(fileName).data.publicUrl
     }
 
-    const tanggal_pengajuan = new Date().toISOString().split('T')[0]
+    const btn = document.getElementById('btnSubmit')
+    btn.disabled = true
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mengirim...'
 
-    const tanggal_selesai =
-      hitungTanggalSelesai(tanggalMulai, jumlahHari)
+    let fileUrl = null
+    if (file) {
+      const fileName = `${Date.now()}-${file.name}`
+      const { error: uploadError } = await supabase.storage.from('surat').upload(fileName, file)
+      if (uploadError) { alert('Upload surat gagal'); btn.disabled = false; btn.innerHTML = '<i class="fa fa-paper-plane"></i> Ajukan Sekarang'; return }
+      fileUrl = supabase.storage.from('surat').getPublicUrl(fileName).data.publicUrl
+    }
 
-    const { error: insertError } = await supabase
-      .from("pengajuan")
-      .insert([{
-        user_id: user.id,
-        nama: user.nama_lengkap || user.email,
-        jenis,
-        alasan,
-        file: fileUrl,
-        status: "pending",
+    const tanggal_selesai = hitungTanggalSelesai(tanggalMulai, jumlahHari)
 
-        // NEW FIELD
-        tanggal_pengajuan,
-        jumlah_hari: jumlahHari,
-        tanggal_mulai: tanggalMulai,
-        tanggal_selesai
-      }])
+    const { error: insertError } = await supabase.from('pengajuan').insert([{
+      user_id: user.id,
+      nama: user.nama_lengkap || user.email,
+      jenis,
+      alasan,
+      file: fileUrl,
+      status: 'pending',
+      tanggal_pengajuan: new Date().toISOString().split('T')[0],
+      jumlah_hari: jumlahHari,
+      tanggal_mulai: tanggalMulai,
+      tanggal_selesai
+    }])
+
+    btn.disabled = false
+    btn.innerHTML = '<i class="fa fa-paper-plane"></i> Ajukan Sekarang'
 
     if (insertError) {
-      console.log(insertError)
-      alert("Gagal kirim pengajuan")
+      console.error(insertError)
+      alert('Gagal kirim pengajuan')
       return
     }
 
-    alert("Pengajuan berhasil")
+    alert('✅ Pengajuan berhasil dikirim!')
     renderPengajuan(user)
   }
 }
 
+function labelJenis(jenis) {
+  if (jenis === 'cuti') return '🌴 Cuti'
+  if (jenis === 'sakit') return '🤒 Sakit'
+  if (jenis === 'izin') return '📋 Izin'
+  return jenis || '-'
+}
+
 /* ================= APPROVE ================= */
-window.approvePengajuan = async function (id) {
+window.approvePengajuan = async function(id) {
+  const { data: pengajuan, error } = await supabase.from('pengajuan').select('*').eq('id', id).single()
+  if (error || !pengajuan) { alert('Data tidak ditemukan'); return }
 
-  // 1. ambil data pengajuan
-  const { data: pengajuan, error } = await supabase
-    .from("pengajuan")
-    .select("*")
-    .eq("id", id)
-    .single()
+  const { user_id, jenis, tanggal_mulai, jumlah_hari } = pengajuan
 
-  if (error || !pengajuan) {
-    alert("Data pengajuan tidak ditemukan")
-    return
-  }
+  // Update status
+  await supabase.from('pengajuan').update({ status: 'approved' }).eq('id', id)
 
-  const user_id = pengajuan.user_id
-  const jenis = pengajuan.jenis
-  const tanggalMulai = pengajuan.tanggal_mulai
-  const jumlahHari = pengajuan.jumlah_hari || 1
-
-  // 2. update status pengajuan
-  await supabase
-    .from("pengajuan")
-    .update({ status: "approved" })
-    .eq("id", id)
-
-  // 3. loop tanggal cuti/sakit/izin
-  for (let i = 0; i < jumlahHari; i++) {
-
-    let date = new Date(tanggalMulai)
+  // Update jadwal per hari
+  for (let i = 0; i < (jumlah_hari || 1); i++) {
+    const date = new Date(tanggal_mulai)
     date.setDate(date.getDate() + i)
+    const tgl = date.toISOString().split('T')[0]
 
-    let tgl = date.toISOString().split('T')[0]
-
-    // 🔥 CEK JADWAL SUDAH ADA ATAU BELUM
-    const { data: existing } = await supabase
-      .from("jadwal")
-      .select("*")
-      .eq("user_id", user_id)
-      .eq("tanggal", tgl)
-      .maybeSingle()
+    const { data: existing } = await supabase.from('jadwal').select('id').eq('user_id', user_id).eq('tanggal', tgl).maybeSingle()
 
     if (existing) {
-
-      // 🔁 UPDATE JIKA SUDAH ADA
-      await supabase
-        .from("jadwal")
-        .update({
-          status_override: jenis,
-          shift_id: null,
-          pengajuan_id: id
-        })
-        .eq("id", existing.id)
-
+      await supabase.from('jadwal').update({ status_override: jenis, shift_id: null, pengajuan_id: id }).eq('id', existing.id)
     } else {
-
-      // ➕ INSERT JIKA BELUM ADA
-      await supabase
-        .from("jadwal")
-        .insert([{
-          user_id,
-          tanggal: tgl,
-          shift_id: null,
-          status_override: jenis,
-          pengajuan_id: id
-        }])
+      await supabase.from('jadwal').insert([{ user_id, tanggal: tgl, shift_id: null, status_override: jenis, pengajuan_id: id }])
     }
   }
 
-  alert("Approve sukses (jadwal otomatis update tanpa duplikat)")
+  // Sync sisa cuti jika jenis cuti
+  if (jenis === 'cuti') {
+    const { data: prof } = await supabase.from('profiles').select('tanggal_bergabung').eq('id', user_id).single()
+    if (prof) await syncSisaCutiProfile(user_id, prof.tanggal_bergabung)
+  }
 
+  alert('✅ Pengajuan disetujui!')
   renderPengajuan(window.currentUser)
 }
+
 /* ================= REJECT ================= */
-window.rejectPengajuan = async function (id) {
+window.rejectPengajuan = async function(id) {
+  if (!confirm('Tolak pengajuan ini?')) return
 
-  const { error } = await supabase
-    .from("pengajuan")
-    .update({
-      status: "rejected"
-    })
-    .eq("id", id)
+  const { error } = await supabase.from('pengajuan').update({ status: 'rejected' }).eq('id', id)
+  if (error) { alert('Gagal menolak'); return }
 
-  if (error) {
-    alert("Gagal reject")
-    return
-  }
-
-  alert("Pengajuan ditolak")
+  alert('Pengajuan ditolak')
   renderPengajuan(window.currentUser)
-}
-
-
-async function updateJadwalCuti(pengajuan) {
-
-  if (!pengajuan.tanggal_mulai || !pengajuan.tanggal_selesai) return
-
-  const start = new Date(pengajuan.tanggal_mulai)
-  const end = new Date(pengajuan.tanggal_selesai)
-
-  let current = new Date(start)
-
-  const updates = []
-
-  while (current <= end) {
-
-    const tanggal = current.toISOString().split('T')[0]
-
-    updates.push({
-      user_id: pengajuan.user_id,
-      tanggal,
-      status_override: pengajuan.jenis, // cuti / sakit / izin
-      shift_id: null // kosongkan shift karena libur
-    })
-
-    current.setDate(current.getDate() + 1)
-  }
-
-  const { error } = await supabase
-    .from("jadwal")
-    .upsert(updates, {
-      onConflict: ['user_id', 'tanggal']
-    })
-
-  if (error) console.error(error)
 }
