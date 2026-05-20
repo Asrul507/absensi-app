@@ -1,354 +1,177 @@
 import { supabase } from './supabase.js'
 
-/* ================= RENDER ================= */
 export async function renderRiwayat(user) {
+  const content = document.getElementById('content')
+  if (!user) { content.innerHTML = `<div class="card"><p>Silakan login dulu</p></div>`; return }
 
-  const content =
-    document.getElementById('content')
-
-  if (!content) return
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
 
   content.innerHTML = `
+    <div class="page-header">
+      <h2><i class="fa fa-list-alt"></i> Riwayat Absensi</h2>
+      <button class="btn-primary btn-sm" onclick="downloadExcelRiwayat()">
+        <i class="fa fa-download"></i> Download Excel
+      </button>
+    </div>
 
-    <div class="card">
-
-      <h3>📊 Riwayat Absensi</h3>
-
-      <div class="filter-row"
-        style="
-          display:flex;
-          gap:10px;
-          margin:15px 0;
-          flex-wrap:wrap;
-        ">
-
-        <input
-          type="date"
-          id="filterTanggal">
-
-        <button
-          onclick="loadRiwayat(window.currentUser)">
-
-          Filter
-
+    <div class="card fade-up" style="padding:14px 18px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        ${isAdmin ? `
+          <div style="flex:1;min-width:140px;">
+            <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);display:block;margin-bottom:5px;">Nama Karyawan</label>
+            <input id="filterNama" placeholder="Semua karyawan"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:.85rem;outline:none;font-family:inherit;">
+          </div>` : ''}
+        <div style="flex:1;min-width:120px;">
+          <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);display:block;margin-bottom:5px;">Dari Tanggal</label>
+          <input type="date" id="filterDari"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:.85rem;outline:none;font-family:inherit;">
+        </div>
+        <div style="flex:1;min-width:120px;">
+          <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);display:block;margin-bottom:5px;">Sampai Tanggal</label>
+          <input type="date" id="filterSampai"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:.85rem;outline:none;font-family:inherit;">
+        </div>
+        <button class="btn-primary btn-sm" onclick="loadRiwayat(window.currentUser)" style="align-self:flex-end;">
+          <i class="fa fa-search"></i> Filter
         </button>
-
       </div>
+    </div>
 
-      <div id="riwayatList">
-
-        <p>Loading data...</p>
-
+    <div id="riwayatList" class="fade-up-1">
+      <div class="card" style="text-align:center;padding:24px;">
+        <i class="fa fa-spinner fa-spin" style="font-size:1.5rem;color:var(--primary);"></i>
       </div>
-
     </div>
   `
 
   await loadRiwayat(user)
 }
 
-
-/* ================= LOAD DATA ================= */
-window.loadRiwayat =
-async function (user) {
-
-  const container =
-    document.getElementById(
-      'riwayatList'
-    )
-
+window.loadRiwayat = async function(user) {
+  const container = document.getElementById('riwayatList')
   if (!container) return
 
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+
   try {
+    let query = supabase.from('absensi').select('*').order('tanggal', { ascending: false })
 
-    const isAdmin =
-      user.role === 'admin' ||
-      user.role === 'super_admin'
+    const nama   = document.getElementById('filterNama')?.value?.trim()
+    const dari   = document.getElementById('filterDari')?.value
+    const sampai = document.getElementById('filterSampai')?.value
 
-    let query = supabase
-      .from('absensi')
-      .select('*')
-      .order('tanggal', {
-        ascending: false
-      })
+    if (!isAdmin) query = query.eq('nama', user.nama_lengkap)
+    else if (nama) query = query.ilike('nama', `%${nama}%`)
 
-    // ================= FILTER =================
+    if (dari)   query = query.gte('tanggal', dari)
+    if (sampai) query = query.lte('tanggal', sampai)
 
-    const tanggal =
-      document.getElementById(
-        'filterTanggal'
-      )?.value
+    const { data, error } = await query
 
-    if (tanggal) {
+    if (error) { container.innerHTML = `<div class="card"><p class="text-danger">❌ Gagal load riwayat</p></div>`; return }
 
-      query = query.eq(
-        'tanggal',
-        tanggal
-      )
-    }
+    // Simpan untuk download
+    window._riwayatData = data || []
 
-    // ================= STAFF ONLY =================
-
-    if (!isAdmin) {
-
-      query = query.eq(
-        'nama',
-        user.nama_lengkap
-      )
-    }
-
-    const { data, error } =
-      await query
-
-    if (error) {
-
-      console.log(error)
-
-      container.innerHTML = `
-        <div class="card">
-          ❌ Gagal load riwayat
-        </div>
-      `
-
+    if (!data?.length) {
+      container.innerHTML = `<div class="empty-state" style="padding:48px 24px;"><i class="fa fa-inbox"></i><p>Tidak ada data absensi</p></div>`
       return
     }
-
-    if (!data || data.length === 0) {
-
-      container.innerHTML = `
-        <div class="card">
-          <h4>
-            📭 Tidak ada data absensi
-          </h4>
-        </div>
-      `
-
-      return
-    }
-
-    container.innerHTML =
-      data.map(item => {
-
-        // ================= NAMA =================
-
-        const nama =
-          item?.nama || 'Unknown'
-
-        // ================= SHIFT =================
-
-        let shift = '-'
-
-        if (item.shift_code == "2") {
-          shift = "🌅 Shift Pagi"
-        }
-
-        if (item.shift_code == "3") {
-          shift = "🌇 Shift Sore"
-        }
-
-        if (item.shift_code == "4") {
-          shift = "🌙 Shift Malam"
-        }
-
-        if (item.shift_code == "8") {
-          shift = "⚫ OFF"
-        }
-
-        // ================= JAM =================
-
-        const jamMasuk =
-          item?.waktu_masuk
-            ? new Date(
-                item.waktu_masuk
-              ).toLocaleTimeString(
-                'id-ID'
-              )
-            : '-'
-
-        const jamPulang =
-          item?.waktu_pulang
-            ? new Date(
-                item.waktu_pulang
-              ).toLocaleTimeString(
-                'id-ID'
-              )
-            : '-'
-
-        // ================= STATUS =================
-
-        let status =
-          item.status_absensi ||
-          'open'
-
-        let badgeClass =
-          'badge-gray'
-
-        if (status === 'open') {
-          badgeClass = 'badge-blue'
-        }
-
-        if (status === 'salah absen') {
-          badgeClass = 'badge-red'
-        }
-
-        if (
-          status ===
-          'lupa absen datang'
-        ) {
-          badgeClass =
-            'badge-yellow'
-        }
-
-        if (
-          status ===
-          'lupa absen pulang'
-        ) {
-          badgeClass =
-            'badge-yellow'
-        }
-
-        if (
-          status ===
-          'approved manual'
-        ) {
-          badgeClass =
-            'badge-green'
-        }
-
-        return `
-
-          <div class="absen-record">
-
-            <div class="ar-top">
-
-              <div class="ar-date">
-                📅 ${item.tanggal || '-'}
-              </div>
-
-              <span class="
-                badge ${badgeClass}
-              ">
-
-                ${status.toUpperCase()}
-
-              </span>
-
-            </div>
-
-            <div class="ar-times">
-
-              <div class="ar-time-item">
-                🧑 ${nama}
-              </div>
-
-            </div>
-
-            <div class="ar-times">
-
-              <div class="ar-time-item">
-                ⏰ Masuk:
-                ${jamMasuk}
-              </div>
-
-              <div class="ar-time-item">
-                ⏰ Pulang:
-                ${jamPulang}
-              </div>
-
-            </div>
-
-            <div class="ar-times">
-
-              <div class="ar-time-item">
-                🏷 Shift:
-                ${shift}
-              </div>
-
-            </div>
-
-            ${
-              isAdmin &&
-              (
-                item.status_absensi === 'salah absen' ||
-                item.status_absensi === 'lupa absen datang' ||
-                item.status_absensi === 'lupa absen pulang'
-              )
-              ? `
-
-                <div style="
-                  margin-top:15px;
-                ">
-
-                  <button
-                    onclick="
-                      approveAbsen(
-                        '${item.id}'
-                      )
-                    ">
-
-                    ✅ Approve Manual
-
-                  </button>
-
-                </div>
-
-              `
-              : ''
-            }
-
-          </div>
-        `
-      }).join('')
-
-  } catch (err) {
-
-    console.log(err)
 
     container.innerHTML = `
-      <div class="card">
-        ❌ Error sistem riwayat
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                ${isAdmin ? '<th>Nama</th>' : ''}
+                <th>Masuk</th>
+                <th>Pulang</th>
+                <th>Status Masuk</th>
+                <th>Keterangan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map(r => `
+                <tr>
+                  <td>${r.tanggal || '-'}</td>
+                  ${isAdmin ? `<td>${r.nama || '-'}</td>` : ''}
+                  <td>${r.waktu_masuk ? new Date(r.waktu_masuk).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+                  <td>${r.waktu_pulang ? new Date(r.waktu_pulang).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+                  <td>
+                    <span class="badge ${r.status_masuk==='Terlambat'?'badge-red':r.status_masuk?'badge-green':'badge-gray'}">
+                      ${r.status_masuk || '-'}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="badge ${
+                      r.status_absensi==='salah absen'      ? 'badge-red'    :
+                      r.status_absensi?.includes('lupa')    ? 'badge-yellow' :
+                      r.status_absensi==='approved manual'  ? 'badge-green'  :
+                      'badge-blue'
+                    }">
+                      ${r.status_absensi || 'open'}
+                    </span>
+                    ${isAdmin && ['salah absen','lupa absen datang','lupa absen pulang'].includes(r.status_absensi)
+                      ? `<button class="tbl-btn view" onclick="approveAbsen('${r.id}')" style="margin-left:4px;">✅ Approve</button>`
+                      : ''}
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:12px 16px;font-size:.78rem;color:var(--text-muted);border-top:1px solid var(--gray-100);">
+          Total: <strong>${data.length}</strong> records
+        </div>
       </div>
     `
+  } catch (err) {
+    console.error(err)
+    container.innerHTML = `<div class="card"><p class="text-danger">❌ Error sistem</p></div>`
   }
 }
 
-
 /* ================= APPROVE ================= */
-window.approveAbsen =
-async function(id) {
+window.approveAbsen = async function(id) {
+  const note = prompt('Keterangan approval (opsional):') ?? ''
+  const { error } = await supabase.from('absensi').update({
+    approve_manual: true,
+    approve_note: note,
+    status_absensi: 'approved manual'
+  }).eq('id', id)
+  if (error) { alert('Gagal approve'); return }
+  alert('✅ Approval berhasil')
+  loadRiwayat(window.currentUser)
+}
 
-  const note =
-    prompt(
-      "Keterangan approval"
-    )
+/* ================= DOWNLOAD EXCEL ================= */
+window.downloadExcelRiwayat = function() {
+  const data = window._riwayatData
+  if (!data || data.length === 0) { alert('Tidak ada data untuk didownload'); return }
 
-  const { error } =
-    await supabase
-      .from('absensi')
-      .update({
+  if (typeof XLSX === 'undefined') { alert('Library XLSX belum dimuat'); return }
 
-        approve_manual: true,
+  const rows = data.map(r => ({
+    'Tanggal'        : r.tanggal || '-',
+    'Nama'           : r.nama || '-',
+    'Waktu Masuk'    : r.waktu_masuk  ? new Date(r.waktu_masuk).toLocaleString('id-ID')  : '-',
+    'Waktu Pulang'   : r.waktu_pulang ? new Date(r.waktu_pulang).toLocaleString('id-ID') : '-',
+    'Status Masuk'   : r.status_masuk   || '-',
+    'Status Absensi' : r.status_absensi || 'open',
+    'Approve Manual' : r.approve_manual ? 'Ya' : 'Tidak',
+    'Catatan Approve': r.approve_note   || '-',
+  }))
 
-        approve_note: note,
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Absensi')
 
-        status_absensi:
-          "approved manual"
+  // Auto column width
+  const cols = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length, 14) }))
+  ws['!cols'] = cols
 
-      })
-      .eq('id', id)
-
-  if (error) {
-
-    console.log(error)
-
-    alert("Gagal approve")
-
-    return
-  }
-
-  alert("Approval berhasil")
-
-  loadRiwayat(
-    window.currentUser
-  )
+  const filename = `riwayat-absensi-${new Date().toISOString().split('T')[0]}.xlsx`
+  XLSX.writeFile(wb, filename)
 }
