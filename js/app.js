@@ -22,7 +22,59 @@ window.addEventListener('DOMContentLoaded', () => {
     const icon = document.getElementById('themeIcon')
     if (icon) icon.className = 'fa fa-sun'
   }
-  checkUser()
+
+  // =====================================================
+  // Tangkap token verifikasi dari URL hash
+  // Supabase kirim link: https://app.com/#access_token=...&type=signup
+  // =====================================================
+  const hash   = window.location.hash
+  const params = new URLSearchParams(hash.replace('#', ''))
+  const type   = params.get('type')
+  const token  = params.get('access_token')
+  const refresh= params.get('refresh_token') || ''
+
+  if (token && (type === 'signup' || type === 'email_change' || type === 'recovery')) {
+    // Bersihkan URL agar token tidak tampil di address bar
+    history.replaceState(null, '', window.location.pathname)
+
+    // Set session dari token lalu masuk
+    supabase.auth.setSession({ access_token: token, refresh_token: refresh })
+      .then(({ error }) => {
+        if (error) {
+          console.error('setSession error:', error)
+          // Fallback: coba getSession
+          supabase.auth.getSession().then(() => checkUser())
+        } else {
+          checkUser()
+        }
+      })
+  } else {
+    checkUser()
+  }
+
+  // Listener perubahan auth state
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session && !window.currentUser) {
+      checkUser()
+    }
+    if (event === 'SIGNED_OUT') {
+      window.currentUser = null
+    }
+    if (event === 'USER_UPDATED' && session) {
+      // Email berhasil diubah — sync ke tabel profiles
+      if (window.currentUser) {
+        window.currentUser.email = session.user.email
+        supabase.from('profiles')
+          .update({ email: session.user.email })
+          .eq('id', session.user.id)
+          .then(() => {
+            // Refresh halaman profile kalau sedang dibuka
+            const emailEl = document.getElementById('profileEmailDisplay')
+            if (emailEl) emailEl.textContent = session.user.email
+          })
+      }
+    }
+  })
 })
 
 /* ================= CHECK USER ================= */
@@ -240,9 +292,27 @@ function renderProfile() {
       </div>
 
       <div class="card fade-up-3">
-        <div class="card-title"><i class="fa fa-lock"></i> Akun</div>
-        <button class="btn-danger" onclick="logout()">
-          <i class="fa fa-sign-out-alt"></i> Keluar
+        <div class="card-title"><i class="fa fa-lock"></i> Pengaturan Akun</div>
+
+        <!-- Email sekarang -->
+        <div style="background:var(--gray-50);border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px;">
+          <div style="font-size:.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:3px;">Email Aktif</div>
+          <div style="font-weight:700;font-size:.9rem;word-break:break-all;">${u.email || '-'}</div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <button class="btn-secondary btn-sm" onclick="openGantiEmail()">
+            <i class="fa fa-envelope"></i> Ganti Email
+          </button>
+          <button class="btn-secondary btn-sm" onclick="openGantiPassword()">
+            <i class="fa fa-key"></i> Ganti Password
+          </button>
+        </div>
+
+        <div style="height:1px;background:var(--gray-100);margin-bottom:14px;"></div>
+
+        <button class="btn-danger btn-sm" onclick="logout()">
+          <i class="fa fa-sign-out-alt"></i> Keluar dari Aplikasi
         </button>
       </div>
 
@@ -301,6 +371,276 @@ window.uploadFotoProfil = async function (input) {
   updateTopbarAvatar(window.currentUser)
   renderProfile()
 }
+
+/* ================================================================
+   GANTI EMAIL
+================================================================ */
+window.openGantiEmail = function () {
+  showProfileModal(`
+    <div class="modal-header">
+      <h3><i class="fa fa-envelope" style="color:var(--primary);"></i> Ganti Email</h3>
+      <button class="modal-close" onclick="closeProfileModal()"><i class="fa fa-times"></i></button>
+    </div>
+
+    <div class="alert info" style="margin-bottom:16px;">
+      <i class="fa fa-info-circle"></i>
+      <span>Link konfirmasi akan dikirim ke <strong>email baru</strong>. Email akan berganti setelah kamu klik link tersebut.</span>
+    </div>
+
+    <div class="field">
+      <label>Email Baru <span class="req">*</span></label>
+      <input type="email" id="inputEmailBaru" placeholder="emailbaru@contoh.com" autocomplete="email"/>
+    </div>
+
+    <div class="field">
+      <label>Konfirmasi Email Baru <span class="req">*</span></label>
+      <input type="email" id="inputEmailKonfirm" placeholder="Ulangi email baru"/>
+    </div>
+
+    <p id="gantiEmailError" style="display:none;font-size:.8rem;color:var(--danger);
+      padding:8px 12px;background:var(--danger-light);border:1px solid var(--danger-mid);
+      border-radius:var(--r-md);margin-top:4px;"></p>
+
+    <p id="gantiEmailSuccess" style="display:none;font-size:.8rem;color:var(--success);
+      padding:8px 12px;background:var(--success-light);border:1px solid var(--success-mid);
+      border-radius:var(--r-md);margin-top:4px;"></p>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeProfileModal()">Batal</button>
+      <button class="btn-primary" id="btnKirimEmail" onclick="submitGantiEmail()">
+        <i class="fa fa-paper-plane"></i> Kirim Konfirmasi
+      </button>
+    </div>
+  `)
+}
+
+window.submitGantiEmail = async function () {
+  const emailBaru   = document.getElementById('inputEmailBaru').value.trim()
+  const emailKonfirm= document.getElementById('inputEmailKonfirm').value.trim()
+  const errEl       = document.getElementById('gantiEmailError')
+  const okEl        = document.getElementById('gantiEmailSuccess')
+  const btn         = document.getElementById('btnKirimEmail')
+
+  errEl.style.display = 'none'
+  okEl.style.display  = 'none'
+
+  // Validasi
+  if (!emailBaru) {
+    errEl.textContent = '⚠ Email baru wajib diisi'
+    errEl.style.display = 'block'
+    return
+  }
+  if (!emailBaru.includes('@') || !emailBaru.includes('.')) {
+    errEl.textContent = '⚠ Format email tidak valid'
+    errEl.style.display = 'block'
+    return
+  }
+  if (emailBaru !== emailKonfirm) {
+    errEl.textContent = '⚠ Email dan konfirmasi tidak cocok'
+    errEl.style.display = 'block'
+    return
+  }
+  if (emailBaru === window.currentUser.email) {
+    errEl.textContent = '⚠ Email baru sama dengan email sekarang'
+    errEl.style.display = 'block'
+    return
+  }
+
+  btn.disabled = true
+  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mengirim...'
+
+  // Update email via Supabase Auth
+  const { error } = await supabase.auth.updateUser({ email: emailBaru })
+
+  btn.disabled = false
+  btn.innerHTML = '<i class="fa fa-paper-plane"></i> Kirim Konfirmasi'
+
+  if (error) {
+    errEl.textContent = '⚠ ' + (
+      error.message.includes('already registered')
+        ? 'Email ini sudah digunakan akun lain'
+        : error.message
+    )
+    errEl.style.display = 'block'
+    return
+  }
+
+  // Tampilkan sukses
+  okEl.innerHTML = `
+    <i class="fa fa-circle-check"></i>
+    Link konfirmasi dikirim ke <strong>${emailBaru}</strong>.<br>
+    Cek inbox dan klik link untuk menyelesaikan perubahan email.
+  `
+  okEl.style.display = 'block'
+
+  // Disable form setelah berhasil
+  document.getElementById('inputEmailBaru').disabled    = true
+  document.getElementById('inputEmailKonfirm').disabled = true
+  btn.style.display = 'none'
+}
+
+/* ================================================================
+   GANTI PASSWORD
+================================================================ */
+window.openGantiPassword = function () {
+  showProfileModal(`
+    <div class="modal-header">
+      <h3><i class="fa fa-key" style="color:var(--primary);"></i> Ganti Password</h3>
+      <button class="modal-close" onclick="closeProfileModal()"><i class="fa fa-times"></i></button>
+    </div>
+
+    <div class="field">
+      <label>Password Baru <span class="req">*</span></label>
+      <div style="position:relative;">
+        <input type="password" id="inputPassBaru" placeholder="Min. 8 karakter"
+          autocomplete="new-password" oninput="cekKekuatanPass(this.value)"
+          style="padding-right:42px;"/>
+        <button onclick="togglePassVis('inputPassBaru', this)"
+          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+            background:none;border:none;cursor:pointer;color:var(--gray-400);padding:4px;
+            min-height:unset!important;width:auto!important;margin:0!important;">
+          <i class="fa fa-eye"></i>
+        </button>
+      </div>
+      <div style="height:4px;border-radius:999px;background:var(--gray-100);margin-top:6px;overflow:hidden;">
+        <div id="passStrengthBar" style="height:100%;border-radius:999px;width:0;transition:.3s;"></div>
+      </div>
+      <div id="passStrengthLabel" style="font-size:.68rem;margin-top:3px;color:var(--text-muted);"></div>
+    </div>
+
+    <div class="field">
+      <label>Konfirmasi Password Baru <span class="req">*</span></label>
+      <div style="position:relative;">
+        <input type="password" id="inputPassKonfirm" placeholder="Ulangi password baru"
+          autocomplete="new-password" oninput="cekKonfirmPass()"
+          style="padding-right:42px;"/>
+        <button onclick="togglePassVis('inputPassKonfirm', this)"
+          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+            background:none;border:none;cursor:pointer;color:var(--gray-400);padding:4px;
+            min-height:unset!important;width:auto!important;margin:0!important;">
+          <i class="fa fa-eye"></i>
+        </button>
+      </div>
+      <div id="passKonfirmMsg" style="font-size:.72rem;margin-top:4px;min-height:16px;"></div>
+    </div>
+
+    <p id="gantiPassError" style="display:none;font-size:.8rem;color:var(--danger);
+      padding:8px 12px;background:var(--danger-light);border:1px solid var(--danger-mid);
+      border-radius:var(--r-md);margin-top:4px;"></p>
+
+    <p id="gantiPassSuccess" style="display:none;font-size:.8rem;color:var(--success);
+      padding:8px 12px;background:var(--success-light);border:1px solid var(--success-mid);
+      border-radius:var(--r-md);margin-top:4px;"></p>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeProfileModal()">Batal</button>
+      <button class="btn-primary" id="btnSimpanPass" onclick="submitGantiPassword()">
+        <i class="fa fa-save"></i> Simpan Password
+      </button>
+    </div>
+  `)
+}
+
+window.cekKekuatanPass = function (val) {
+  const bar   = document.getElementById('passStrengthBar')
+  const label = document.getElementById('passStrengthLabel')
+  if (!bar) return
+  let score = 0
+  if (val.length >= 8)            score++
+  if (val.length >= 12)           score++
+  if (/[A-Z]/.test(val))          score++
+  if (/[0-9]/.test(val))          score++
+  if (/[^A-Za-z0-9]/.test(val))   score++
+  const levels = [
+    { w:'0%',    bg:'',         txt:'' },
+    { w:'25%',   bg:'#ef4444', txt:'Lemah' },
+    { w:'50%',   bg:'#f59e0b', txt:'Cukup' },
+    { w:'75%',   bg:'#3b82f6', txt:'Kuat' },
+    { w:'100%',  bg:'#22c55e', txt:'Sangat Kuat' },
+  ]
+  const lv = levels[Math.min(score, 4)]
+  bar.style.width      = lv.w
+  bar.style.background = lv.bg
+  label.textContent    = lv.txt
+  label.style.color    = lv.bg
+}
+
+window.cekKonfirmPass = function () {
+  const pass  = document.getElementById('inputPassBaru')?.value
+  const konf  = document.getElementById('inputPassKonfirm')?.value
+  const msg   = document.getElementById('passKonfirmMsg')
+  if (!msg || !konf) return
+  msg.innerHTML = pass === konf
+    ? '<span style="color:#16a34a;"><i class="fa fa-check"></i> Password cocok</span>'
+    : '<span style="color:#dc2626;"><i class="fa fa-times"></i> Password tidak cocok</span>'
+}
+
+window.togglePassVis = function (inputId, btn) {
+  const input = document.getElementById(inputId)
+  if (!input) return
+  const isPass = input.type === 'password'
+  input.type = isPass ? 'text' : 'password'
+  btn.querySelector('i').className = isPass ? 'fa fa-eye-slash' : 'fa fa-eye'
+}
+
+window.submitGantiPassword = async function () {
+  const passBaru  = document.getElementById('inputPassBaru').value
+  const konfirm   = document.getElementById('inputPassKonfirm').value
+  const errEl     = document.getElementById('gantiPassError')
+  const okEl      = document.getElementById('gantiPassSuccess')
+  const btn       = document.getElementById('btnSimpanPass')
+
+  errEl.style.display = 'none'
+  okEl.style.display  = 'none'
+
+  if (!passBaru) {
+    errEl.textContent = '⚠ Password baru wajib diisi'
+    errEl.style.display = 'block'
+    return
+  }
+  if (passBaru.length < 8) {
+    errEl.textContent = '⚠ Password minimal 8 karakter'
+    errEl.style.display = 'block'
+    return
+  }
+  if (passBaru !== konfirm) {
+    errEl.textContent = '⚠ Password dan konfirmasi tidak cocok'
+    errEl.style.display = 'block'
+    return
+  }
+
+  btn.disabled = true
+  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Menyimpan...'
+
+  const { error } = await supabase.auth.updateUser({ password: passBaru })
+
+  btn.disabled = false
+  btn.innerHTML = '<i class="fa fa-save"></i> Simpan Password'
+
+  if (error) {
+    errEl.textContent = '⚠ ' + error.message
+    errEl.style.display = 'block'
+    return
+  }
+
+  okEl.innerHTML = '<i class="fa fa-circle-check"></i> Password berhasil diperbarui!'
+  okEl.style.display = 'block'
+
+  // Tutup modal otomatis setelah 2 detik
+  setTimeout(() => closeProfileModal(), 2000)
+}
+
+/* ---- Modal helper untuk profile ---- */
+function showProfileModal(html) {
+  let el = document.getElementById('profileModal')
+  if (el) el.remove()
+  const bg = document.createElement('div')
+  bg.id = 'profileModal'; bg.className = 'modal-bg open'
+  bg.innerHTML = `<div class="modal-box">${html}</div>`
+  bg.addEventListener('click', e => { if (e.target === bg) closeProfileModal() })
+  document.body.appendChild(bg)
+}
+window.closeProfileModal = () => { document.getElementById('profileModal')?.remove() }
 
 /* ================================================================
    USERS / KARYAWAN PAGE
@@ -588,4 +928,3 @@ window.toggleTheme = function() {
   if (icon) icon.className = isDark ? 'fa fa-sun' : 'fa fa-moon'
   localStorage.setItem('theme', isDark ? 'dark' : 'light')
 }
-
