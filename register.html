@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Daftar Karyawan Baru — Genius HR</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .pending-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 13px 16px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: var(--r-lg);
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all .18s;
+      background: var(--white);
+    }
+    .pending-item:hover {
+      border-color: var(--primary-mid);
+      background: var(--primary-light);
+    }
+    .pending-item.selected {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+    .pi-avatar {
+      width: 40px; height: 40px;
+      border-radius: var(--r-md);
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+      color: #fff;
+      font-weight: 900;
+      font-size: .9rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .pending-item.selected .pi-avatar {
+      box-shadow: 0 3px 10px var(--primary-glow);
+    }
+    .pi-info { flex: 1; min-width: 0; }
+    .pi-name { font-weight: 800; font-size: .92rem; color: var(--text); }
+    .pi-sub  { font-size: .72rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* Password strength bar */
+    .strength-bar { height: 4px; border-radius: 999px; background: var(--gray-100); margin-top: 6px; overflow: hidden; }
+    .strength-fill { height: 100%; border-radius: 999px; transition: width .3s, background .3s; width: 0; }
+  </style>
+</head>
+<body>
+
+<div id="registerPage" style="min-height:100vh;display:flex;align-items:flex-start;justify-content:center;
+  background:radial-gradient(ellipse 100% 80% at 20% -10%, #1e40af 0%, transparent 55%),
+             radial-gradient(ellipse 80% 70% at 80% 110%, #0891b2 0%, transparent 55%),
+             linear-gradient(160deg, #0f172a 0%, #1e3a8a 50%, #0c4a6e 100%);
+  padding:24px 16px;">
+
+  <div style="width:100%;max-width:480px;">
+
+    <!-- HEADER -->
+    <div style="text-align:center;margin-bottom:24px;">
+      <span style="font-size:2.5rem;filter:drop-shadow(0 4px 12px rgba(37,99,235,.3));">🏢</span>
+      <h1 style="font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:900;
+        color:#fff;letter-spacing:3px;margin-top:8px;">GENIUS HR</h1>
+      <p style="color:rgba(255,255,255,.7);font-size:.85rem;margin-top:4px;">Registrasi Akun Karyawan Baru</p>
+    </div>
+
+    <!-- CARD -->
+    <div style="background:rgba(255,255,255,.97);border-radius:var(--r-2xl);padding:28px 24px;
+      box-shadow:0 32px 80px rgba(0,0,0,.28),0 12px 32px rgba(0,0,0,.16);">
+
+      <!-- STEP 1: Pilih nama -->
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;
+            font-weight:900;font-size:.82rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</div>
+          <div>
+            <div style="font-weight:800;font-size:.92rem;">Cari & Pilih Nama Kamu</div>
+            <div style="font-size:.75rem;color:var(--text-muted);">Nama sudah didaftarkan oleh HRD</div>
+          </div>
+        </div>
+
+        <!-- Search -->
+        <div class="search-box" style="margin-bottom:12px;">
+          <i class="fa fa-search"></i>
+          <input id="searchPending" placeholder="Ketik nama kamu...">
+        </div>
+
+        <!-- Daftar nama -->
+        <div id="pendingList" style="max-height:280px;overflow-y:auto;"></div>
+        <div id="pendingEmpty" style="display:none;text-align:center;padding:24px;color:var(--text-muted);">
+          <i class="fa fa-inbox" style="font-size:1.8rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          <p style="font-size:.85rem;">Tidak ada karyawan yang menunggu registrasi.<br>Hubungi HRD untuk didaftarkan.</p>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--gray-100);margin-bottom:20px;"></div>
+
+      <!-- STEP 2: Form registrasi (hidden until nama dipilih) -->
+      <div id="regForm" style="display:none;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;
+            font-weight:900;font-size:.82rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</div>
+          <div>
+            <div style="font-weight:800;font-size:.92rem;">Buat Akun untuk</div>
+            <div id="regNamaDisplay" style="font-size:.85rem;font-weight:900;color:var(--primary);"></div>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <p id="regError" style="display:none;color:var(--danger);font-size:.82rem;margin-bottom:12px;
+          padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid);border-radius:var(--r-md);"></p>
+
+        <div class="login-field">
+          <label for="regEmail">Email Aktif Kamu <span style="color:var(--danger);">*</span></label>
+          <input type="email" id="regEmail" placeholder="nama@email.com" autocomplete="email"/>
+          <div style="font-size:.7rem;color:var(--text-muted);margin-top:4px;">
+            <i class="fa fa-info-circle"></i> Link verifikasi akan dikirim ke email ini
+          </div>
+        </div>
+
+        <div class="login-field" style="margin-top:12px;">
+          <label for="regPassword">Password <span style="color:var(--danger);">*</span></label>
+          <input type="password" id="regPassword" placeholder="Min. 8 karakter"
+            autocomplete="new-password" oninput="checkPasswordStrength(this.value)"/>
+          <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+          <div id="strengthLabel" style="font-size:.68rem;color:var(--text-muted);margin-top:3px;"></div>
+        </div>
+
+        <div class="login-field" style="margin-top:12px;">
+          <label for="regKonfirmasi">Konfirmasi Password <span style="color:var(--danger);">*</span></label>
+          <input type="password" id="regKonfirmasi" placeholder="Ulangi password"
+            autocomplete="new-password" oninput="checkKonfirmasi()"/>
+          <div id="konfirmasiMsg" style="font-size:.7rem;margin-top:3px;"></div>
+        </div>
+
+        <button id="btnDaftar" class="btn-login" style="margin-top:16px;">
+          <i class="fa fa-user-plus"></i> Daftar & Kirim Verifikasi
+        </button>
+      </div>
+
+      <!-- SUCCESS STATE -->
+      <div id="regSuccess" style="display:none;text-align:center;padding:16px 0;">
+        <i class="fa fa-envelope-circle-check" style="font-size:3rem;color:var(--success);margin-bottom:16px;display:block;"></i>
+        <h3 style="font-weight:900;color:var(--text);margin-bottom:8px;">Email Verifikasi Terkirim!</h3>
+        <p style="color:var(--text-muted);font-size:.88rem;line-height:1.6;margin-bottom:20px;">
+          Cek inbox email kamu dan klik link verifikasi.<br>
+          Setelah terverifikasi, kamu bisa login ke aplikasi.
+        </p>
+        <button id="btnKeLogin" class="btn-login">
+          <i class="fa fa-sign-in-alt"></i> Ke Halaman Login
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Link ke login -->
+    <div style="text-align:center;margin-top:18px;">
+      <a href="index.html" style="color:rgba(255,255,255,.7);font-size:.82rem;">
+        <i class="fa fa-arrow-left"></i> Sudah punya akun? Login di sini
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function checkPasswordStrength(val) {
+    const fill  = document.getElementById('strengthFill')
+    const label = document.getElementById('strengthLabel')
+    if (!fill || !label) return
+    let score = 0
+    if (val.length >= 8)  score++
+    if (val.length >= 12) score++
+    if (/[A-Z]/.test(val)) score++
+    if (/[0-9]/.test(val)) score++
+    if (/[^A-Za-z0-9]/.test(val)) score++
+    const levels = [
+      { w:'0%',   bg:'',           txt:'' },
+      { w:'25%',  bg:'#ef4444',    txt:'Lemah' },
+      { w:'50%',  bg:'#f59e0b',    txt:'Cukup' },
+      { w:'75%',  bg:'#3b82f6',    txt:'Kuat' },
+      { w:'100%', bg:'#22c55e',    txt:'Sangat Kuat' },
+    ]
+    const lv = levels[Math.min(score, 4)]
+    fill.style.width      = lv.w
+    fill.style.background = lv.bg
+    label.textContent     = lv.txt
+    label.style.color     = lv.bg
+  }
+
+  function checkKonfirmasi() {
+    const pass  = document.getElementById('regPassword').value
+    const konf  = document.getElementById('regKonfirmasi').value
+    const msgEl = document.getElementById('konfirmasiMsg')
+    if (!msgEl || !konf) return
+    if (pass === konf) {
+      msgEl.innerHTML = '<span style="color:#16a34a;"><i class="fa fa-check"></i> Password cocok</span>'
+    } else {
+      msgEl.innerHTML = '<span style="color:#dc2626;"><i class="fa fa-times"></i> Password tidak cocok</span>'
+    }
+  }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+  import { initRegisterPage } from './js/register.js'
+  initRegisterPage()
+</script>
+
+</body>
+</html>
