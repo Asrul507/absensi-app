@@ -3,11 +3,28 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-  <meta name="description" content="Genius HR - Aplikasi Manajemen Absensi Karyawan"/>
+  <meta name="description" content="Genius HR - Aplikasi Manajemen Absensi"/>
   <title>Genius HR App</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="style.css"/>
+  <style>
+    /* Avatar topbar */
+    #topbarAvatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.22);
+      border: 1.5px solid rgba(255,255,255,.35);
+      color: #fff;
+      font-size: .78rem;
+      font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    #topbarAvatar:hover { opacity: .85; }
+  </style>
 </head>
 <body>
 
@@ -25,27 +42,36 @@
 
     <div class="login-field">
       <label for="email">Email</label>
-      <input type="email" id="email" placeholder="email@company.com"
-        autocomplete="email"
+      <input type="email" id="email" placeholder="email@company.com" autocomplete="email"
         onkeydown="if(event.key==='Enter') document.getElementById('password').focus()"/>
     </div>
 
     <div class="login-field">
       <label for="password">Password</label>
-      <input type="password" id="password" placeholder="Password"
-        autocomplete="current-password"
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password"
         onkeydown="if(event.key==='Enter') login()"/>
     </div>
 
-    <!-- Error message -->
     <p id="loginError" style="display:none;color:var(--danger);font-size:.82rem;margin-top:8px;
       padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid);
-      border-radius:var(--r-md);">
-    </p>
+      border-radius:var(--r-md);line-height:1.5;"></p>
 
     <button class="btn-login" id="btnLogin" onclick="login()">
       <i class="fa fa-sign-in-alt"></i> Masuk
     </button>
+
+    <!-- Link ke registrasi karyawan baru -->
+    <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200);">
+      <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:8px;">Karyawan baru? Belum punya akun?</p>
+      <a href="register.html"
+        style="display:inline-flex;align-items:center;gap:7px;font-size:.82rem;font-weight:700;
+          color:var(--primary);text-decoration:none;padding:8px 16px;border:1.5px solid var(--primary-mid);
+          border-radius:var(--r-md);background:var(--primary-light);transition:.2s;"
+        onmouseover="this.style.background='var(--primary)';this.style.color='#fff'"
+        onmouseout="this.style.background='var(--primary-light)';this.style.color='var(--primary)'">
+        <i class="fa fa-user-plus"></i> Daftar sebagai Karyawan Baru
+      </a>
+    </div>
 
   </div>
 </div>
@@ -64,7 +90,10 @@
       <div class="topbar-title">GENIUS HR</div>
     </div>
     <div class="topbar-right">
-      <span id="userName">User</span>
+      <!-- Avatar klik → ke profile -->
+      <div id="topbarAvatar" onclick="navigate('profile')" title="Profil Saya">?</div>
+      <span id="userName" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+        font-size:.82rem;font-weight:700;color:rgba(255,255,255,.95);"></span>
       <button class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Ganti tema"
         style="margin-top:0!important;min-height:unset!important;width:38px!important;padding:0!important;">
         <i class="fa fa-moon" id="themeIcon"></i>
@@ -81,17 +110,17 @@
   <!-- SIDEBAR -->
   <div id="sidebar"></div>
 
-  <!-- MAIN CONTENT -->
+  <!-- CONTENT -->
   <div id="content">
     <div style="display:flex;align-items:center;justify-content:center;height:60vh;">
       <div style="text-align:center;">
         <i class="fa fa-spinner fa-spin" style="font-size:2rem;color:var(--primary);"></i>
-        <p style="margin-top:12px;color:var(--text-muted);">Memuat dashboard...</p>
+        <p style="margin-top:12px;color:var(--text-muted);font-size:.85rem;">Memuat...</p>
       </div>
     </div>
   </div>
 
-  <!-- BOTTOM NAV (mobile, diisi oleh JS) -->
+  <!-- BOTTOM NAV -->
   <div id="bottomNav"></div>
 
 </div>
@@ -102,7 +131,7 @@
   <div class="loading-text">Memproses...</div>
 </div>
 
-<!-- TOAST CONTAINER -->
+<!-- TOAST -->
 <div id="toast-container"></div>
 
 <!-- SCRIPTS -->
