@@ -2,17 +2,18 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="description" content="Genius HR - Aplikasi Manajemen Absensi Karyawan"/>
   <title>Genius HR App</title>
-
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="style.css"/>
 </head>
-
 <body>
 
-<!-- ================= LOGIN ================= -->
+<!-- ======================================================
+     LOGIN PAGE
+====================================================== -->
 <div id="loginPage">
   <div class="login-box">
 
@@ -24,18 +25,23 @@
 
     <div class="login-field">
       <label for="email">Email</label>
-      <input type="email" id="email" placeholder="email@company.com" autocomplete="email"
+      <input type="email" id="email" placeholder="email@company.com"
+        autocomplete="email"
         onkeydown="if(event.key==='Enter') document.getElementById('password').focus()"/>
     </div>
 
     <div class="login-field">
       <label for="password">Password</label>
-      <input type="password" id="password" placeholder="Password" autocomplete="current-password"
+      <input type="password" id="password" placeholder="Password"
+        autocomplete="current-password"
         onkeydown="if(event.key==='Enter') login()"/>
     </div>
 
     <!-- Error message -->
-    <p id="loginError" style="display:none;color:var(--danger);font-size:.82rem;margin-top:6px;padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid);border-radius:var(--r-md);"></p>
+    <p id="loginError" style="display:none;color:var(--danger);font-size:.82rem;margin-top:8px;
+      padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid);
+      border-radius:var(--r-md);">
+    </p>
 
     <button class="btn-login" id="btnLogin" onclick="login()">
       <i class="fa fa-sign-in-alt"></i> Masuk
@@ -44,20 +50,23 @@
   </div>
 </div>
 
-<!-- ================= APP ================= -->
+<!-- ======================================================
+     APP PAGE
+====================================================== -->
 <div id="appPage" style="display:none;">
 
   <!-- TOPBAR -->
   <div class="topbar">
     <div class="topbar-left">
-      <button class="btn-menu" onclick="toggleSidebar()" aria-label="Buka menu">
+      <button class="btn-menu" onclick="toggleSidebar()" aria-label="Menu">
         <i class="fa fa-bars"></i>
       </button>
       <div class="topbar-title">GENIUS HR</div>
     </div>
     <div class="topbar-right">
       <span id="userName">User</span>
-      <button class="btn-theme-toggle" onclick="toggleTheme()" id="themeBtn" aria-label="Toggle tema">
+      <button class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Ganti tema"
+        style="margin-top:0!important;min-height:unset!important;width:38px!important;padding:0!important;">
         <i class="fa fa-moon" id="themeIcon"></i>
       </button>
       <button class="btn-logout-top" onclick="logout()" aria-label="Keluar">
@@ -72,41 +81,28 @@
   <!-- SIDEBAR -->
   <div id="sidebar"></div>
 
-  <!-- CONTENT -->
+  <!-- MAIN CONTENT -->
   <div id="content">
-    <div class="card">
-      <h3>Memuat Dashboard...</h3>
+    <div style="display:flex;align-items:center;justify-content:center;height:60vh;">
+      <div style="text-align:center;">
+        <i class="fa fa-spinner fa-spin" style="font-size:2rem;color:var(--primary);"></i>
+        <p style="margin-top:12px;color:var(--text-muted);">Memuat dashboard...</p>
+      </div>
     </div>
   </div>
 
-  <!-- BOTTOM NAV (mobile) -->
-  <div id="bottomNav">
-    <button class="bottom-nav-item active" onclick="navigate('dashboard')">
-      <i class="fa fa-house"></i><span>Home</span>
-    </button>
-    <button class="bottom-nav-item" onclick="navigate('absensi')">
-      <i class="fa fa-clock"></i><span>Absen</span>
-    </button>
-    <button class="bottom-nav-item" onclick="navigate('pengajuan')">
-      <i class="fa fa-file-alt"></i><span>Ajukan</span>
-    </button>
-    <button class="bottom-nav-item" onclick="navigate('riwayat')">
-      <i class="fa fa-list"></i><span>Riwayat</span>
-    </button>
-    <button class="bottom-nav-item" onclick="navigate('kalender')">
-      <i class="fa fa-calendar"></i><span>Kalender</span>
-    </button>
-  </div>
+  <!-- BOTTOM NAV (mobile, diisi oleh JS) -->
+  <div id="bottomNav"></div>
 
 </div>
 
 <!-- LOADING OVERLAY -->
 <div id="loading-overlay">
   <div class="loading-spinner"></div>
-  <div class="loading-text">Loading...</div>
+  <div class="loading-text">Memproses...</div>
 </div>
 
-<!-- TOAST -->
+<!-- TOAST CONTAINER -->
 <div id="toast-container"></div>
 
 <!-- SCRIPTS -->
