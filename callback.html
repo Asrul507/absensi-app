@@ -87,7 +87,25 @@
         const user = data.session.user
 
         // ===== UPDATE PROFILE KE AKTIF =====
-        // 1. Update di tabel profiles
+        // Deklarasikan variabel di luar agar bisa diakses oleh langkah berikutnya
+        let currentProfile = null
+
+        try {
+          // 1. Ambil data profil lama terlebih dahulu untuk mendapatkan nama_lengkap asli
+          const { data: profileData, error: fetchErr } = await supabase
+            .from('profiles')
+            .select('nama_lengkap')
+            .eq('id', user.id)
+            .single()
+          
+          if (!fetchErr) {
+            currentProfile = profileData
+          }
+        } catch (e) {
+          console.warn('Gagal mengambil data nama_lengkap:', e)
+        }
+
+        // 2. Update status_akun di tabel profiles
         const { error: updateErr } = await supabase
           .from('profiles')
           .update({ status_akun: 'Aktif' })
@@ -97,16 +115,19 @@
           console.warn('Update status_akun profiles warning:', updateErr)
         }
 
-        // 2. Update juga di tabel pending_profiles (supaya sinkron di dashboard admin)
-        const { error: updatePendingErr } = await supabase
-          .from('pending_profiles')
-          .update({ status: 'approved' }) 
-          .eq('nama_lengkap', currentProfile.nama_lengkap)
+        // 3. Update di tabel pending_profiles menggunakan nama_lengkap yang didapat dari database
+        if (currentProfile && currentProfile.nama_lengkap) {
+          const { error: updatePendingErr } = await supabase
+            .from('pending_profiles')
+            .update({ status: 'approved' }) 
+            .eq('nama_lengkap', currentProfile.nama_lengkap)
 
-        if (updatePendingErr) {
-          console.warn('Update status pending_profiles warning:', updatePendingErr)
+          if (updatePendingErr) {
+            console.warn('Update status pending_profiles warning:', updatePendingErr)
+          }
+        } else {
+          console.warn('Skip update pending_profiles karena nama_lengkap tidak ditemukan atau kosong')
         }
-
         // ===== TAMPILKAN SUKSES =====
         spinner.style.display = 'none'
         if (type === 'email_change') {
