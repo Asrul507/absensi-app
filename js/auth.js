@@ -103,23 +103,28 @@ export async function registerKaryawan(
 
     // ================= SIGNUP =================
     const {
-      data,
-      error
-    } = await supabase.auth.signUp({
+  data,
+  error
+} = await supabase.auth.signUp({
 
-      email,
-      password,
+  email,
+  password,
 
-      // FLOW LAMA SUPABASE
-      // TANPA emailRedirectTo
+  options: {
 
-      options: {
-        data: {
-          pending_id: pendingId,
-          nama_lengkap: pending.nama_lengkap,
-        }
-      }
-    })
+    // PENTING !!!
+    emailRedirectTo:
+      'https://hrpro01.netlify.app/callback.html',
+
+    data: {
+
+      pending_id: pendingId,
+
+      nama_lengkap:
+        pending.nama_lengkap,
+    }
+  }
+})
 
     // ================= ERROR =================
     if (error) {
