@@ -119,15 +119,3 @@ function bindEvents() {
     window.location.href = 'index.html'
   })
 }
-
-const { data, error } = await supabase.auth.signUp({
-  email,
-  password,
-  options: { data: { pending_id: pendingId, nama_lengkap: pending.nama_lengkap } }
-})
-
-if (error) {
-  console.error('SIGNUP ERROR:', error)  // ← log ini
-  showRegError(error.message)
-  return false
-}
