@@ -199,14 +199,14 @@
       // LOGIN SESSION DARI TOKEN
       // =========================
 
-      const { data, error } =
-        await supabase.auth.setSession({
+    const { data, error } =
+  await supabase.auth.verifyOtp({
 
-          access_token,
-          refresh_token
+    token_hash: access_token,
 
-        })
+    type: 'signup'
 
+  })
       if (error) throw error
 
       // Paksa session tersimpan
