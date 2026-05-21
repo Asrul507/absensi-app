@@ -45,7 +45,12 @@ export async function logout() {
    DAFTAR KARYAWAN BARU
    Dipanggil dari halaman registrasi (karyawan pilih nama sendiri)
 =============================================================== */
-export async function registerKaryawan(pendingId, email, password, konfirmasi) {
+export async function registerKaryawan(
+  pendingId,
+  email,
+  password,
+  konfirmasi
+) {
 
   // ================= VALIDASI =================
   if (!email || !password) {
@@ -80,7 +85,10 @@ export async function registerKaryawan(pendingId, email, password, konfirmasi) {
   try {
 
     // ================= AMBIL DATA PENDING =================
-    const { data: pending, error: pendingErr } = await supabase
+    const {
+      data: pending,
+      error: pendingErr
+    } = await supabase
       .from('pending_profiles')
       .select('*')
       .eq('id', pendingId)
@@ -93,18 +101,19 @@ export async function registerKaryawan(pendingId, email, password, konfirmasi) {
       )
     }
 
-    // ================= SIGNUP SUPABASE =================
-    const { data, error } = await supabase.auth.signUp({
+    // ================= SIGNUP =================
+    const {
+      data,
+      error
+    } = await supabase.auth.signUp({
 
       email,
       password,
 
+      // FLOW LAMA SUPABASE
+      // TANPA emailRedirectTo
+
       options: {
-
-        // PENTING !!!
-        emailRedirectTo:
-          'https://hrpro01.netlify.app/callback.html',
-
         data: {
           pending_id: pendingId,
           nama_lengkap: pending.nama_lengkap,
@@ -112,11 +121,15 @@ export async function registerKaryawan(pendingId, email, password, konfirmasi) {
       }
     })
 
+    // ================= ERROR =================
     if (error) {
 
-      if (error.message.includes('already registered')) {
+      if (
+        error.message.includes('already registered')
+      ) {
+
         throw new Error(
-          'Email ini sudah terdaftar. Silakan gunakan email lain atau login.'
+          'Email ini sudah terdaftar. Silakan login atau gunakan email lain.'
         )
       }
 
@@ -128,18 +141,30 @@ export async function registerKaryawan(pendingId, email, password, konfirmasi) {
     // ================= BUAT PROFILE =================
     if (user) {
 
-      const { error: profileError } = await supabase
+      const {
+        error: profileError
+      } = await supabase
         .from('profiles')
         .insert([{
-          id:                user.id,
+
+          id: user.id,
+
           email,
 
-          nama_lengkap:      pending.nama_lengkap,
+          nama_lengkap:
+            pending.nama_lengkap,
 
-          role:              pending.role || 'staff',
-          jabatan:           pending.jabatan || '',
-          departemen:        pending.departemen || '',
-          no_hp:             pending.no_hp || '',
+          role:
+            pending.role || 'staff',
+
+          jabatan:
+            pending.jabatan || '',
+
+          departemen:
+            pending.departemen || '',
+
+          no_hp:
+            pending.no_hp || '',
 
           tanggal_bergabung:
             pending.tanggal_bergabung || null,
@@ -147,17 +172,19 @@ export async function registerKaryawan(pendingId, email, password, konfirmasi) {
           tanggal_lahir:
             pending.tanggal_lahir || null,
 
-          status_akun: 'Menunggu Verifikasi',
+          status_akun:
+            'Menunggu Verifikasi',
 
           foto_url: '',
 
-          sisa_cuti:  0,
+          sisa_cuti: 0,
           jatah_cuti: 0,
         }])
 
       if (profileError) {
+
         console.error(
-          'Profile insert error:',
+          'PROFILE ERROR:',
           profileError
         )
       }
@@ -178,7 +205,8 @@ export async function registerKaryawan(pendingId, email, password, konfirmasi) {
     console.error(err)
 
     showRegError(
-      err.message || 'Terjadi kesalahan saat registrasi'
+      err.message ||
+      'Terjadi kesalahan saat registrasi'
     )
 
     return false
@@ -195,7 +223,6 @@ export async function registerKaryawan(pendingId, email, password, konfirmasi) {
     }
   }
 }
-
 /* ===============================================================
    SIGNUP LANGSUNG (untuk HRD buat akun tanpa pending flow)
    Dipakai saat HRD ingin buat akun sekaligus dengan email
