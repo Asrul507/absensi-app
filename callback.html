@@ -161,71 +161,53 @@
     try {
 
       // =========================
-      // AMBIL TOKEN DARI URL HASH
-      // =========================
-
-      const hash =
-        window.location.hash
-
-      const params =
-        new URLSearchParams(
-          hash.replace('#', '')
-        )
-
-      const token_hash =
-        params.get('access_token')
-
-      // =========================
-      // TOKEN TIDAK ADA
-      // =========================
-
-      if (!token_hash) {
-
-        throw new Error(
-          'Token verifikasi tidak ditemukan'
-        )
-      }
-
-      // =========================
-      // VERIFY OTP
+      // EXCHANGE CODE SESSION
       // =========================
 
       const { data, error } =
-        await supabase.auth.verifyOtp({
+        await supabase.auth.exchangeCodeForSession(
+          window.location.href
+        )
 
-          token_hash,
-
-          type: 'signup'
-
-        })
+      console.log('CALLBACK DATA:', data)
+      console.log('CALLBACK ERROR:', error)
 
       if (error) throw error
 
-      const user =
-        data?.user
+      const session =
+        data?.session
 
-      if (!user) {
+      if (!session) {
 
         throw new Error(
-          'User tidak ditemukan'
+          'Session tidak ditemukan'
         )
       }
+
+      const user =
+        session.user
 
       // =========================
       // UPDATE STATUS AKUN
       // =========================
 
-      await supabase
-        .from('profiles')
-        .update({
+      const { error:updateError } =
+        await supabase
+          .from('profiles')
+          .update({
 
-          status_akun: 'Aktif'
+            status_akun: 'Aktif'
 
-        })
-        .eq('id', user.id)
+          })
+          .eq('id', user.id)
+
+      console.log(
+        'PROFILE UPDATE:',
+        updateError
+      )
 
       // =========================
-      // SUKSES
+      // SUCCESS
       // =========================
 
       spinner.style.display =
