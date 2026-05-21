@@ -8,7 +8,14 @@ export async function login(email, password) {
     btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   }
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+ const { data, error } =
+  await supabase.auth.signInWithPassword({
+    email,
+    password
+  })
+
+console.log('LOGIN RESULT:', data)
+console.log('LOGIN ERROR:', error)
 
   if (btn) {
     btn.disabled = false
