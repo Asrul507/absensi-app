@@ -322,28 +322,50 @@ window.uploadFotoProfil = async function (input) {
   renderProfile()
 }
 
-/* ================= USERS PAGE STUB ================= */
+/* ================= USERS PAGE ================= */
 async function renderUsers() {
   const content = document.getElementById('content')
-  content.innerHTML = `<div class="card"><h2>Users Page</h2><p>Not implemented yet</p></div>`
-}
+  content.innerHTML = `<div class="card"><h2>Memuat Data Karyawan...</h2></div>`
 
-/* ================= SIDEBAR ================= */
-window.toggleSidebar = () => {
-  document.getElementById('sidebar')?.classList.toggle('open')
-  document.getElementById('overlay')?.classList.toggle('active')
-}
-window.closeSidebar = () => {
-  document.getElementById('sidebar')?.classList.remove('open')
-  document.getElementById('overlay')?.classList.remove('active')
-}
-document.addEventListener('keydown', e => { if(e.key==='Escape') closeSidebar() })
+  try {
+    // Mengambil semua data profil/karyawan dari tabel 'profiles' di Supabase
+    const { data: users, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('nama_lengkap', { ascending: true })
 
-/* ================= DARK MODE ================= */
-window.toggleTheme = function() {
-  document.documentElement.classList.toggle('dark')
-  const isDark = document.documentElement.classList.contains('dark')
-  const icon   = document.getElementById('themeIcon')
-  if (icon) icon.className = isDark ? 'fa fa-sun' : 'fa fa-moon'
-  localStorage.setItem('theme', isDark ? 'dark' : 'light')
+    if (error) throw error
+
+    // Render tabel atau list karyawan
+    content.innerHTML = `
+      <div class="card fade-up">
+        <div class="card-title"><i class="fa fa-users"></i> Daftar Karyawan</div>
+        <div style="overflow-x: auto;">
+          <table style="width:100%; border-collapse: collapse; margin-top: 10px;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border); text-align: left;">
+                <th style="padding: 10px;">Nama</th>
+                <th style="padding: 10px;">Jabatan</th>
+                <th style="padding: 10px;">Departemen</th>
+                <th style="padding: 10px;">Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${users.map(u => `
+                <tr style="border-bottom: 1px solid var(--border);">
+                  <td style="padding: 10px;">${u.nama_lengkap || '-'}</td>
+                  <td style="padding: 10px;">${u.jabatan || '-'}</td>
+                  <td style="padding: 10px;">${u.departemen || '-'}</td>
+                  <td style="padding: 10px;"><span class="badge">${u.role}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `
+  } catch (err) {
+    console.error('Gagal memuat data karyawan:', err)
+    content.innerHTML = `<div class="card"><h2>Eror</h2><p>Gagal memuat data karyawan.</p></div>`
+  }
 }
