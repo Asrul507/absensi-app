@@ -101,7 +101,7 @@
         const { error: updatePendingErr } = await supabase
           .from('pending_profiles')
           .update({ status: 'approved' }) 
-          .eq('email', user.email)
+          .eq('nama_lengkap', currentProfile.nama_lengkap)
 
         if (updatePendingErr) {
           console.warn('Update status pending_profiles warning:', updatePendingErr)
