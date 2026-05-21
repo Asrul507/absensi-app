@@ -11,9 +11,9 @@ import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
 
 /* ================= GLOBAL ================= */
-window.currentUser  = null
+window.currentUser = null
 window.currentShift = null
-window.supabase     = supabase
+window.supabase = supabase
 
 /* ================= INIT ================= */
 window.addEventListener('DOMContentLoaded', () => {
@@ -27,11 +27,11 @@ window.addEventListener('DOMContentLoaded', () => {
   // Tangkap token verifikasi dari URL hash
   // Supabase kirim link: https://app.com/#access_token=...&type=signup
   // =====================================================
-  const hash   = window.location.hash
+  const hash = window.location.hash
   const params = new URLSearchParams(hash.replace('#', ''))
-  const type   = params.get('type')
-  const token  = params.get('access_token')
-  const refresh= params.get('refresh_token') || ''
+  const type = params.get('type')
+  const token = params.get('access_token')
+  const refresh = params.get('refresh_token') || ''
 
   if (token && (type === 'signup' || type === 'email_change' || type === 'recovery')) {
     // Bersihkan URL agar token tidak tampil di address bar
@@ -80,12 +80,12 @@ window.addEventListener('DOMContentLoaded', () => {
 /* ================= CHECK USER ================= */
 async function checkUser() {
   const loginPage = document.getElementById('loginPage')
-  const appPage   = document.getElementById('appPage')
+  const appPage = document.getElementById('appPage')
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
     loginPage.style.display = 'flex'
-    appPage.style.display   = 'none'
+    appPage.style.display = 'none'
     return
   }
 
@@ -99,13 +99,13 @@ async function checkUser() {
 
   if (!profile) {
     loginPage.style.display = 'flex'
-    appPage.style.display   = 'none'
+    appPage.style.display = 'none'
     return
   }
 
   window.currentUser = profile
   loginPage.style.display = 'none'
-  appPage.style.display   = 'block'
+  appPage.style.display = 'block'
 
   const userNameEl = document.getElementById('userName')
   if (userNameEl) userNameEl.innerText = profile.nama_lengkap || user.email
@@ -125,7 +125,7 @@ function updateTopbarAvatar(profile) {
   if (!el) return
   if (profile.foto_url) {
     el.style.backgroundImage = `url(${profile.foto_url})`
-    el.style.backgroundSize  = 'cover'
+    el.style.backgroundSize = 'cover'
     el.textContent = ''
   } else {
     el.style.backgroundImage = ''
@@ -135,9 +135,9 @@ function updateTopbarAvatar(profile) {
 
 /* ================= LOGIN ================= */
 window.login = async function () {
-  const email    = document.getElementById('email').value.trim()
+  const email = document.getElementById('email').value.trim()
   const password = document.getElementById('password').value
-  const errEl    = document.getElementById('loginError')
+  const errEl = document.getElementById('loginError')
   if (errEl) errEl.style.display = 'none'
   const ok = await doLogin(email, password)
   if (ok) await checkUser()
@@ -152,23 +152,23 @@ function renderMenu(role) {
   if (!sidebar) return
 
   const adminMenu = [
-    { key:'dashboard', name:'Dashboard',    icon:'fa-house' },
-    { key:'absensi',   name:'Absensi',      icon:'fa-clock' },
-    { key:'shift',     name:'Shift',        icon:'fa-calendar' },
-    { key:'jadwal',    name:'Jadwal',       icon:'fa-calendar-days' },
-    { key:'pengajuan', name:'Approval',     icon:'fa-inbox' },
-    { key:'users',     name:'Karyawan',     icon:'fa-users' },
-    { key:'riwayat',   name:'Riwayat',      icon:'fa-list' },
-    { key:'kalender',  name:'Kalender',     icon:'fa-calendar' },
+    { key:'dashboard', name:'Dashboard', icon:'fa-house' },
+    { key:'absensi', name:'Absensi', icon:'fa-clock' },
+    { key:'shift', name:'Shift', icon:'fa-calendar' },
+    { key:'jadwal', name:'Jadwal', icon:'fa-calendar-days' },
+    { key:'pengajuan', name:'Approval', icon:'fa-inbox' },
+    { key:'users', name:'Karyawan', icon:'fa-users' },
+    { key:'riwayat', name:'Riwayat', icon:'fa-list' },
+    { key:'kalender', name:'Kalender', icon:'fa-calendar' },
   ]
 
   const staffMenu = [
-    { key:'dashboard', name:'Dashboard',    icon:'fa-house' },
-    { key:'absensi',   name:'Absensi',      icon:'fa-clock' },
-    { key:'pengajuan', name:'Pengajuan',    icon:'fa-file-alt' },
-    { key:'riwayat',   name:'Riwayat',      icon:'fa-list' },
-    { key:'kalender',  name:'Kalender',     icon:'fa-calendar-alt' },
-    { key:'profile',   name:'Profil Saya',  icon:'fa-user' },
+    { key:'dashboard', name:'Dashboard', icon:'fa-house' },
+    { key:'absensi', name:'Absensi', icon:'fa-clock' },
+    { key:'pengajuan', name:'Pengajuan', icon:'fa-file-alt' },
+    { key:'riwayat', name:'Riwayat', icon:'fa-list' },
+    { key:'kalender', name:'Kalender', icon:'fa-calendar-alt' },
+    { key:'profile', name:'Profil Saya', icon:'fa-user' },
   ]
 
   const menu = (role === 'staff') ? staffMenu : adminMenu
@@ -194,15 +194,15 @@ function renderBottomNav(role) {
   if (!nav) return
   const items = role === 'staff'
     ? [
-        { key:'dashboard', icon:'fa-house',    label:'Home' },
-        { key:'absensi',   icon:'fa-clock',    label:'Absen' },
-        { key:'profile',   icon:'fa-user',     label:'Profil' },
+        { key:'dashboard', icon:'fa-house', label:'Home' },
+        { key:'absensi', icon:'fa-clock', label:'Absen' },
+        { key:'profile', icon:'fa-user', label:'Profil' },
       ]
     : [
-        { key:'dashboard', icon:'fa-house',    label:'Home' },
-        { key:'absensi',   icon:'fa-clock',    label:'Absen' },
-        { key:'pengajuan', icon:'fa-inbox',    label:'Approval' },
-        { key:'users',     icon:'fa-users',    label:'Karyawan' },
+        { key:'dashboard', icon:'fa-house', label:'Home' },
+        { key:'absensi', icon:'fa-clock', label:'Absen' },
+        { key:'pengajuan', icon:'fa-inbox', label:'Approval' },
+        { key:'users', icon:'fa-users', label:'Karyawan' },
       ]
 
   nav.innerHTML = items.map(i => `
@@ -222,14 +222,14 @@ window.navigate = async function (page) {
 
   switch (page) {
     case 'dashboard': renderDashboard(); break
-    case 'absensi':   renderAbsensi(window.currentUser); break
-    case 'shift':     renderShiftManagement(); break
-    case 'jadwal':    renderJadwalManagement(); break
+    case 'absensi': renderAbsensi(window.currentUser); break
+    case 'shift': renderShiftManagement(); break
+    case 'jadwal': renderJadwalManagement(); break
     case 'pengajuan': renderPengajuan(window.currentUser); break
-    case 'riwayat':   renderRiwayat(window.currentUser); break
-    case 'kalender':  renderKalenderHR(); break
-    case 'profile':   renderProfile(); break
-    case 'users':     await renderUsers(); break
+    case 'riwayat': renderRiwayat(window.currentUser); break
+    case 'kalender': renderKalenderHR(); break
+    case 'profile': renderProfile(); break
+    case 'users': await renderUsers(); break
     default:
       document.getElementById('content').innerHTML = `<div class="card"><h2>${page}</h2></div>`
   }
@@ -294,7 +294,6 @@ function renderProfile() {
       <div class="card fade-up-3">
         <div class="card-title"><i class="fa fa-lock"></i> Pengaturan Akun</div>
 
-        <!-- Email sekarang -->
         <div style="background:var(--gray-50);border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px;">
           <div style="font-size:.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:3px;">Email Aktif</div>
           <div style="font-weight:700;font-size:.9rem;word-break:break-all;">${u.email || '-'}</div>
@@ -337,7 +336,7 @@ function renderProfile() {
 
 /* ---- Upload foto profil ---- */
 window.uploadFotoProfil = async function (input) {
-  const file   = input.files[0]
+  const file = input.files[0]
   const status = document.getElementById('uploadStatus')
   if (!file) return
 
@@ -349,7 +348,7 @@ window.uploadFotoProfil = async function (input) {
 
   if (status) status.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mengupload...'
 
-  const ext      = file.name.split('.').pop()
+  const ext = file.name.split('.').pop()
   const fileName = `avatar-${window.currentUser.id}-${Date.now()}.${ext}`
 
   const { error: uploadErr } = await supabase.storage
@@ -415,14 +414,14 @@ window.openGantiEmail = function () {
 }
 
 window.submitGantiEmail = async function () {
-  const emailBaru   = document.getElementById('inputEmailBaru').value.trim()
-  const emailKonfirm= document.getElementById('inputEmailKonfirm').value.trim()
-  const errEl       = document.getElementById('gantiEmailError')
-  const okEl        = document.getElementById('gantiEmailSuccess')
-  const btn         = document.getElementById('btnKirimEmail')
+  const emailBaru = document.getElementById('inputEmailBaru').value.trim()
+  const emailKonfirm = document.getElementById('inputEmailKonfirm').value.trim()
+  const errEl = document.getElementById('gantiEmailError')
+  const okEl = document.getElementById('gantiEmailSuccess')
+  const btn = document.getElementById('btnKirimEmail')
 
   errEl.style.display = 'none'
-  okEl.style.display  = 'none'
+  okEl.style.display = 'none'
 
   // Validasi
   if (!emailBaru) {
@@ -474,7 +473,7 @@ window.submitGantiEmail = async function () {
   okEl.style.display = 'block'
 
   // Disable form setelah berhasil
-  document.getElementById('inputEmailBaru').disabled    = true
+  document.getElementById('inputEmailBaru').disabled = true
   document.getElementById('inputEmailKonfirm').disabled = true
   btn.style.display = 'none'
 }
@@ -542,33 +541,33 @@ window.openGantiPassword = function () {
 }
 
 window.cekKekuatanPass = function (val) {
-  const bar   = document.getElementById('passStrengthBar')
+  const bar = document.getElementById('passStrengthBar')
   const label = document.getElementById('passStrengthLabel')
   if (!bar) return
   let score = 0
-  if (val.length >= 8)            score++
-  if (val.length >= 12)           score++
-  if (/[A-Z]/.test(val))          score++
-  if (/[0-9]/.test(val))          score++
-  if (/[^A-Za-z0-9]/.test(val))   score++
+  if (val.length >= 8) score++
+  if (val.length >= 12) score++
+  if (/[A-Z]/.test(val)) score++
+  if (/[0-9]/.test(val)) score++
+  if (/[^A-Za-z0-9]/.test(val)) score++
   const levels = [
-    { w:'0%',    bg:'',         txt:'' },
-    { w:'25%',   bg:'#ef4444', txt:'Lemah' },
-    { w:'50%',   bg:'#f59e0b', txt:'Cukup' },
-    { w:'75%',   bg:'#3b82f6', txt:'Kuat' },
-    { w:'100%',  bg:'#22c55e', txt:'Sangat Kuat' },
+    { w:'0%', bg:'', txt:'' },
+    { w:'25%', bg:'#ef4444', txt:'Lemah' },
+    { w:'50%', bg:'#f59e0b', txt:'Cukup' },
+    { w:'75%', bg:'#3b82f6', txt:'Kuat' },
+    { w:'100%', bg:'#22c55e', txt:'Sangat Kuat' },
   ]
   const lv = levels[Math.min(score, 4)]
-  bar.style.width      = lv.w
+  bar.style.width = lv.w
   bar.style.background = lv.bg
-  label.textContent    = lv.txt
-  label.style.color    = lv.bg
+  label.textContent = lv.txt
+  label.style.color = lv.bg
 }
 
 window.cekKonfirmPass = function () {
-  const pass  = document.getElementById('inputPassBaru')?.value
-  const konf  = document.getElementById('inputPassKonfirm')?.value
-  const msg   = document.getElementById('passKonfirmMsg')
+  const pass = document.getElementById('inputPassBaru')?.value
+  const konf = document.getElementById('inputPassKonfirm')?.value
+  const msg = document.getElementById('passKonfirmMsg')
   if (!msg || !konf) return
   msg.innerHTML = pass === konf
     ? '<span style="color:#16a34a;"><i class="fa fa-check"></i> Password cocok</span>'
@@ -584,14 +583,14 @@ window.togglePassVis = function (inputId, btn) {
 }
 
 window.submitGantiPassword = async function () {
-  const passBaru  = document.getElementById('inputPassBaru').value
-  const konfirm   = document.getElementById('inputPassKonfirm').value
-  const errEl     = document.getElementById('gantiPassError')
-  const okEl      = document.getElementById('gantiPassSuccess')
-  const btn       = document.getElementById('btnSimpanPass')
+  const passBaru = document.getElementById('inputPassBaru').value
+  const konfirm = document.getElementById('inputPassKonfirm').value
+  const errEl = document.getElementById('gantiPassError')
+  const okEl = document.getElementById('gantiPassSuccess')
+  const btn = document.getElementById('btnSimpanPass')
 
   errEl.style.display = 'none'
-  okEl.style.display  = 'none'
+  okEl.style.display = 'none'
 
   if (!passBaru) {
     errEl.textContent = '⚠ Password baru wajib diisi'
@@ -646,7 +645,7 @@ window.closeProfileModal = () => { document.getElementById('profileModal')?.remo
    USERS / KARYAWAN PAGE
 ================================================================ */
 async function renderUsers() {
-  const content  = document.getElementById('content')
+  const content = document.getElementById('content')
   const canAdmin = window.currentUser.role === 'super_admin'
 
   content.innerHTML = `
@@ -657,7 +656,6 @@ async function renderUsers() {
       </button>
     </div>
 
-    <!-- TAB -->
     <div style="display:flex;gap:8px;margin-bottom:16px;">
       <button id="tabAktif" class="btn-primary btn-sm" onclick="switchTab('aktif')">
         <i class="fa fa-users"></i> Karyawan Aktif
@@ -667,7 +665,6 @@ async function renderUsers() {
       </button>
     </div>
 
-    <!-- SEARCH -->
     <div class="card fade-up" style="padding:14px 18px;margin-bottom:12px;">
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <div class="search-box" style="flex:2;min-width:180px;margin:0;">
@@ -699,10 +696,10 @@ async function renderUsers() {
   const tahunIni = new Date().getFullYear()
   const { data: cutiData } = await supabase.from('pengajuan').select('user_id, jumlah_hari')
     .eq('jenis','cuti').eq('status','approved').gte('tanggal_pengajuan',`${tahunIni}-01-01`)
-  window._cutiMap  = {}
+  window._cutiMap = {}
   ;(cutiData||[]).forEach(c => { window._cutiMap[c.user_id] = (window._cutiMap[c.user_id]||0) + (parseInt(c.jumlah_hari)||0) })
-  window._allUsers   = users   || []
-  window._pendingList= pending || []
+  window._allUsers = users || []
+  window._pendingList = pending || []
   window._currentTab = 'aktif'
 
   renderUserList(window._allUsers)
@@ -710,14 +707,14 @@ async function renderUsers() {
   // Tab
   window.switchTab = function(tab) {
     window._currentTab = tab
-    document.getElementById('tabAktif').className   = tab==='aktif'   ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
-    document.getElementById('tabPending').className = tab==='pending' ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
+    document.getElementById('tabAktif').className = tab=='aktif' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
+    document.getElementById('tabPending').className = tab=='pending' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
     if (tab === 'aktif') renderUserList(window._allUsers)
     else renderPendingList(window._pendingList)
   }
 
   window.filterUsers = function() {
-    const q  = document.getElementById('searchUser').value.toLowerCase()
+    const q = document.getElementById('searchUser').value.toLowerCase()
     const st = document.getElementById('filterStatusUser').value
     if (window._currentTab === 'aktif') {
       renderUserList(window._allUsers.filter(u =>
@@ -771,14 +768,14 @@ async function renderUsers() {
     if (!nama) { alert('Nama wajib diisi'); return }
 
     const { error } = await supabase.from('pending_profiles').insert([{
-      nama_lengkap:      nama,
-      jabatan:           document.getElementById('pJabatan').value.trim(),
-      departemen:        document.getElementById('pDept').value.trim(),
-      no_hp:             document.getElementById('pHp').value.trim(),
+      nama_lengkap: nama,
+      jabatan: document.getElementById('pJabatan').value.trim(),
+      departemen: document.getElementById('pDept').value.trim(),
+      no_hp: document.getElementById('pHp').value.trim(),
       tanggal_bergabung: document.getElementById('pTgl').value || null,
-      tanggal_lahir:     document.getElementById('pLahir').value || null,
-      role:              document.getElementById('pRole').value,
-      created_by:        window.currentUser.id,
+      tanggal_lahir: document.getElementById('pLahir').value || null,
+      role: document.getElementById('pRole').value,
+      created_by: window.currentUser.id,
     }])
 
     if (error) { alert('Gagal simpan: ' + error.message); return }
@@ -798,10 +795,10 @@ function renderUserList(users) {
   }
   el.innerHTML = users.map(u => {
     const masaKerja = hitungMasaKerja(u.tanggal_bergabung)
-    const jatah     = hitungJatahCuti(u.tanggal_bergabung)
-    const terpakai  = (window._cutiMap||{})[u.id] || 0
-    const sisa      = jatah - terpakai
-    const isAktif   = u.status_akun !== 'Non-Aktif'
+    const jatah = hitungJatahCuti(u.tanggal_bergabung)
+    const terpakai = (window._cutiMap||{})[u.id] || 0
+    const sisa = jatah - terpakai
+    const isAktif = u.status_akun !== 'Non-Aktif'
 
     const avatarHtml = u.foto_url
       ? `<img src="${u.foto_url}" style="width:40px;height:40px;border-radius:var(--r-md);object-fit:cover;flex-shrink:0;">`
@@ -924,7 +921,7 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') closeSidebar() 
 window.toggleTheme = function() {
   document.documentElement.classList.toggle('dark')
   const isDark = document.documentElement.classList.contains('dark')
-  const icon   = document.getElementById('themeIcon')
+  const icon = document.getElementById('themeIcon')
   if (icon) icon.className = isDark ? 'fa fa-sun' : 'fa fa-moon'
   localStorage.setItem('theme', isDark ? 'dark' : 'light')
 }
