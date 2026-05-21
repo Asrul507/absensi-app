@@ -581,10 +581,6 @@ function showUserModal(html) {
 }
 window.closeUserModal = () => { document.getElementById('userModal')?.remove() }
 
-/* ================= HELPERS ================= */
-function infoRow(label, value) {
-  return `<div class="info-row"><div class="ir-label">${label}</div><div class="ir-val">${value}</div></div>`
-}
 
 /* ================= SIDEBAR ================= */
 window.toggleSidebar = () => {
