@@ -102,7 +102,7 @@ export async function registerKaryawan(
     }
 
     // ================= SIGNUP =================
-    const {
+   const {
   data,
   error
 } = await supabase.auth.signUp({
@@ -112,7 +112,6 @@ export async function registerKaryawan(
 
   options: {
 
-    // PENTING !!!
     emailRedirectTo:
       'https://hrpro01.netlify.app/callback.html',
 
@@ -125,7 +124,6 @@ export async function registerKaryawan(
     }
   }
 })
-
     // ================= ERROR =================
     if (error) {
 
