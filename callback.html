@@ -3,282 +3,131 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-
-  <title>Verifikasi — Genius HR</title>
-
-  <link
-    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap"
-    rel="stylesheet"
-  />
-
+  <title>Verifikasi Email — Genius HR</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
   <style>
-
-    *{
-      box-sizing:border-box;
-      margin:0;
-      padding:0;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: linear-gradient(160deg, #0f172a 0%, #1e3a8a 50%, #0c4a6e 100%);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
     }
-
-    body{
-      font-family:'Plus Jakarta Sans',sans-serif;
-
-      background:
-        linear-gradient(
-          160deg,
-          #0f172a 0%,
-          #1e3a8a 50%,
-          #0c4a6e 100%
-        );
-
-      min-height:100vh;
-
-      display:flex;
-      align-items:center;
-      justify-content:center;
+    .box {
+      background: rgba(255,255,255,.97);
+      border-radius: 24px;
+      padding: 40px 32px;
+      width: 100%; max-width: 380px;
+      text-align: center;
+      box-shadow: 0 32px 80px rgba(0,0,0,.28);
     }
-
-    .box{
-      background:rgba(255,255,255,.97);
-
-      border-radius:24px;
-
-      padding:40px 32px;
-
-      width:100%;
-      max-width:380px;
-
-      text-align:center;
-
-      box-shadow:
-        0 32px 80px rgba(0,0,0,.28);
+    .icon { font-size: 3rem; margin-bottom: 16px; }
+    h2 { font-size: 1.2rem; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
+    p  { font-size: .88rem; color: #64748b; line-height: 1.6; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 16px;
     }
-
-    h2{
-      font-size:1.2rem;
-      font-weight:800;
-
-      color:#0f172a;
-
-      margin-bottom:8px;
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-top: 20px; padding: 12px 24px;
+      background: linear-gradient(180deg, #4f8ef7, #1d4ed8);
+      color: #fff; border: none; border-radius: 10px;
+      font-size: .9rem; font-weight: 800; cursor: pointer;
+      font-family: inherit; text-decoration: none;
     }
-
-    p{
-      font-size:.88rem;
-      color:#64748b;
-
-      line-height:1.6;
-    }
-
-    .spinner{
-      width:40px;
-      height:40px;
-
-      border:3px solid #e2e8f0;
-      border-top-color:#2563eb;
-
-      border-radius:50%;
-
-      animation:spin .7s linear infinite;
-
-      margin:0 auto 16px;
-    }
-
-    @keyframes spin{
-      to{
-        transform:rotate(360deg);
-      }
-    }
-
-    .btn{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-
-      margin-top:20px;
-
-      padding:12px 24px;
-
-      background:
-        linear-gradient(
-          180deg,
-          #4f8ef7,
-          #1d4ed8
-        );
-
-      color:#fff;
-
-      border:none;
-      border-radius:10px;
-
-      font-size:.9rem;
-      font-weight:800;
-
-      cursor:pointer;
-
-      text-decoration:none;
-
-      font-family:inherit;
-    }
-
   </style>
 </head>
-
 <body>
-
 <div class="box" id="box">
-
   <div class="spinner" id="spinner"></div>
-
-  <h2 id="title">
-    Memverifikasi akun...
-  </h2>
-
-  <p id="desc">
-    Mohon tunggu sebentar
-  </p>
-
+  <h2 id="title">Memverifikasi akun...</h2>
+  <p id="desc">Mohon tunggu sebentar</p>
 </div>
 
 <script type="module">
+  import { supabase } from './js/supabase.js'
 
-import { supabase }
-  from './js/supabase.js'
+  async function handleCallback() {
+    const spinner = document.getElementById('spinner')
+    const title   = document.getElementById('title')
+    const desc    = document.getElementById('desc')
+    const box     = document.getElementById('box')
 
-async function handleCallback() {
+    try {
+      // Ambil token dari URL hash
+      const hash   = window.location.hash
+      const params = new URLSearchParams(hash.substring(1))
+      const token  = params.get('access_token')
+      const refresh= params.get('refresh_token') || ''
+      const type   = params.get('type')
 
-  const spinner =
-    document.getElementById('spinner')
+      // Bersihkan URL agar token tidak tampil
+      history.replaceState(null, '', window.location.pathname)
 
-  const title =
-    document.getElementById('title')
+      if (!token) {
+        throw new Error('Token verifikasi tidak ditemukan')
+      }
 
-  const desc =
-    document.getElementById('desc')
+      // Set session dari token
+      const { data, error: sessionError } = await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: refresh
+      })
 
-  const box =
-    document.getElementById('box')
+      if (sessionError || !data?.session) {
+        throw sessionError || new Error('Gagal set session')
+      }
 
-  try {
+      const user = data.session.user
 
-    // =========================
-    // AMBIL TOKEN HASH
-    // =========================
+      // ===== UPDATE PROFILE KE AKTIF =====
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ status_akun: 'Aktif' })
+        .eq('id', user.id)
 
-    const hash =
-      window.location.hash
+      if (updateErr) {
+        console.warn('Update status_akun warning:', updateErr)
+        // Lanjut saja meski ada error, karena user sudah terverifikasi
+      }
 
-    const params =
-      new URLSearchParams(
-        hash.substring(1)
-      )
+      // ===== TAMPILKAN SUKSES =====
+      spinner.style.display = 'none'
 
-    const access_token =
-      params.get('access_token')
+      if (type === 'email_change') {
+        title.textContent = '✅ Email Berhasil Diubah!'
+        desc.textContent = `Email kamu sekarang: ${user.email}`
+      } else {
+        title.textContent = '✅ Akun Terverifikasi!'
+        desc.textContent = 'Selamat! Akun kamu sudah aktif.'
+      }
 
-    const refresh_token =
-      params.get('refresh_token')
+      // ===== AUTO REDIRECT TANPA TOMBOL =====
+      // Tunggu 2 detik lalu redirect langsung ke dashboard
+      setTimeout(() => {
+        window.location.replace('index.html')
+      }, 2000)
 
-    // DEBUG
-    console.log('HASH:', hash)
-    console.log('ACCESS:', access_token)
-    console.log('REFRESH:', refresh_token)
-
-    if (
-      !access_token ||
-      !refresh_token
-    ) {
-
-      throw new Error(
-        'Token tidak ditemukan'
-      )
+    } catch (err) {
+      console.error('CALLBACK ERROR:', err)
+      spinner.style.display = 'none'
+      title.textContent = '❌ Verifikasi Gagal'
+      desc.innerHTML = `
+        Error: ${err.message || 'Link mungkin sudah kadaluarsa'}<br><br>
+        <small>Coba login dengan email kamu — mungkin akun sudah aktif.</small>
+      `
+      box.innerHTML += `<a href="index.html" class="btn">← Ke Halaman Login</a>`
     }
-
-    // =========================
-    // SET SESSION
-    // =========================
-
-    const { data, error } =
-      await supabase.auth.setSession({
-
-        access_token,
-
-        refresh_token
-
-      })
-
-    if (error) throw error
-
-    const user =
-      data.session.user
-
-    // =========================
-    // UPDATE PROFILE
-    // =========================
-
-    await supabase
-      .from('profiles')
-      .update({
-
-        status_akun: 'Aktif'
-
-      })
-      .eq('id', user.id)
-
-    spinner.style.display =
-      'none'
-
-    title.textContent =
-      '✅ Verifikasi Berhasil!'
-
-    desc.textContent =
-      'Akun kamu sudah aktif.'
-
-    box.innerHTML += `
-      <a href="index.html" class="btn">
-        🚀 Login Sekarang
-      </a>
-    `
-
-    // Bersihkan URL
-    history.replaceState(
-      {},
-      document.title,
-      window.location.pathname
-    )
-
-    // Redirect
-    setTimeout(() => {
-
-      window.location.href =
-        'index.html'
-
-    }, 3000)
-
-  } catch (err) {
-
-    console.error(err)
-
-    spinner.style.display =
-      'none'
-
-    title.textContent =
-      '❌ Verifikasi Gagal'
-
-    desc.innerHTML = `
-      Link verifikasi tidak valid
-      atau sudah kadaluarsa.
-    `
-
-    box.innerHTML += `
-      <a href="index.html" class="btn">
-        ← Kembali Login
-      </a>
-    `
   }
-}
 
-handleCallback()
-
+  // Jalankan
+  handleCallback()
 </script>
 </body>
 </html>
