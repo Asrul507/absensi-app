@@ -4,69 +4,163 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Verifikasi — Genius HR</title>
+
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: 'Plus Jakarta Sans', sans-serif;
-      background: linear-gradient(160deg, #0f172a 0%, #1e3a8a 50%, #0c4a6e 100%);
+      background:
+        linear-gradient(
+          160deg,
+          #0f172a 0%,
+          #1e3a8a 50%,
+          #0c4a6e 100%
+        );
+
       min-height: 100vh;
-      display: flex; align-items: center; justify-content: center;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
+
     .box {
       background: rgba(255,255,255,.97);
+
       border-radius: 24px;
+
       padding: 40px 32px;
-      width: 100%; max-width: 380px;
+
+      width: 100%;
+      max-width: 380px;
+
       text-align: center;
-      box-shadow: 0 32px 80px rgba(0,0,0,.28);
+
+      box-shadow:
+        0 32px 80px rgba(0,0,0,.28);
     }
-    .icon { font-size: 3rem; margin-bottom: 16px; }
-    h2 { font-size: 1.2rem; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
-    p  { font-size: .88rem; color: #64748b; line-height: 1.6; }
+
+    h2 {
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #0f172a;
+
+      margin-bottom: 8px;
+    }
+
+    p {
+      font-size: .88rem;
+      color: #64748b;
+
+      line-height: 1.6;
+    }
+
     .spinner {
-      width: 40px; height: 40px;
+      width: 40px;
+      height: 40px;
+
       border: 3px solid #e2e8f0;
       border-top-color: #2563eb;
+
       border-radius: 50%;
+
       animation: spin .7s linear infinite;
+
       margin: 0 auto 16px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
     .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      margin-top: 20px; padding: 12px 24px;
-      background: linear-gradient(180deg, #4f8ef7, #1d4ed8);
-      color: #fff; border: none; border-radius: 10px;
-      font-size: .9rem; font-weight: 800; cursor: pointer;
-      font-family: inherit; text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+
+      margin-top: 20px;
+
+      padding: 12px 24px;
+
+      background:
+        linear-gradient(
+          180deg,
+          #4f8ef7,
+          #1d4ed8
+        );
+
+      color: #fff;
+
+      border: none;
+      border-radius: 10px;
+
+      font-size: .9rem;
+      font-weight: 800;
+
+      cursor: pointer;
+
+      text-decoration: none;
+
+      font-family: inherit;
     }
   </style>
 </head>
+
 <body>
+
 <div class="box" id="box">
+
   <div class="spinner" id="spinner"></div>
-  <h2 id="title">Memverifikasi akun...</h2>
-  <p id="desc">Mohon tunggu sebentar</p>
+
+  <h2 id="title">
+    Memverifikasi akun...
+  </h2>
+
+  <p id="desc">
+    Mohon tunggu sebentar
+  </p>
+
 </div>
 
 <script type="module">
-  import { supabase } from './js/supabase.js'
+
+  import { supabase }
+    from './js/supabase.js'
 
   async function handleCallback() {
 
-    const spinner = document.getElementById('spinner')
-    const title   = document.getElementById('title')
-    const desc    = document.getElementById('desc')
-    const box     = document.getElementById('box')
+    const spinner =
+      document.getElementById('spinner')
 
-    // Ambil hash dari URL
-    const hash = window.location.hash
+    const title =
+      document.getElementById('title')
 
-    // Parse token
-    const params = new URLSearchParams(
-      hash.replace('#', '')
-    )
+    const desc =
+      document.getElementById('desc')
+
+    const box =
+      document.getElementById('box')
+
+    // =========================
+    // AMBIL TOKEN DARI HASH
+    // =========================
+
+    const hash =
+      window.location.hash
+
+    const params =
+      new URLSearchParams(
+        hash.replace('#', '')
+      )
 
     const access_token =
       params.get('access_token')
@@ -74,7 +168,10 @@
     const refresh_token =
       params.get('refresh_token')
 
-    // Jika token tidak ada
+    // =========================
+    // TOKEN TIDAK ADA
+    // =========================
+
     if (!access_token) {
 
       spinner.style.display = 'none'
@@ -98,42 +195,55 @@
 
     try {
 
+      // =========================
       // LOGIN SESSION DARI TOKEN
-     const { data, error } =
-  await supabase.auth.setSession({
-    access_token,
-    refresh_token
-  })
+      // =========================
 
-if (error) throw error
+      const { data, error } =
+        await supabase.auth.setSession({
 
-// Paksa Supabase simpan session
-await supabase.auth.getSession()
+          access_token,
+          refresh_token
+
+        })
 
       if (error) throw error
 
-      const session = data?.session
+      // Paksa session tersimpan
+      await supabase.auth.getSession()
+
+      const session =
+        data?.session
 
       if (!session) {
+
         throw new Error(
           'Session tidak ditemukan'
         )
       }
 
-      const user = session.user
+      const user =
+        session.user
 
-      // Update status akun
+      // =========================
+      // UPDATE STATUS AKUN
+      // =========================
+
       await supabase
         .from('profiles')
         .update({
+
           status_akun: 'Aktif'
+
         })
         .eq('id', user.id)
 
-      // Hilangkan spinner
+      // =========================
+      // TAMPILKAN SUKSES
+      // =========================
+
       spinner.style.display = 'none'
 
-      // Tampilkan sukses
       title.textContent =
         '✅ Akun Berhasil Diverifikasi!'
 
@@ -146,17 +256,27 @@ await supabase.auth.getSession()
         </a>
       `
 
-      // Bersihkan URL hash
+      // =========================
+      // BERSIHKAN URL HASH
+      // =========================
+
       history.replaceState(
         null,
         '',
         window.location.pathname
       )
 
-      // Redirect otomatis
-    setTimeout(() => {
-  window.location.replace('index.html')
-}, 4000)
+      // =========================
+      // REDIRECT OTOMATIS
+      // =========================
+
+      setTimeout(() => {
+
+        window.location.replace(
+          'index.html'
+        )
+
+      }, 4000)
 
     } catch (err) {
 
@@ -169,7 +289,8 @@ await supabase.auth.getSession()
 
       desc.innerHTML = `
         Link mungkin sudah kadaluarsa
-        atau sudah pernah digunakan.<br><br>
+        atau sudah pernah digunakan.
+        <br><br>
 
         Jika akun sudah pernah diverifikasi,
         silakan login langsung.
@@ -184,6 +305,8 @@ await supabase.auth.getSession()
   }
 
   handleCallback()
+
 </script>
+
 </body>
 </html>
