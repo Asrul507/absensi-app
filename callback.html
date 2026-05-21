@@ -51,42 +51,42 @@
 </div>
 
 <script type="module">
-  import { supabase } from './js/supabase.js'
+    import { supabase } from './js/supabase.js'
 
-  async function handleCallback() {
-    const spinner = document.getElementById('spinner')
-    const title   = document.getElementById('title')
-    const desc    = document.getElementById('desc')
-    const box     = document.getElementById('box')
+    async function handleCallback() {
+      const spinner = document.getElementById('spinner')
+      const title   = document.getElementById('title')
+      const desc    = document.getElementById('desc')
+      const box     = document.getElementById('box')
 
-    try {
-      // Ambil token dari URL hash
-      const hash   = window.location.hash
-      const params = new URLSearchParams(hash.substring(1))
-      const token  = params.get('access_token')
-      const refresh= params.get('refresh_token') || ''
-      const type   = params.get('type')
+      try {
+        // Ambil token dari URL hash
+        const hash   = window.location.hash
+        const params = new URLSearchParams(hash.substring(1))
+        const token  = params.get('access_token')
+        const refresh= params.get('refresh_token') || ''
+        const type   = params.get('type')
 
-      // Bersihkan URL agar token tidak tampil
-      history.replaceState(null, '', window.location.pathname)
+        // Bersihkan URL agar token tidak tampil
+        history.replaceState(null, '', window.location.pathname)
 
-      if (!token) {
-        throw new Error('Token verifikasi tidak ditemukan')
-      }
+        if (!token) {
+          throw new Error('Token verifikasi tidak ditemukan')
+        }
 
-      // Set session dari token
-      const { data, error: sessionError } = await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: refresh
-      })
+        // Set session dari token
+        const { data, error: sessionError } = await supabase.auth.setSession({
+          access_token: token,
+          refresh_token: refresh
+        })
 
-      if (sessionError || !data?.session) {
-        throw sessionError || new Error('Gagal set session')
-      }
+        if (sessionError || !data?.session) {
+          throw sessionError || new Error('Gagal set session')
+        }
 
-      const user = data.session.user
+        const user = data.session.user
 
-    // ===== UPDATE PROFILE KE AKTIF =====
+        // ===== UPDATE PROFILE KE AKTIF =====
         // 1. Update di tabel profiles
         const { error: updateErr } = await supabase
           .from('profiles')
@@ -100,43 +100,44 @@
         // 2. Update juga di tabel pending_profiles (supaya sinkron di dashboard admin)
         const { error: updatePendingErr } = await supabase
           .from('pending_profiles')
-          .update({ status: 'approved' }) // Ubah jadi 'approved' atau 'Aktif' sesuai skema databasemu
-          .eq('email', user.email) // Menggunakan email karena id auth berbeda dengan id pending_profiles
+          .update({ status: 'approved' }) 
+          .eq('email', user.email)
 
         if (updatePendingErr) {
           console.warn('Update status pending_profiles warning:', updatePendingErr)
         }
-      // ===== TAMPILKAN SUKSES =====
-      spinner.style.display = 'none'
 
-      if (type === 'email_change') {
-        title.textContent = '✅ Email Berhasil Diubah!'
-        desc.textContent = `Email kamu sekarang: ${user.email}`
-      } else {
-        title.textContent = '✅ Akun Terverifikasi!'
-        desc.textContent = 'Selamat! Akun kamu sudah aktif.'
+        // ===== TAMPILKAN SUKSES =====
+        spinner.style.display = 'none'
+        if (type === 'email_change') {
+          title.textContent = '✅ Email Berhasil Diubah!'
+          desc.textContent = `Email kamu sekarang: ${user.email}`
+        } else {
+          title.textContent = '✅ Akun Terverifikasi!'
+          desc.textContent = 'Selamat! Akun kamu sudah aktif.'
+        }
+
+        // ===== AUTO REDIRECT (DIMATIKAN UNTUK DEBUGGING) =====
+        /*
+        setTimeout(() => {
+          window.location.replace('index.html')
+        }, 2000)
+        */
+
+      } catch (err) {
+        console.error('CALLBACK ERROR:', err)
+        spinner.style.display = 'none'
+        title.textContent = '❌ Verifikasi Gagal'
+        desc.innerHTML = `
+          Error: ${err.message || 'Link mungkin sudah kadaluarsa'}<br><br>
+          <small>Coba login dengan email kamu — mungkin akun sudah aktif.</small>
+        `
+        box.innerHTML += `<a href="index.html" class="btn">← Ke Halaman Login</a>`
       }
-
-      // ===== AUTO REDIRECT TANPA TOMBOL =====
-      // Tunggu 2 detik lalu redirect langsung ke dashboard
-     /* setTimeout(() => {
-        window.location.replace('index.html')
-      }, 2000)
-
-    } catch (err) {
-      console.error('CALLBACK ERROR:', err)
-      spinner.style.display = 'none'
-      title.textContent = '❌ Verifikasi Gagal'
-      desc.innerHTML = `
-        Error: ${err.message || 'Link mungkin sudah kadaluarsa'}<br><br>
-        <small>Coba login dengan email kamu — mungkin akun sudah aktif.</small>
-      `
-      box.innerHTML += `<a href="index.html" class="btn">← Ke Halaman Login</a>`
     }
-  }
 
-  // Jalankan
-  handleCallback() */
-</script>
+    // Jalankan fungsinya
+    handleCallback()
+  </script>
 </body>
 </html>
