@@ -65,9 +65,13 @@
       const params = new URLSearchParams(hash.substring(1))
       const token  = params.get('access_token')
       const refresh= params.get('refresh_token') || ''
-      const type   = params.get('type')
+      const type   = params.get('type') || 'signup'
 
-      // Bersihkan URL agar token tidak tampil
+      console.log('=== CALLBACK DEBUG ===')
+      console.log('Token:', token ? 'YES' : 'NO')
+      console.log('Type:', type)
+
+      // Bersihkan URL
       history.replaceState(null, '', window.location.pathname)
 
       if (!token) {
@@ -75,52 +79,67 @@
       }
 
       // Set session dari token
+      console.log('Setting session...')
       const { data, error: sessionError } = await supabase.auth.setSession({
         access_token: token,
         refresh_token: refresh
       })
 
-      if (sessionError || !data?.session) {
-        throw sessionError || new Error('Gagal set session')
+      if (sessionError) {
+        console.error('Session Error:', sessionError)
+        throw sessionError
+      }
+
+      if (!data?.session?.user) {
+        throw new Error('Session tidak valid')
       }
 
       const user = data.session.user
+      console.log('Session berhasil, User ID:', user.id)
+      console.log('User Email:', user.email)
+      console.log('User email_confirmed_at:', user.email_confirmed_at)
 
-      // ===== UPDATE PROFILE KE AKTIF =====
-      const { error: updateErr } = await supabase
+      // Update profile status ke Aktif
+      console.log('Updating profile status to Aktif...')
+      const { error: updateErr, data: updateData } = await supabase
         .from('profiles')
-        .update({ status_akun: 'Aktif' })
+        .update({ 
+          status_akun: 'Aktif',
+          updated_at: new Date().toISOString()
+        })
         .eq('id', user.id)
+        .select()
 
       if (updateErr) {
-        console.warn('Update status_akun warning:', updateErr)
-        // Lanjut saja meski ada error, karena user sudah terverifikasi
-      }
-
-      // ===== TAMPILKAN SUKSES =====
-      spinner.style.display = 'none'
-
-      if (type === 'email_change') {
-        title.textContent = '✅ Email Berhasil Diubah!'
-        desc.textContent = `Email kamu sekarang: ${user.email}`
+        console.error('Update Error:', updateErr)
+        console.error('Update Error Message:', updateErr.message)
+        // Lanjut saja, user sudah terverifikasi
       } else {
-        title.textContent = '✅ Akun Terverifikasi!'
-        desc.textContent = 'Selamat! Akun kamu sudah aktif.'
+        console.log('Update Success:', updateData)
       }
 
-      // ===== AUTO REDIRECT TANPA TOMBOL =====
-      // Tunggu 2 detik lalu redirect langsung ke dashboard
+      // Tampilkan sukses
+      spinner.style.display = 'none'
+      title.textContent = '✅ Email Terverifikasi!'
+      desc.innerHTML = 'Akun kamu sudah siap. Anda akan diarahkan ke login...'
+
+      console.log('✅ Verification complete, redirecting...')
+
+      // Auto redirect ke login setelah 2 detik
       setTimeout(() => {
         window.location.replace('index.html')
       }, 2000)
 
     } catch (err) {
-      console.error('CALLBACK ERROR:', err)
+      console.error('=== CALLBACK ERROR ===')
+      console.error('Error:', err)
+      console.error('Message:', err.message)
+
       spinner.style.display = 'none'
-      title.textContent = '❌ Verifikasi Gagal'
+      title.textContent = '❌ Ada Kendala'
       desc.innerHTML = `
-        Error: ${err.message || 'Link mungkin sudah kadaluarsa'}<br><br>
-        <small>Coba login dengan email kamu — mungkin akun sudah aktif.</small>
+        ${err.message || 'Verifikasi gagal'}<br><br>
+        <small>Silakan coba login — akun Anda mungkin sudah aktif.</small>
       `
       box.innerHTML += `<a href="index.html" class="btn">← Ke Halaman Login</a>`
     }
