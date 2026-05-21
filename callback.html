@@ -86,17 +86,26 @@
 
       const user = data.session.user
 
-      // ===== UPDATE PROFILE KE AKTIF =====
-      const { error: updateErr } = await supabase
-        .from('profiles')
-        .update({ status_akun: 'Aktif' })
-        .eq('id', user.id)
+    // ===== UPDATE PROFILE KE AKTIF =====
+        // 1. Update di tabel profiles
+        const { error: updateErr } = await supabase
+          .from('profiles')
+          .update({ status_akun: 'Aktif' })
+          .eq('id', user.id)
 
-      if (updateErr) {
-        console.warn('Update status_akun warning:', updateErr)
-        // Lanjut saja meski ada error, karena user sudah terverifikasi
-      }
+        if (updateErr) {
+          console.warn('Update status_akun profiles warning:', updateErr)
+        }
 
+        // 2. Update juga di tabel pending_profiles (supaya sinkron di dashboard admin)
+        const { error: updatePendingErr } = await supabase
+          .from('pending_profiles')
+          .update({ status: 'approved' }) // Ubah jadi 'approved' atau 'Aktif' sesuai skema databasemu
+          .eq('email', user.email) // Menggunakan email karena id auth berbeda dengan id pending_profiles
+
+        if (updatePendingErr) {
+          console.warn('Update status pending_profiles warning:', updatePendingErr)
+        }
       // ===== TAMPILKAN SUKSES =====
       spinner.style.display = 'none'
 
