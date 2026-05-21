@@ -54,23 +54,65 @@
   import { supabase } from './js/supabase.js'
 
   async function handleCallback() {
+
     const spinner = document.getElementById('spinner')
     const title   = document.getElementById('title')
     const desc    = document.getElementById('desc')
     const box     = document.getElementById('box')
 
+    // Ambil hash dari URL
+    const hash = window.location.hash
+
+    // Parse token
+    const params = new URLSearchParams(
+      hash.replace('#', '')
+    )
+
+    const access_token =
+      params.get('access_token')
+
+    const refresh_token =
+      params.get('refresh_token')
+
+    // Jika token tidak ada
+    if (!access_token) {
+
+      spinner.style.display = 'none'
+
+      title.textContent =
+        '❌ Token Tidak Ditemukan'
+
+      desc.innerHTML = `
+        Link verifikasi tidak valid
+        atau sudah kadaluarsa.
+      `
+
+      box.innerHTML += `
+        <a href="index.html" class="btn">
+          ← Ke Halaman Login
+        </a>
+      `
+
+      return
+    }
+
     try {
 
-      // PROSES CODE DARI SUPABASE
+      // LOGIN SESSION DARI TOKEN
       const { data, error } =
-        await supabase.auth.exchangeCodeForSession(window.location.href)
+        await supabase.auth.setSession({
+          access_token,
+          refresh_token
+        })
 
       if (error) throw error
 
       const session = data?.session
 
       if (!session) {
-        throw new Error('Session tidak ditemukan')
+        throw new Error(
+          'Session tidak ditemukan'
+        )
       }
 
       const user = session.user
@@ -83,9 +125,13 @@
         })
         .eq('id', user.id)
 
+      // Hilangkan spinner
       spinner.style.display = 'none'
 
-      title.textContent = '✅ Akun Berhasil Diverifikasi!'
+      // Tampilkan sukses
+      title.textContent =
+        '✅ Akun Berhasil Diverifikasi!'
+
       desc.textContent =
         'Akun kamu sudah aktif dan siap digunakan.'
 
@@ -95,9 +141,18 @@
         </a>
       `
 
+      // Bersihkan URL hash
+      history.replaceState(
+        null,
+        '',
+        window.location.pathname
+      )
+
+      // Redirect otomatis
       setTimeout(() => {
-        window.location.href = 'index.html'
-      }, 2000)
+        window.location.href =
+          'index.html'
+      }, 2500)
 
     } catch (err) {
 
@@ -105,7 +160,8 @@
 
       spinner.style.display = 'none'
 
-      title.textContent = '❌ Verifikasi Gagal'
+      title.textContent =
+        '❌ Verifikasi Gagal'
 
       desc.innerHTML = `
         Link mungkin sudah kadaluarsa
