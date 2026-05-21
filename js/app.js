@@ -23,6 +23,59 @@ window.addEventListener('DOMContentLoaded', () => {
     if (icon) icon.className = 'fa fa-sun'
   }
 
+  // =====================================================
+  // Tangkap token verifikasi dari URL hash
+  // Supabase kirim link: https://app.com/#access_token=...&type=signup
+  // =====================================================
+  const hash   = window.location.hash
+  const params = new URLSearchParams(hash.replace('#', ''))
+  const type   = params.get('type')
+  const token  = params.get('access_token')
+  const refresh= params.get('refresh_token') || ''
+
+  if (token && (type === 'signup' || type === 'email_change' || type === 'recovery')) {
+    // Bersihkan URL agar token tidak tampil di address bar
+    history.replaceState(null, '', window.location.pathname)
+
+    // Set session dari token lalu masuk
+    supabase.auth.setSession({ access_token: token, refresh_token: refresh })
+      .then(({ error }) => {
+        if (error) {
+          console.error('setSession error:', error)
+          // Fallback: coba getSession
+          supabase.auth.getSession().then(() => checkUser())
+        } else {
+          checkUser()
+        }
+      })
+  } else {
+    checkUser()
+  }
+
+  // Listener perubahan auth state
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session && !window.currentUser) {
+      checkUser()
+    }
+    if (event === 'SIGNED_OUT') {
+      window.currentUser = null
+    }
+    if (event === 'USER_UPDATED' && session) {
+      // Email berhasil diubah — sync ke tabel profiles
+      if (window.currentUser) {
+        window.currentUser.email = session.user.email
+        supabase.from('profiles')
+          .update({ email: session.user.email })
+          .eq('id', session.user.id)
+          .then(() => {
+            // Refresh halaman profile kalau sedang dibuka
+            const emailEl = document.getElementById('profileEmailDisplay')
+            if (emailEl) emailEl.textContent = session.user.email
+          })
+      }
+    }
+  })
+})
 
 /* ================= CHECK USER ================= */
 async function checkUser() {
