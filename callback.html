@@ -141,136 +141,144 @@
 
 <script type="module">
 
-  import { supabase }
-    from './js/supabase.js'
+import { supabase }
+  from './js/supabase.js'
 
-  async function handleCallback() {
+async function handleCallback() {
 
-    const spinner =
-      document.getElementById('spinner')
+  const spinner =
+    document.getElementById('spinner')
 
-    const title =
-      document.getElementById('title')
+  const title =
+    document.getElementById('title')
 
-    const desc =
-      document.getElementById('desc')
+  const desc =
+    document.getElementById('desc')
 
-    const box =
-      document.getElementById('box')
+  const box =
+    document.getElementById('box')
 
-    try {
+  try {
 
-      // =========================
-      // EXCHANGE CODE SESSION
-      // =========================
+    // =========================
+    // AMBIL TOKEN HASH
+    // =========================
 
-      const { data, error } =
-        await supabase.auth.exchangeCodeForSession(
-          window.location.href
-        )
+    const hash =
+      window.location.hash
 
-      console.log('CALLBACK DATA:', data)
-      console.log('CALLBACK ERROR:', error)
-
-      if (error) throw error
-
-      const session =
-        data?.session
-
-      if (!session) {
-
-        throw new Error(
-          'Session tidak ditemukan'
-        )
-      }
-
-      const user =
-        session.user
-
-      // =========================
-      // UPDATE STATUS AKUN
-      // =========================
-
-      const { error:updateError } =
-        await supabase
-          .from('profiles')
-          .update({
-
-            status_akun: 'Aktif'
-
-          })
-          .eq('id', user.id)
-
-      console.log(
-        'PROFILE UPDATE:',
-        updateError
+    const params =
+      new URLSearchParams(
+        hash.substring(1)
       )
 
-      // =========================
-      // SUCCESS
-      // =========================
+    const access_token =
+      params.get('access_token')
 
-      spinner.style.display =
-        'none'
+    const refresh_token =
+      params.get('refresh_token')
 
-      title.textContent =
-        '✅ Akun Berhasil Diverifikasi!'
+    // DEBUG
+    console.log('HASH:', hash)
+    console.log('ACCESS:', access_token)
+    console.log('REFRESH:', refresh_token)
 
-      desc.textContent =
-        'Akun kamu sudah aktif dan siap digunakan.'
+    if (
+      !access_token ||
+      !refresh_token
+    ) {
 
-      box.innerHTML += `
-        <a href="index.html" class="btn">
-          🚀 Masuk ke Aplikasi
-        </a>
-      `
-
-      // Bersihkan URL
-      history.replaceState(
-        null,
-        '',
-        window.location.pathname
+      throw new Error(
+        'Token tidak ditemukan'
       )
-
-      // Redirect otomatis
-      setTimeout(() => {
-
-        window.location.replace(
-          'index.html'
-        )
-
-      }, 3000)
-
-    } catch (err) {
-
-      console.error(err)
-
-      spinner.style.display =
-        'none'
-
-      title.textContent =
-        '❌ Verifikasi Gagal'
-
-      desc.innerHTML = `
-        Link mungkin sudah kadaluarsa
-        atau sudah pernah digunakan.
-        <br><br>
-
-        Jika akun sudah pernah diverifikasi,
-        silakan login langsung.
-      `
-
-      box.innerHTML += `
-        <a href="index.html" class="btn">
-          ← Ke Halaman Login
-        </a>
-      `
     }
-  }
 
-  handleCallback()
+    // =========================
+    // SET SESSION
+    // =========================
+
+    const { data, error } =
+      await supabase.auth.setSession({
+
+        access_token,
+
+        refresh_token
+
+      })
+
+    if (error) throw error
+
+    const user =
+      data.session.user
+
+    // =========================
+    // UPDATE PROFILE
+    // =========================
+
+    await supabase
+      .from('profiles')
+      .update({
+
+        status_akun: 'Aktif'
+
+      })
+      .eq('id', user.id)
+
+    spinner.style.display =
+      'none'
+
+    title.textContent =
+      '✅ Verifikasi Berhasil!'
+
+    desc.textContent =
+      'Akun kamu sudah aktif.'
+
+    box.innerHTML += `
+      <a href="index.html" class="btn">
+        🚀 Login Sekarang
+      </a>
+    `
+
+    // Bersihkan URL
+    history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    )
+
+    // Redirect
+    setTimeout(() => {
+
+      window.location.href =
+        'index.html'
+
+    }, 3000)
+
+  } catch (err) {
+
+    console.error(err)
+
+    spinner.style.display =
+      'none'
+
+    title.textContent =
+      '❌ Verifikasi Gagal'
+
+    desc.innerHTML = `
+      Link verifikasi tidak valid
+      atau sudah kadaluarsa.
+    `
+
+    box.innerHTML += `
+      <a href="index.html" class="btn">
+        ← Kembali Login
+      </a>
+    `
+  }
+}
+
+handleCallback()
 
 </script>
-
 </body>
 </html>
