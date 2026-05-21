@@ -54,74 +54,72 @@
   import { supabase } from './js/supabase.js'
 
   async function handleCallback() {
-    const hash   = window.location.hash
-    const params = new URLSearchParams(hash.replace('#', ''))
-    const type   = params.get('type')
-    const token  = params.get('access_token')
-    const refresh= params.get('refresh_token') || ''
-
-    // Bersihkan URL
-    history.replaceState(null, '', window.location.pathname)
-
     const spinner = document.getElementById('spinner')
     const title   = document.getElementById('title')
     const desc    = document.getElementById('desc')
     const box     = document.getElementById('box')
 
-    if (!token) {
-      // Tidak ada token → langsung redirect ke index
-      window.location.href = 'index.html'
-      return
-    }
-
     try {
-      const { data, error } = await supabase.auth.setSession({
-        access_token:  token,
-        refresh_token: refresh
-      })
 
-      if (error || !data?.session) throw error || new Error('Session tidak valid')
+      // PROSES CODE DARI SUPABASE
+      const { data, error } =
+        await supabase.auth.exchangeCodeForSession(window.location.href)
 
-      const user = data.session.user
+      if (error) throw error
 
-      // Update status akun di profiles jadi Aktif
-      await supabase.from('profiles')
-        .update({ status_akun: 'Aktif' })
-        .eq('id', user.id)
+      const session = data?.session
 
-      // Tampilkan sukses berdasarkan type
-      spinner.style.display = 'none'
-
-      if (type === 'email_change') {
-        // Update email baru di profiles
-        await supabase.from('profiles')
-          .update({ email: user.email })
-          .eq('id', user.id)
-
-        title.textContent = '✅ Email Berhasil Diubah!'
-        desc.textContent  = `Email kamu sekarang: ${user.email}`
-      } else if (type === 'recovery') {
-        title.textContent = '🔑 Reset Password'
-        desc.textContent  = 'Silakan set password baru kamu.'
-      } else {
-        title.textContent = '✅ Akun Terverifikasi!'
-        desc.textContent  = 'Selamat! Akun kamu sudah aktif. Klik tombol di bawah untuk mulai login.'
+      if (!session) {
+        throw new Error('Session tidak ditemukan')
       }
 
-      box.innerHTML += `<a href="index.html" class="btn">🚀 Masuk ke Aplikasi</a>`
+      const user = session.user
 
-      // Auto redirect setelah 2.5 detik
-      setTimeout(() => { window.location.href = 'index.html' }, 2500)
+      // Update status akun
+      await supabase
+        .from('profiles')
+        .update({
+          status_akun: 'Aktif'
+        })
+        .eq('id', user.id)
+
+      spinner.style.display = 'none'
+
+      title.textContent = '✅ Akun Berhasil Diverifikasi!'
+      desc.textContent =
+        'Akun kamu sudah aktif dan siap digunakan.'
+
+      box.innerHTML += `
+        <a href="index.html" class="btn">
+          🚀 Masuk ke Aplikasi
+        </a>
+      `
+
+      setTimeout(() => {
+        window.location.href = 'index.html'
+      }, 2000)
 
     } catch (err) {
+
       console.error(err)
+
       spinner.style.display = 'none'
+
       title.textContent = '❌ Verifikasi Gagal'
+
       desc.innerHTML = `
-        Link mungkin sudah kadaluarsa atau sudah pernah digunakan.<br><br>
-        Coba login langsung — jika email sudah terverifikasi sebelumnya, akun kamu mungkin sudah aktif.
+        Link mungkin sudah kadaluarsa
+        atau sudah pernah digunakan.<br><br>
+
+        Jika akun sudah pernah diverifikasi,
+        silakan login langsung.
       `
-      box.innerHTML += `<a href="index.html" class="btn">← Ke Halaman Login</a>`
+
+      box.innerHTML += `
+        <a href="index.html" class="btn">
+          ← Ke Halaman Login
+        </a>
+      `
     }
   }
 
