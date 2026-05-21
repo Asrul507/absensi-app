@@ -39,98 +39,154 @@ export async function logout() {
    Dipanggil dari halaman registrasi (karyawan pilih nama sendiri)
 =============================================================== */
 export async function registerKaryawan(pendingId, email, password, konfirmasi) {
-  // Validasi input
+
+  // ================= VALIDASI =================
   if (!email || !password) {
     showRegError('Email dan password wajib diisi')
     return false
   }
+
   if (password.length < 8) {
     showRegError('Password minimal 8 karakter')
     return false
   }
+
   if (password !== konfirmasi) {
     showRegError('Password dan konfirmasi tidak cocok')
     return false
   }
+
   if (!email.includes('@') || !email.includes('.')) {
     showRegError('Format email tidak valid')
     return false
   }
 
+  // ================= LOADING BUTTON =================
   const btn = document.getElementById('btnDaftar')
+
   if (btn) {
     btn.disabled = true
-    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mendaftarkan...'
+    btn.innerHTML =
+      '<i class="fa fa-spinner fa-spin"></i> Mendaftarkan...'
   }
 
-  // Ambil data pending
-  const { data: pending, error: pendingErr } = await supabase
-    .from('pending_profiles')
-    .select('*')
-    .eq('id', pendingId)
-    .eq('status', 'waiting')
-    .single()
+  try {
 
-  if (pendingErr || !pending) {
-    showRegError('Data karyawan tidak ditemukan atau sudah terdaftar')
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa fa-user-plus"></i> Daftar & Kirim Verifikasi' }
-    return false
-  }
-
-  // Signup ke Supabase Auth
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        pending_id:   pendingId,
-        nama_lengkap: pending.nama_lengkap,
-      }
-    }
-  })
-
-  if (error) {
-    showRegError(
-      error.message.includes('already registered')
-        ? 'Email ini sudah terdaftar. Silakan gunakan email lain atau login.'
-        : error.message
-    )
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa fa-user-plus"></i> Daftar & Kirim Verifikasi' }
-    return false
-  }
-
-  const user = data.user
-  if (user) {
-    // Buat profil langsung (akan aktif setelah email terverifikasi)
-    const { error: profileError } = await supabase.from('profiles').insert([{
-      id:                user.id,
-      email,
-      nama_lengkap:      pending.nama_lengkap,
-      role:              pending.role || 'staff',
-      jabatan:           pending.jabatan || '',
-      departemen:        pending.departemen || '',
-      no_hp:             pending.no_hp || '',
-      tanggal_bergabung: pending.tanggal_bergabung || null,
-      tanggal_lahir:     pending.tanggal_lahir || null,
-      status_akun:       'Menunggu Verifikasi',
-      foto_url:          '',
-      sisa_cuti:         0,
-      jatah_cuti:        0,
-    }])
-
-    if (profileError) {
-      console.error('Profile insert error:', profileError)
-      // Lanjut saja, profil bisa di-setup ulang saat login pertama
-    }
-
-    // Update pending → registered
-    await supabase.from('pending_profiles')
-      .update({ status: 'registered' })
+    // ================= AMBIL DATA PENDING =================
+    const { data: pending, error: pendingErr } = await supabase
+      .from('pending_profiles')
+      .select('*')
       .eq('id', pendingId)
-  }
+      .eq('status', 'waiting')
+      .single()
 
-  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa fa-user-plus"></i> Daftar & Kirim Verifikasi' }
-  return true
+    if (pendingErr || !pending) {
+      throw new Error(
+        'Data karyawan tidak ditemukan atau sudah terdaftar'
+      )
+    }
+
+    // ================= SIGNUP SUPABASE =================
+    const { data, error } = await supabase.auth.signUp({
+
+      email,
+      password,
+
+      options: {
+
+        // PENTING !!!
+        emailRedirectTo:
+          'https://hrpro01.netlify.app/callback.html',
+
+        data: {
+          pending_id: pendingId,
+          nama_lengkap: pending.nama_lengkap,
+        }
+      }
+    })
+
+    if (error) {
+
+      if (error.message.includes('already registered')) {
+        throw new Error(
+          'Email ini sudah terdaftar. Silakan gunakan email lain atau login.'
+        )
+      }
+
+      throw error
+    }
+
+    const user = data?.user
+
+    // ================= BUAT PROFILE =================
+    if (user) {
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([{
+          id:                user.id,
+          email,
+
+          nama_lengkap:      pending.nama_lengkap,
+
+          role:              pending.role || 'staff',
+          jabatan:           pending.jabatan || '',
+          departemen:        pending.departemen || '',
+          no_hp:             pending.no_hp || '',
+
+          tanggal_bergabung:
+            pending.tanggal_bergabung || null,
+
+          tanggal_lahir:
+            pending.tanggal_lahir || null,
+
+          status_akun: 'Menunggu Verifikasi',
+
+          foto_url: '',
+
+          sisa_cuti:  0,
+          jatah_cuti: 0,
+        }])
+
+      if (profileError) {
+        console.error(
+          'Profile insert error:',
+          profileError
+        )
+      }
+
+      // ================= UPDATE PENDING =================
+      await supabase
+        .from('pending_profiles')
+        .update({
+          status: 'registered'
+        })
+        .eq('id', pendingId)
+    }
+
+    return true
+
+  } catch (err) {
+
+    console.error(err)
+
+    showRegError(
+      err.message || 'Terjadi kesalahan saat registrasi'
+    )
+
+    return false
+
+  } finally {
+
+    // ================= RESET BUTTON =================
+    if (btn) {
+
+      btn.disabled = false
+
+      btn.innerHTML =
+        '<i class="fa fa-user-plus"></i> Daftar & Kirim Verifikasi'
+    }
+  }
 }
 
 /* ===============================================================
