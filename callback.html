@@ -41,6 +41,24 @@
       font-size: .9rem; font-weight: 800; cursor: pointer;
       font-family: inherit; text-decoration: none;
     }
+    .logs {
+      margin-top: 16px;
+      max-height: 120px;
+      overflow-y: auto;
+      background: #f1f5f9;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: .65rem;
+      font-family: 'Courier New', monospace;
+      color: #334155;
+      text-align: left;
+      display: none;
+    }
+    .logs.show { display: block; }
+    .log-item { margin: 2px 0; }
+    .log-ok { color: #16a34a; }
+    .log-err { color: #dc2626; }
+    .log-info { color: #0284c7; }
   </style>
 </head>
 <body>
@@ -48,117 +66,173 @@
   <div class="spinner" id="spinner"></div>
   <h2 id="title">Memverifikasi akun...</h2>
   <p id="desc">Mohon tunggu sebentar</p>
+  <div class="logs" id="logs"></div>
 </div>
 
 <script type="module">
-    import { supabase } from './js/supabase.js'
+  import { supabase } from './js/supabase.js'
 
-    async function handleCallback() {
-      const spinner = document.getElementById('spinner')
-      const title   = document.getElementById('title')
-      const desc    = document.getElementById('desc')
-      const box     = document.getElementById('box')
+  // =================== LOG HELPER ===================
+  const logs = []
+  function addLog(msg, type = 'info') {
+    logs.push({ msg, type })
+    console.log(`[${type.toUpperCase()}] ${msg}`)
+  }
+
+  function showLogs() {
+    const logsEl = document.getElementById('logs')
+    if (logsEl && logs.length > 0) {
+      logsEl.innerHTML = logs.map(l => 
+        `<div class="log-item log-${l.type}">${l.msg}</div>`
+      ).join('')
+      logsEl.classList.add('show')
+    }
+  }
+
+  // =================== MAIN HANDLER ===================
+  async function handleCallback() {
+    const spinner = document.getElementById('spinner')
+    const title   = document.getElementById('title')
+    const desc    = document.getElementById('desc')
+    const box     = document.getElementById('box')
+
+    try {
+      // ===== STEP 1: Parse URL Hash =====
+      addLog('Step 1: Parse URL hash token')
+      const hash   = window.location.hash
+      const params = new URLSearchParams(hash.substring(1))
+      const token  = params.get('access_token')
+      const refresh= params.get('refresh_token') || ''
+      const type   = params.get('type') || 'signup'
+
+      if (!token) {
+        throw new Error('Token verifikasi tidak ditemukan di URL')
+      }
+      addLog(`Token found, type: ${type}`, 'ok')
+
+      // Bersihkan URL dari token
+      history.replaceState(null, '', window.location.pathname)
+      addLog('URL cleaned', 'ok')
+
+      // ===== STEP 2: Set Session dari Token =====
+      addLog('Step 2: Setting Supabase session')
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: refresh
+      })
+
+      if (sessionError) {
+        throw new Error(`Session Error: ${sessionError.message}`)
+      }
+
+      const session = sessionData?.session
+      if (!session?.user) {
+        throw new Error('Session tidak valid atau user kosong')
+      }
+
+      const user = session.user
+      addLog(`Session OK, User ID: ${user.id}`, 'ok')
+      addLog(`User Email: ${user.email}`, 'ok')
+
+      // ===== STEP 3: Ambil Nama dari Metadata Auth =====
+      addLog('Step 3: Extract nama from user metadata')
+      const nama_lengkap = 
+        user.user_metadata?.nama_lengkap || 
+        user.user_metadata?.full_name || 
+        user.email?.split('@')[0] || 
+        'User'
+      
+      addLog(`Nama dari metadata: ${nama_lengkap}`, 'ok')
+
+      // ===== STEP 4: Update Tabel PROFILES =====
+      addLog('Step 4: Update profiles table - status_akun to Aktif')
+      let profileUpdateOk = false
+      
+      try {
+        const { error: profileErr } = await supabase
+          .from('profiles')
+          .update({ 
+            status_akun: 'Aktif'
+          })
+          .eq('id', user.id)
+        
+        if (profileErr) {
+          addLog(`profiles update error: ${profileErr.message}`, 'err')
+        } else {
+          addLog('profiles table updated to Aktif', 'ok')
+          profileUpdateOk = true
+        }
+      } catch (err) {
+        addLog(`profiles update exception: ${err.message}`, 'err')
+      }
+
+      // ===== STEP 5: Update Tabel PENDING_PROFILES (PRIMARY by nama_lengkap) =====
+      addLog('Step 5: Update pending_profiles - by nama_lengkap')
+      let pendingUpdateOk = false
 
       try {
-        // Ambil token dari URL hash
-        const hash   = window.location.hash
-        const params = new URLSearchParams(hash.substring(1))
-        const token  = params.get('access_token')
-        const refresh= params.get('refresh_token') || ''
-        const type   = params.get('type')
-
-        // Bersihkan URL agar token tidak tampil
-        history.replaceState(null, '', window.location.pathname)
-
-        if (!token) {
-          throw new Error('Token verifikasi tidak ditemukan')
-        }
-
-        // Set session dari token
-        const { data, error: sessionError } = await supabase.auth.setSession({
-          access_token: token,
-          refresh_token: refresh
-        })
-
-        if (sessionError || !data?.session) {
-          throw sessionError || new Error('Gagal set session')
-        }
-
-        const user = data.session.user
-
-        // ===== UPDATE PROFILE KE AKTIF =====
-        // Deklarasikan variabel di luar agar bisa diakses oleh langkah berikutnya
-        let currentProfile = null
-
-        try {
-          // 1. Ambil data profil lama terlebih dahulu untuk mendapatkan nama_lengkap asli
-          const { data: profileData, error: fetchErr } = await supabase
-            .from('profiles')
-            .select('nama_lengkap')
-            .eq('id', user.id)
-            .single()
-          
-          if (!fetchErr) {
-            currentProfile = profileData
-          }
-        } catch (e) {
-          console.warn('Gagal mengambil data nama_lengkap:', e)
-        }
-
-        // 2. Update status_akun di tabel profiles
-        const { error: updateErr } = await supabase
-          .from('profiles')
-          .update({ status_akun: 'Aktif' })
-          .eq('id', user.id)
-
-        if (updateErr) {
-          console.warn('Update status_akun profiles warning:', updateErr)
-        }
-
-        // 3. Update di tabel pending_profiles menggunakan nama_lengkap yang didapat dari database
-        if (currentProfile && currentProfile.nama_lengkap) {
-          const { error: updatePendingErr } = await supabase
-            .from('pending_profiles')
-            .update({ status: 'approved' }) 
-            .eq('nama_lengkap', currentProfile.nama_lengkap)
-
-          if (updatePendingErr) {
-            console.warn('Update status pending_profiles warning:', updatePendingErr)
-          }
+        const { error: pendingErr } = await supabase
+          .from('pending_profiles')
+          .update({ status: 'registered' })
+          .eq('status', 'waiting')
+          .eq('nama_lengkap', nama_lengkap)
+        
+        if (pendingErr) {
+          addLog(`pending_profiles update error: ${pendingErr.message}`, 'err')
         } else {
-          console.warn('Skip update pending_profiles karena nama_lengkap tidak ditemukan atau kosong')
+          addLog('pending_profiles updated to registered', 'ok')
+          pendingUpdateOk = true
         }
-        // ===== TAMPILKAN SUKSES =====
-        spinner.style.display = 'none'
-        if (type === 'email_change') {
-          title.textContent = '✅ Email Berhasil Diubah!'
-          desc.textContent = `Email kamu sekarang: ${user.email}`
-        } else {
-          title.textContent = '✅ Akun Terverifikasi!'
-          desc.textContent = 'Selamat! Akun kamu sudah aktif.'
-        }
-
-        // ===== AUTO REDIRECT (DIMATIKAN UNTUK DEBUGGING) =====
-        /*
-        setTimeout(() => {
-          window.location.replace('index.html')
-        }, 2000)
-        */
-
       } catch (err) {
-        console.error('CALLBACK ERROR:', err)
-        spinner.style.display = 'none'
-        title.textContent = '❌ Verifikasi Gagal'
-        desc.innerHTML = `
-          Error: ${err.message || 'Link mungkin sudah kadaluarsa'}<br><br>
-          <small>Coba login dengan email kamu — mungkin akun sudah aktif.</small>
-        `
-        box.innerHTML += `<a href="index.html" class="btn">← Ke Halaman Login</a>`
+        addLog(`pending_profiles update exception: ${err.message}`, 'err')
       }
-    }
 
-    // Jalankan fungsinya
-    handleCallback()
-  </script>
+      // ===== STEP 6: Summary & Show Result =====
+      addLog('Step 6: Verifikasi complete', 'ok')
+
+      spinner.style.display = 'none'
+      
+      if (profileUpdateOk && pendingUpdateOk) {
+        title.textContent = '✅ Akun Terverifikasi!'
+        desc.innerHTML = 'Email kamu sudah dikonfirmasi. Akun siap digunakan. Anda akan diarahkan ke halaman login...'
+        addLog('✅ All updates successful', 'ok')
+      } else if (profileUpdateOk || pendingUpdateOk) {
+        title.textContent = '⚠️ Verifikasi Sebagian Berhasil'
+        desc.innerHTML = `Profile ${profileUpdateOk ? 'sudah diaktifkan' : 'gagal diaktifkan'} dan Pending ${pendingUpdateOk ? 'sudah diupdate' : 'gagal diupdate'}. Silakan coba login.`
+        addLog('⚠️ Partial success', 'info')
+      } else {
+        title.textContent = '⚠️ Verifikasi dengan Kendala'
+        desc.innerHTML = 'Email sudah dikonfirmasi tapi ada error database. Silakan coba login — akun mungkin sudah aktif.'
+        addLog('⚠️ Database updates failed', 'err')
+      }
+
+      showLogs()
+
+      // ===== STEP 7: Auto Redirect setelah 3 detik =====
+      addLog('Auto-redirect ke index.html dalam 3 detik...', 'info')
+      showLogs()
+      
+      setTimeout(() => {
+        window.location.replace('index.html')
+      }, 3000)
+
+    } catch (err) {
+      // ===== ERROR HANDLER =====
+      addLog(`Fatal error: ${err.message}`, 'err')
+      showLogs()
+
+      spinner.style.display = 'none'
+      title.textContent = '❌ Verifikasi Gagal'
+      desc.innerHTML = `
+        <strong>${err.message}</strong><br><br>
+        <small>Silakan coba login dengan email Anda. Email mungkin sudah terverifikasi.</small>
+      `
+      box.innerHTML += `<a href="index.html" class="btn">← Kembali ke Login</a>`
+    }
+  }
+
+  // Run handler
+  handleCallback()
+</script>
 </body>
 </html>
