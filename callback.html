@@ -3,19 +3,25 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
   <title>Verifikasi — Genius HR</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap"
+    rel="stylesheet"
+  />
 
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+
+    *{
+      box-sizing:border-box;
+      margin:0;
+      padding:0;
     }
 
-    body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
+    body{
+      font-family:'Plus Jakarta Sans',sans-serif;
+
       background:
         linear-gradient(
           160deg,
@@ -24,72 +30,73 @@
           #0c4a6e 100%
         );
 
-      min-height: 100vh;
+      min-height:100vh;
 
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
 
-    .box {
-      background: rgba(255,255,255,.97);
+    .box{
+      background:rgba(255,255,255,.97);
 
-      border-radius: 24px;
+      border-radius:24px;
 
-      padding: 40px 32px;
+      padding:40px 32px;
 
-      width: 100%;
-      max-width: 380px;
+      width:100%;
+      max-width:380px;
 
-      text-align: center;
+      text-align:center;
 
       box-shadow:
         0 32px 80px rgba(0,0,0,.28);
     }
 
-    h2 {
-      font-size: 1.2rem;
-      font-weight: 800;
-      color: #0f172a;
+    h2{
+      font-size:1.2rem;
+      font-weight:800;
 
-      margin-bottom: 8px;
+      color:#0f172a;
+
+      margin-bottom:8px;
     }
 
-    p {
-      font-size: .88rem;
-      color: #64748b;
+    p{
+      font-size:.88rem;
+      color:#64748b;
 
-      line-height: 1.6;
+      line-height:1.6;
     }
 
-    .spinner {
-      width: 40px;
-      height: 40px;
+    .spinner{
+      width:40px;
+      height:40px;
 
-      border: 3px solid #e2e8f0;
-      border-top-color: #2563eb;
+      border:3px solid #e2e8f0;
+      border-top-color:#2563eb;
 
-      border-radius: 50%;
+      border-radius:50%;
 
-      animation: spin .7s linear infinite;
+      animation:spin .7s linear infinite;
 
-      margin: 0 auto 16px;
+      margin:0 auto 16px;
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
+    @keyframes spin{
+      to{
+        transform:rotate(360deg);
       }
     }
 
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
 
-      margin-top: 20px;
+      margin-top:20px;
 
-      padding: 12px 24px;
+      padding:12px 24px;
 
       background:
         linear-gradient(
@@ -98,20 +105,21 @@
           #1d4ed8
         );
 
-      color: #fff;
+      color:#fff;
 
-      border: none;
-      border-radius: 10px;
+      border:none;
+      border-radius:10px;
 
-      font-size: .9rem;
-      font-weight: 800;
+      font-size:.9rem;
+      font-weight:800;
 
-      cursor: pointer;
+      cursor:pointer;
 
-      text-decoration: none;
+      text-decoration:none;
 
-      font-family: inherit;
+      font-family:inherit;
     }
+
   </style>
 </head>
 
@@ -150,80 +158,58 @@
     const box =
       document.getElementById('box')
 
-    // =========================
-    // AMBIL TOKEN DARI HASH
-    // =========================
-
-    const hash =
-      window.location.hash
-
-    const params =
-      new URLSearchParams(
-        hash.replace('#', '')
-      )
-
- const token_hash =
-  params.get('access_token')
-
-    const refresh_token =
-      params.get('refresh_token')
-
-    // =========================
-    // TOKEN TIDAK ADA
-    // =========================
-
-    if (!access_token) {
-
-      spinner.style.display = 'none'
-
-      title.textContent =
-        '❌ Token Tidak Ditemukan'
-
-      desc.innerHTML = `
-        Link verifikasi tidak valid
-        atau sudah kadaluarsa.
-      `
-
-      box.innerHTML += `
-        <a href="index.html" class="btn">
-          ← Ke Halaman Login
-        </a>
-      `
-
-      return
-    }
-
     try {
 
       // =========================
-      // LOGIN SESSION DARI TOKEN
+      // AMBIL TOKEN DARI URL HASH
       // =========================
 
-    const { data, error } =
-  await supabase.auth.verifyOtp({
+      const hash =
+        window.location.hash
 
-    token_hash: access_token,
+      const params =
+        new URLSearchParams(
+          hash.replace('#', '')
+        )
 
-    type: 'signup'
+      const token_hash =
+        params.get('access_token')
 
-  })
-      if (error) throw error
+      // =========================
+      // TOKEN TIDAK ADA
+      // =========================
 
-      // Paksa session tersimpan
-      await supabase.auth.getSession()
-
-      const session =
-        data?.session
-
-      if (!session) {
+      if (!token_hash) {
 
         throw new Error(
-          'Session tidak ditemukan'
+          'Token verifikasi tidak ditemukan'
         )
       }
 
+      // =========================
+      // VERIFY OTP
+      // =========================
+
+      const { data, error } =
+        await supabase.auth.verifyOtp({
+
+          token_hash,
+
+          type: 'signup'
+
+        })
+
+      if (error) throw error
+
       const user =
-        session.user
+        data?.user
+
+      if (!user) {
+
+        throw new Error(
+          'User tidak ditemukan'
+        )
+      }
 
       // =========================
       // UPDATE STATUS AKUN
@@ -239,10 +225,11 @@
         .eq('id', user.id)
 
       // =========================
-      // TAMPILKAN SUKSES
+      // SUKSES
       // =========================
 
-      spinner.style.display = 'none'
+      spinner.style.display =
+        'none'
 
       title.textContent =
         '✅ Akun Berhasil Diverifikasi!'
@@ -256,33 +243,28 @@
         </a>
       `
 
-      // =========================
-      // BERSIHKAN URL HASH
-      // =========================
-
+      // Bersihkan URL
       history.replaceState(
         null,
         '',
         window.location.pathname
       )
 
-      // =========================
-      // REDIRECT OTOMATIS
-      // =========================
-
+      // Redirect otomatis
       setTimeout(() => {
 
         window.location.replace(
           'index.html'
         )
 
-      }, 4000)
+      }, 3000)
 
     } catch (err) {
 
       console.error(err)
 
-      spinner.style.display = 'none'
+      spinner.style.display =
+        'none'
 
       title.textContent =
         '❌ Verifikasi Gagal'
