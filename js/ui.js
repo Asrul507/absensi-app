@@ -352,42 +352,7 @@ export async function renderAbsensi(user) {
       let loc = { lat: null, lng: null }
       try { loc = await getLocation() } catch {}
 
-      // ===== VALIDASI RADIUS ABSEN =====
-      if (loc.lat && loc.lng) {
-        const radiusCheck = await validateAbsenRadius(loc.lat, loc.lng)
-        if (!radiusCheck.valid) {
-          // Tolak absen — diluar radius
-          btn.disabled = false
-          btn.innerHTML = '<i class="fa fa-sign-in-alt"></i> Absen Masuk'
-          
-          // Tampilkan error message
-          const errorMsg = document.createElement('div')
-          errorMsg.style.cssText = `
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #fef2f2; border: 2px solid #dc2626; border-radius: 12px;
-            padding: 20px; max-width: 320px; text-align: center; z-index: 9999;
-            box-shadow: 0 20px 60px rgba(220,38,38,0.3);
-          `
-          errorMsg.innerHTML = `
-            <i class="fa fa-map-location-dot" style="font-size: 2.5rem; color: #dc2626; display: block; margin-bottom: 12px;"></i>
-            <h3 style="color: #dc2626; font-size: 1rem; margin-bottom: 8px; font-weight: 800;">Lokasi Tidak Valid</h3>
-            <p style="color: #991b1b; font-size: .85rem; line-height: 1.6; margin-bottom: 12px;">
-              ${radiusCheck.message}
-            </p>
-            <p style="color: #6b7280; font-size: .75rem;">
-              📍 Kantor: ${radiusCheck.kantor}<br>
-              📏 Jarak: ${radiusCheck.jarak}m / ${radiusCheck.radius}m
-            </p>
-            <button onclick="this.parentElement.remove()" style="margin-top: 12px; padding: 8px 16px; 
-              background: #dc2626; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 700;">
-              Tutup
-            </button>
-          `
-          document.body.appendChild(errorMsg)
-          return
-        }
-      }
-
+      
       // Tentukan status_absensi
       let status_absensi = 'open'
 
