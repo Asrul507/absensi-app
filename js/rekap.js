@@ -177,7 +177,7 @@ window.applyRekapFilter = async function (user) {
       // Load pengajuan data (izin/sakit/cuti)
       let queryPengajuan = supabase
         .from('pengajuan')
-        .select('*, nama, user_id, tanggal_pengajuan, jumlah_hari, keterangan')
+        .select('id, nama, user_id, tanggal_pengajuan, jumlah_hari, jenis, status')
         .eq('jenis', tab)
         .eq('status', 'approved')
         .order('tanggal_pengajuan', { ascending: false })
@@ -192,7 +192,10 @@ window.applyRekapFilter = async function (user) {
       if (sampai) queryPengajuan = queryPengajuan.lte('tanggal_pengajuan', sampai)
 
       const { data: pengajuanData, error: errPengajuan } = await queryPengajuan
-      if (errPengajuan) throw errPengajuan
+      if (errPengajuan) {
+        console.error('Pengajuan query error:', errPengajuan)
+        throw errPengajuan
+      }
 
       // Filter by nama jika admin search
       let filtered = pengajuanData || []
@@ -352,7 +355,6 @@ function renderPengajuanTable(pengajuanData, jenis, isAdmin) {
               ${isAdmin ? '<th>Nama</th>' : ''}
               <th>Tanggal Pengajuan</th>
               <th>Jumlah Hari</th>
-              <th>Keterangan</th>
             </tr>
           </thead>
           <tbody>
@@ -361,7 +363,6 @@ function renderPengajuanTable(pengajuanData, jenis, isAdmin) {
                 ${isAdmin ? `<td style="font-weight: 600;">${p.nama || '-'}</td>` : ''}
                 <td>${p.tanggal_pengajuan || p.tanggal_mulai || '-'}</td>
                 <td style="text-align: center; font-weight: 700;">${p.jumlah_hari || 1}</td>
-                <td style="font-size: .85rem; color: var(--text-muted);">${p.keterangan || '-'}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -536,3 +537,4 @@ window.showDetailModal = function (tipe) {
 
   document.body.appendChild(modalBg)
 }
+
