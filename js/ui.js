@@ -1,6 +1,6 @@
 import { supabase } from './supabase.js'
 // FIX: getTodayAbsen dan getTodayShift dimasukkan ke baris import dari absensi.js
-import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift } from './absensi.js'
+import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
 
 window.activeVideoStream = null
@@ -383,12 +383,18 @@ export async function renderAbsensi(user) {
 
       const status_absensi = absen.status_absensi === 'open' ? 'complete' : absen.status_absensi
 
+      // 1. Jalankan fungsi hitung status pulang dinamis di sini
+      const hasilPulang = checkStatusPulang(todayShift.jam_pulang)
+
       await supabase.from('absensi').update({
         waktu_pulang:   new Date().toISOString(),
-        lat_pulang:      loc.lat,
-        lng_pulang:      loc.lng,
+        lat_pulang:     loc.lat,
+        lng_pulang:     loc.lng,
         foto_pulang:    window.photo || null,
-        status_absensi  
+        status_absensi,
+        // 2. Simpan data status pulang cepat ke kolom baru Supabase
+        status_pulang:  hasilPulang.status, 
+        menit_pulang_cepat: hasilPulang.minutesEarly 
       }).eq('id', absen.id)
 
       stopCamera(video)
