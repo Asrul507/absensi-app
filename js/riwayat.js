@@ -45,7 +45,6 @@ export async function renderRiwayat(user) {
       </button>
     </div>
 
-    <!-- FILTER -->
     <div class="card fade-up" style="padding:14px 18px;">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         ${isAdmin ? `
@@ -87,7 +86,6 @@ export async function renderRiwayat(user) {
       </div>
     </div>
 
-    <!-- TABEL -->
     <div id="riwayatList" class="fade-up-1">
       <div class="card" style="text-align:center;padding:28px;">
         <i class="fa fa-spinner fa-spin" style="font-size:1.5rem;color:var(--primary);"></i>
@@ -158,7 +156,19 @@ window.loadRiwayat = async function (user) {
               </tr>
             </thead>
             <tbody>
-              ${data.map(r => `
+              ${data.map(r => {
+                // FIX AUDIT 1: Tampilkan durasi menit keterlambatan riil jika ada datanya
+                let statusMasukHtml = '-'
+                if (r.status_masuk === 'Terlambat') {
+                  const mLat = r.menit_terlambat ? ` (${r.menit_terlambat}m)` : ''
+                  statusMasukHtml = `<span class="badge badge-red"><i class="fa fa-clock"></i> Terlambat${mLat}</span>`
+                } else if (r.status_masuk) {
+                  statusMasukHtml = `<span class="badge badge-green">${r.status_masuk}</span>`
+                } else {
+                  statusMasukHtml = `<span class="badge badge-gray">-</span>`
+                }
+
+                return `
                 <tr>
                   <td>${r.tanggal || '-'}</td>
                   ${isAdmin ? `<td style="font-weight:600;">${r.nama || '-'}</td>` : ''}
@@ -173,9 +183,7 @@ window.loadRiwayat = async function (user) {
                       : '<span style="color:var(--gray-400);">-</span>'}
                   </td>
                   <td>
-                    <span class="badge ${r.status_masuk === 'Terlambat' ? 'badge-red' : r.status_masuk ? 'badge-green' : 'badge-gray'}">
-                      ${r.status_masuk || '-'}
-                    </span>
+                    ${statusMasukHtml}
                   </td>
                   <td>
                     ${badgeKeterangan(r.status_absensi, r.waktu_masuk, r.waktu_pulang)}
@@ -188,7 +196,7 @@ window.loadRiwayat = async function (user) {
                            </button>`
                         : ''}
                     </td>` : ''}
-                </tr>`).join('')}
+                </tr>`}).join('')}
             </tbody>
           </table>
         </div>
@@ -228,7 +236,6 @@ window.downloadExcelRiwayat = function () {
   if (typeof XLSX === 'undefined') { alert('Library XLSX belum dimuat'); return }
 
   const rows = data.map(r => {
-    // Tentukan label keterangan yang sama dengan badge
     let keterangan = r.status_absensi || 'open'
     if (keterangan === 'complete') keterangan = 'Complete'
     else if (keterangan === 'open') keterangan = 'Open'
@@ -238,14 +245,16 @@ window.downloadExcelRiwayat = function () {
     else if (keterangan === 'approved manual') keterangan = 'Approved Manual'
 
     return {
-      'Tanggal':         r.tanggal || '-',
-      'Nama':            r.nama || '-',
-      'Waktu Masuk':     r.waktu_masuk  ? new Date(r.waktu_masuk).toLocaleString('id-ID')  : '-',
-      'Waktu Pulang':    r.waktu_pulang ? new Date(r.waktu_pulang).toLocaleString('id-ID') : '-',
-      'Status Masuk':    r.status_masuk   || '-',
-      'Keterangan':      keterangan,
-      'Approve Manual':  r.approve_manual ? 'Ya' : 'Tidak',
-      'Catatan Approve': r.approve_note   || '-',
+      'Tanggal':           r.tanggal || '-',
+      'Nama':              r.nama || '-',
+      'Waktu Masuk':       r.waktu_masuk  ? new Date(r.waktu_masuk).toLocaleString('id-ID')  : '-',
+      'Waktu Pulang':      r.waktu_pulang ? new Date(r.waktu_pulang).toLocaleString('id-ID') : '-',
+      'Status Masuk':      r.status_masuk   || '-',
+      // FIX AUDIT 2: Ekspor data total menit terlambat ke Excel laporan riwayat
+      'Menit Terlambat':   r.status_masuk === 'Terlambat' ? (r.menit_terlambat || 0) : 0, 
+      'Keterangan':        keterangan,
+      'Approve Manual':    r.approve_manual ? 'Ya' : 'Tidak',
+      'Catatan Approve':   r.approve_note   || '-',
     }
   })
 
