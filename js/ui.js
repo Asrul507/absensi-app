@@ -314,7 +314,7 @@ export async function renderAbsensi(user) {
       photoStatus.innerHTML = '<i class="fa fa-check" style="color:var(--success);"></i> Foto berhasil diambil'
     }
 
-    document.getElementById('btnMasuk').onclick = async () => {
+  document.getElementById('btnMasuk').onclick = async () => {
       const btn = document.getElementById('btnMasuk')
       btn.disabled = true
       btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
@@ -322,15 +322,12 @@ export async function renderAbsensi(user) {
       let loc = { lat: null, lng: null }
       try { loc = await getLocation() } catch {}
 
-      // Tentukan status_absensi
       let status_absensi = 'open'
 
-      // Cek salah absen (shift special tapi tetap absen)
       if (['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(todayShift.nama_shift)) {
         status_absensi = 'salah absen'
       }
 
-      // Cek lupa absen pulang kemarin
       if (status_absensi === 'open') {
         const yDate = new Date()
         yDate.setDate(yDate.getDate() - 1)
@@ -343,6 +340,9 @@ export async function renderAbsensi(user) {
         }
       }
 
+      // Hitung status dan menit keterlambatan secara riil
+      const hasilCheck = checkStatus(todayShift.jam_masuk)
+
       await submitAbsen({
         nama:           user.nama_lengkap,
         tanggal:        new Date().toISOString().split('T')[0],
@@ -350,7 +350,9 @@ export async function renderAbsensi(user) {
         lat_masuk:      loc.lat,
         lng_masuk:      loc.lng,
         foto_masuk:     window.photo || null,
-        status_masuk:   checkStatus(todayShift.jam_masuk).status,
+        status_masuk:   hasilCheck.status,                     // 'Tepat Waktu' atau 'Terlambat'
+        menit_terlambat: hasilCheck.status === 'Terlambat' ? hasilCheck.minutesLate : 0, // Catat menit aslinya
+        jam_jadwal_masuk: todayShift.jam_masuk,                // Catat jam jadwal (misal: '07:00')
         status_absensi
       })
 
