@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js'
 import { openCamera, takePhoto, getLocation, checkStatus } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
-import { validateAbsenRadius } from './geolocation.js'
+//import { validateAbsenRadius } from './geolocation.js'
 
 window.activeVideoStream = null
 
