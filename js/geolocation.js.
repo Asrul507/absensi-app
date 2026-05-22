@@ -1,12 +1,1 @@
-/**
- * Fungsi Validasi Radius - BYPASS SEMENTARA
- * Langsung meloloskan absen tanpa cek koordinat GPS
- */
-export async function validateAbsenRadius(lat, lng) {
-  return {
-    valid: true,
-    jarak: 0,
-    radius: 100,
-    kantor: "Genius HR System"
-  }
-}
+
