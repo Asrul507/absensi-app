@@ -52,6 +52,42 @@ export function checkStatus(jamMasuk) {
 }
 
 /* ===============================================================
+   CHECK STATUS PULANG (BARU)
+   Compare waktu pulang dengan jam selesai shift
+   
+   Return: {
+     status: 'Selesai' | 'Pulang Cepat',
+     minutesEarly: number
+   }
+=============================================================== */
+export function checkStatusPulang(jamPulangJadwal) {
+  // Jika tidak ada jadwal pulang atau shift spesial (OFF/CUTI/dll)
+  if (!jamPulangJadwal || jamPulangJadwal === '-') {
+    return { status: 'Selesai', minutesEarly: 0 }
+  }
+
+  const now = new Date()
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+
+  const [h, m] = jamPulangJadwal.split(':').map(Number)
+  const targetMinutes = h * 60 + m
+
+  // Jika waktu sekarang kurang dari jam seharusnya pulang
+  if (currentMinutes < targetMinutes) {
+    const minutesEarly = targetMinutes - currentMinutes
+    return {
+      status: 'Pulang Cepat',
+      minutesEarly: minutesEarly
+    }
+  }
+
+  return {
+    status: 'Selesai',
+    minutesEarly: 0
+  }
+}
+
+/* ===============================================================
    GET TODAY ABSEN
    Ambil record absensi hari ini untuk karyawan tertentu
 =============================================================== */
