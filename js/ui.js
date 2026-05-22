@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
-import { openCamera, takePhoto, getLocation, checkStatus } from './absensi.js'
+// FIX: getTodayAbsen dan getTodayShift dimasukkan ke baris import dari absensi.js
+import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
 
 window.activeVideoStream = null
@@ -11,40 +12,9 @@ function stopCamera(video) {
   window.activeVideoStream = null
 }
 
-async function getTodayAbsen(nama) {
-  const today = new Date().toISOString().split('T')[0]
-  const { data } = await supabase.from('absensi').select('*')
-    .eq('nama', nama).eq('tanggal', today).maybeSingle()
-  return data
-}
-
-async function getTodayShift(user_id) {
-  const today = new Date().toISOString().split('T')[0]
-  const { data } = await supabase.from('jadwal').select('*')
-    .eq('user_id', user_id).eq('tanggal', today).maybeSingle()
-  if (!data) return null
-
-  if (data.status_override === 'cuti')  return { nama_shift: 'CUTI',        jam_masuk: '-', jam_pulang: '-' }
-  if (data.status_override === 'sakit') return { nama_shift: 'SAKIT',       jam_masuk: '-', jam_pulang: '-' }
-  if (data.status_override === 'izin')  return { nama_shift: 'IZIN',        jam_masuk: '-', jam_pulang: '-' }
-  if (data.shift_code == '2') return { nama_shift: 'Shift Pagi',  jam_masuk: '07:00', jam_pulang: '15:00' }
-  if (data.shift_code == '3') return { nama_shift: 'Shift Sore',  jam_masuk: '15:00', jam_pulang: '23:00' }
-  if (data.shift_code == '4') return { nama_shift: 'Shift Malam', jam_masuk: '23:00', jam_pulang: '07:00' }
-  if (data.shift_code == '8') return { nama_shift: 'OFF',         jam_masuk: '-',     jam_pulang: '-' }
-  return null
-}
-
 /* ===============================================================
    HITUNG KETERANGAN STATUS ABSENSI
    Return: { label, color, icon, bg }
-
-   Aturan:
-   - shift OFF/CUTI/SAKIT/IZIN → COMPLETE (kecuali ada record salah absen)
-   - masuk + pulang ada         → COMPLETE (hijau)
-   - status_absensi salah absen → SALAH ABSEN (merah)
-   - hanya masuk, belum pulang  → BELUM PULANG (merah)
-   - tidak ada masuk sama sekali→ TIDAK ABSEN (merah)
-   - open / lainnya             → OPEN (kuning)
 =============================================================== */
 function hitungKeterangan(absen, shift) {
   const shiftSpecial = ['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(shift?.nama_shift)
@@ -352,7 +322,6 @@ export async function renderAbsensi(user) {
       let loc = { lat: null, lng: null }
       try { loc = await getLocation() } catch {}
 
-      
       // Tentukan status_absensi
       let status_absensi = 'open'
 
@@ -410,15 +379,14 @@ export async function renderAbsensi(user) {
       let loc = { lat: null, lng: null }
       try { loc = await getLocation() } catch {}
 
-      // Jika sebelumnya status_absensi masih open dan masuk+pulang lengkap → set complete
       const status_absensi = absen.status_absensi === 'open' ? 'complete' : absen.status_absensi
 
       await supabase.from('absensi').update({
         waktu_pulang:   new Date().toISOString(),
-        lat_pulang:     loc.lat,
-        lng_pulang:     loc.lng,
+        lat_pulang:      loc.lat,
+        lng_pulang:      loc.lng,
         foto_pulang:    window.photo || null,
-        status_absensi  // update ke complete kalau open
+        status_absensi  
       }).eq('id', absen.id)
 
       stopCamera(video)
