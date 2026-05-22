@@ -215,7 +215,7 @@ window.applyRekapFilter = async function (user) {
 }
 
 /* ===============================================================
-   CALCULATE REKAP ABSENSI
+   CALCULATE REKAP ABSENSI (RIEL & DINAMIS)
 =============================================================== */
 function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
   const detail = []
@@ -242,7 +242,7 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
     let terlambatMinutes = 0
 
     absenList.forEach(a => {
-      // Hitung jam kerja (jam_masuk - jam_pulang)
+      // 1. Hitung durasi jam kerja riil
       if (a.waktu_masuk && a.waktu_pulang) {
         const masuk = new Date(a.waktu_masuk)
         const pulang = new Date(a.waktu_pulang)
@@ -250,10 +250,33 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
         jamKerjaMinutes += Math.round(durationMs / 60000)
       }
 
-      // Hitung terlambat
+      // 2. Hitung durasi keterlambatan riil berdasarkan jam jadwal masuk
       if (a.status_masuk === 'Terlambat') {
-        // Extract menit dari format "Terlambat X menit" atau use default
-        terlambatMinutes += 15 // default assumption, ideally simpan di DB
+        if (typeof a.menit_terlambat === 'number' && a.menit_terlambat > 0) {
+          // Gunakan data riil dari Supabase jika tersedia
+          terlambatMinutes += a.menit_terlambat
+        } else if (a.waktu_masuk) {
+          // FALLBACK UNTUK DATA LAMA: Bandingkan timestamp absen dengan perkiraan jam shift
+          const waktuAbsen = new Date(a.waktu_masuk)
+          const jamAbsen = waktuAbsen.getHours()
+          const menitAbsen = waktuAbsen.getMinutes()
+          const totalMenitAbsen = jamAbsen * 60 + menitAbsen
+
+          // Tebak jadwal terdekat (07:00, 15:00, atau 23:00) jika kolom jam_jadwal_masuk kosong
+          let jamJadwalMenit = 7 * 60 // Default 07:00
+          if (a.jam_jadwal_masuk) {
+            const [h, m] = a.jam_jadwal_masuk.split(':').map(Number)
+            jamJadwalMenit = h * 60 + m
+          } else {
+            if (jamAbsen >= 15 && jamAbsen < 23) jamJadwalMenit = 15 * 60 // Shift Sore
+            else if (jamAbsen >= 23 || jamAbsen < 7) jamJadwalMenit = 23 * 60 // Shift Malam
+          }
+
+          const selisih = Math.max(0, totalMenitAbsen - jamJadwalMenit)
+          terlambatMinutes += selisih > 0 ? selisih : 15 // Gunakan selisih asli atau fallback minimal 15 mnt
+        } else {
+          terlambatMinutes += 15
+        }
       }
     })
 
@@ -277,7 +300,6 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
 
   return { detail, summary }
 }
-
 /* ===============================================================
    RENDER REKAP TABLE (ABSENSI)
 =============================================================== */
