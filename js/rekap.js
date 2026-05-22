@@ -25,7 +25,6 @@ export async function renderRekap(user) {
       </button>
     </div>
 
-    <!-- TABS -->
     <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
       <button id="tabAbsensi" class="btn-primary btn-sm" onclick="switchRekapTab('absensi')">
         <i class="fa fa-clock"></i> Absensi
@@ -41,7 +40,6 @@ export async function renderRekap(user) {
       </button>
     </div>
 
-    <!-- FILTER -->
     <div class="card fade-up" style="padding: 14px 18px; margin-bottom: 16px;">
       <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
         ${isAdmin ? `
@@ -70,8 +68,7 @@ export async function renderRekap(user) {
       </div>
     </div>
 
-    <!-- SUMMARY CARDS (untuk tab absensi) -->
-    <div id="summaryCar ds" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px;">
+    <div id="summaryCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px;">
       <div class="card fade-up" style="padding: 14px; text-align: center; cursor: pointer;" onclick="showDetailModal('hariKerja')">
         <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Total Hari Kerja</div>
         <div style="font-size: 1.6rem; font-weight: 900; color: var(--primary);" id="totalHari">-</div>
@@ -87,9 +84,13 @@ export async function renderRekap(user) {
         <div style="font-size: 1.4rem; font-weight: 900; color: var(--warning);" id="totalTerlambat">-</div>
         <div style="font-size: .65rem; color: var(--warning); margin-top: 6px;">📋 Klik untuk detail</div>
       </div>
+      <div class="card fade-up" style="padding: 14px; text-align: center; cursor: pointer;" onclick="showDetailModal('pulangCepat')">
+        <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Total Pulang Cepat</div>
+        <div style="font-size: 1.4rem; font-weight: 900; color: var(--danger);" id="totalPulangCepat">-</div>
+        <div style="font-size: .65rem; color: var(--danger); margin-top: 6px;">📋 Klik untuk detail</div>
+      </div>
     </div>
 
-    <!-- DETAIL TABLE -->
     <div id="rekapDetail" class="fade-up-1">
       <div class="card" style="text-align: center; padding: 28px;">
         <i class="fa fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--primary);"></i>
@@ -98,14 +99,12 @@ export async function renderRekap(user) {
     </div>
   `
 
-  // Set default date range (current month)
   const now = new Date()
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   document.getElementById('filterDari').value = firstDay.toISOString().split('T')[0]
   document.getElementById('filterSampai').value = lastDay.toISOString().split('T')[0]
 
-  // Store for download
   window._currentRekapTab = 'absensi'
   window._currentUser = user
   window._isAdminRekap = isAdmin
@@ -119,17 +118,15 @@ export async function renderRekap(user) {
 window.switchRekapTab = async function (tab) {
   window._currentRekapTab = tab
 
-  // Update button styles
   document.getElementById('tabAbsensi').className = tab === 'absensi' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
   document.getElementById('tabIzin').className = tab === 'izin' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
   document.getElementById('tabCuti').className = tab === 'cuti' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
   document.getElementById('tabSakit').className = tab === 'sakit' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
 
-  // Toggle summary cards (hanya untuk absensi)
-  const summaryEl = document.getElementById('summaryCar ds')
+  // FIX 2: Perbaikan pemanggilan selector ID summaryCards
+  const summaryEl = document.getElementById('summaryCards')
   if (summaryEl) summaryEl.style.display = tab === 'absensi' ? 'grid' : 'none'
 
-  // Hide download button untuk non-absensi
   const btnDl = document.getElementById('btnDownloadExcel')
   if (btnDl) btnDl.style.display = tab === 'absensi' ? 'block' : 'none'
 
@@ -148,7 +145,6 @@ window.applyRekapFilter = async function (user) {
 
   try {
     if (tab === 'absensi') {
-      // Load absensi data
       let query = supabase.from('absensi').select('*').order('tanggal', { ascending: false })
 
       if (!isAdmin) {
@@ -163,18 +159,16 @@ window.applyRekapFilter = async function (user) {
       const { data: absensiData, error } = await query
       if (error) throw error
 
-      // Calculate summary
       const rekap = calculateRekapAbsensi(absensiData || [], isAdmin, user.nama_lengkap)
       window._currentRekapData = rekap.detail
 
-      // Update summary
       document.getElementById('totalHari').textContent = rekap.summary.totalHari
       document.getElementById('totalJamKerja').textContent = rekap.summary.totalJamKerja
       document.getElementById('totalTerlambat').textContent = rekap.summary.totalTerlambat
+      document.getElementById('totalPulangCepat').textContent = rekap.summary.totalPulangCepat
 
       renderRekapTable(rekap, isAdmin)
     } else {
-      // Load pengajuan data (izin/sakit/cuti)
       let queryPengajuan = supabase
         .from('pengajuan')
         .select('id, nama, user_id, tanggal_pengajuan, jumlah_hari, jenis, status')
@@ -184,20 +178,14 @@ window.applyRekapFilter = async function (user) {
 
       if (!isAdmin) {
         queryPengajuan = queryPengajuan.eq('user_id', user.id)
-      } else if (namaPencarian) {
-        // Akan fetch semua then filter by nama (simplified)
       }
 
       if (dari) queryPengajuan = queryPengajuan.gte('tanggal_pengajuan', dari)
       if (sampai) queryPengajuan = queryPengajuan.lte('tanggal_pengajuan', sampai)
 
       const { data: pengajuanData, error: errPengajuan } = await queryPengajuan
-      if (errPengajuan) {
-        console.error('Pengajuan query error:', errPengajuan)
-        throw errPengajuan
-      }
+      if (errPengajuan) throw errPengajuan
 
-      // Filter by nama jika admin search
       let filtered = pengajuanData || []
       if (isAdmin && namaPencarian) {
         filtered = filtered.filter(p => (p.nama || '').toLowerCase().includes(namaPencarian.toLowerCase()))
@@ -222,7 +210,8 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
   const summary = {
     totalHari: 0,
     totalJamKerja: '00:00:00',
-    totalTerlambat: '00:00:00'
+    totalTerlambat: '00:00:00',
+    totalPulangCepat: '00:00:00'
   }
 
   const groupedByName = {}
@@ -233,6 +222,7 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
 
   let totalJamKerjaMinutes = 0
   let totalTerlambatMinutes = 0
+  let totalPulangCepatMinutes = 0
   let totalHariKerja = 0
 
   Object.keys(groupedByName).forEach(nama => {
@@ -240,9 +230,9 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
     let hariKerja = absenList.length
     let jamKerjaMinutes = 0
     let terlambatMinutes = 0
+    let pulangCepatMinutes = 0 // FIX 3: Deklarasi variabel penampung baru
 
     absenList.forEach(a => {
-      // 1. Hitung durasi jam kerja riil
       if (a.waktu_masuk && a.waktu_pulang) {
         const masuk = new Date(a.waktu_masuk)
         const pulang = new Date(a.waktu_pulang)
@@ -250,35 +240,32 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
         jamKerjaMinutes += Math.round(durationMs / 60000)
       }
 
-      // 2. Hitung durasi keterlambatan riil berdasarkan jam jadwal masuk
       if (a.status_masuk === 'Terlambat') {
         if (typeof a.menit_terlambat === 'number' && a.menit_terlambat > 0) {
-          // Gunakan data riil dari Supabase jika tersedia
           terlambatMinutes += a.menit_terlambat
         } else if (a.waktu_masuk) {
-          // FALLBACK UNTUK DATA LAMA: Bandingkan timestamp absen dengan perkiraan jam shift
           const waktuAbsen = new Date(a.waktu_masuk)
           const jamAbsen = waktuAbsen.getHours()
           const menitAbsen = waktuAbsen.getMinutes()
           const totalMenitAbsen = jamAbsen * 60 + menitAbsen
 
-          // Tebak jadwal terdekat (07:00, 15:00, atau 23:00) jika kolom jam_jadwal_masuk kosong
-          let jamJadwalMenit = 7 * 60 // Default 07:00
+          let jamJadwalMenit = 7 * 60
           if (a.jam_jadwal_masuk) {
             const [h, m] = a.jam_jadwal_masuk.split(':').map(Number)
             jamJadwalMenit = h * 60 + m
           } else {
-            if (jamAbsen >= 15 && jamAbsen < 23) jamJadwalMenit = 15 * 60 // Shift Sore
-            else if (jamAbsen >= 23 || jamAbsen < 7) jamJadwalMenit = 23 * 60 // Shift Malam
+            if (jamAbsen >= 15 && jamAbsen < 23) jamJadwalMenit = 15 * 60
+            else if (jamAbsen >= 23 || jamAbsen < 7) jamJadwalMenit = 23 * 60
           }
 
           const selisih = Math.max(0, totalMenitAbsen - jamJadwalMenit)
-          terlambatMinutes += selisih > 0 ? selisih : 15 // Gunakan selisih asli atau fallback minimal 15 mnt
+          terlambatMinutes += selisih > 0 ? selisih : 15
         } else {
           terlambatMinutes += 15
         }
       }
-    }
+
+      // FIX 4: Logika hitung ditaruh di dalam perulangan absensi karyawan (SINTAKS AMAN)
       if (a.status_pulang === 'Pulang Cepat') {
         pulangCepatMinutes += a.menit_pulang_cepat || 0
       }
@@ -286,6 +273,7 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
 
     totalJamKerjaMinutes += jamKerjaMinutes
     totalTerlambatMinutes += terlambatMinutes
+    totalPulangCepatMinutes += pulangCepatMinutes
     totalHariKerja += hariKerja
 
     detail.push({
@@ -294,16 +282,20 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
       jamKerja: minutesToHMS(jamKerjaMinutes),
       jamKerjaMinutes,
       terlambat: minutesToHMS(terlambatMinutes),
-      terlambatMinutes
+      terlambatMinutes,
+      pulangCepat: minutesToHMS(pulangCepatMinutes),
+      pulangCepatMinutes
     })
   })
 
   summary.totalHari = totalHariKerja
   summary.totalJamKerja = minutesToHMS(totalJamKerjaMinutes)
   summary.totalTerlambat = minutesToHMS(totalTerlambatMinutes)
+  summary.totalPulangCepat = minutesToHMS(totalPulangCepatMinutes)
 
   return { detail, summary }
 }
+
 /* ===============================================================
    RENDER REKAP TABLE (ABSENSI)
 =============================================================== */
@@ -330,6 +322,7 @@ function renderRekapTable(rekap, isAdmin) {
               <th>Hari Kerja</th>
               <th>Total Jam Kerja</th>
               <th>Total Terlambat</th>
+              <th>Total Pulang Cepat</th>
             </tr>
           </thead>
           <tbody>
@@ -339,6 +332,7 @@ function renderRekapTable(rekap, isAdmin) {
                 <td style="text-align: center; font-weight: 700;">${r.hariKerja}</td>
                 <td style="font-weight: 700; color: var(--success);">${r.jamKerja}</td>
                 <td style="font-weight: 700; color: var(--warning);">${r.terlambat}</td>
+                <td style="font-weight: 700; color: var(--danger);">${r.pulangCepat}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -348,7 +342,8 @@ function renderRekapTable(rekap, isAdmin) {
         border-top: 1px solid var(--gray-100);">
         Total: <strong>${rekap.detail.length}</strong> karyawan | 
         Jam kerja: <strong>${rekap.summary.totalJamKerja}</strong> | 
-        Terlambat: <strong>${rekap.summary.totalTerlambat}</strong>
+        Terlambat: <strong>${rekap.summary.totalTerlambat}</strong> | 
+        Pulang Cepat: <strong>${rekap.summary.totalPulangCepat}</strong>
       </div>
     </div>
   `
@@ -423,14 +418,15 @@ window.downloadExcelRekap = function () {
     'Total Hari Kerja': r.hariKerja,
     'Total Jam Kerja': r.jamKerja,
     'Total Terlambat': r.terlambat,
+    'Total Pulang Cepat': r.pulangCepat
   }))
 
   const ws = XLSX.utils.json_to_sheet(data)
   const wb = XLSX.utils.book_new()
 
-  // Auto column width
   ws['!cols'] = [
     { wch: 20 },
+    { wch: 15 },
     { wch: 15 },
     { wch: 15 },
     { wch: 15 },
@@ -515,9 +511,29 @@ window.showDetailModal = function (tipe) {
         </tbody>
       </table>
     `
+  } else if (tipe === 'pulangCepat') {
+    // FITUR BARU: Menampilkan tabel modal detail khusus data Pulang Cepat
+    modalTitle = '🏃 Detail Pulang Cepat per Karyawan'
+    tableHtml = `
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid var(--danger);">
+            <th style="padding: 10px; text-align: left; font-weight: 800;">Nama</th>
+            <th style="padding: 10px; text-align: center; font-weight: 800;">Total Pulang Cepat</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(r => `
+            <tr style="border-bottom: 1px solid var(--gray-200);">
+              <td style="padding: 10px;">${r.nama}</td>
+              <td style="padding: 10px; text-align: center; font-weight: 700; color: var(--danger);">${r.pulangCepat}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
   }
 
-  // Create modal
   let modal = document.getElementById('rekapDetailModal')
   if (modal) modal.remove()
 
@@ -563,4 +579,3 @@ window.showDetailModal = function (tipe) {
 
   document.body.appendChild(modalBg)
 }
-
