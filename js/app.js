@@ -6,6 +6,7 @@ import { renderAbsensi } from './ui.js'
 import { renderShiftManagement } from './shift.js'
 import { renderJadwalManagement } from './jadwal.js'
 import { renderRiwayat } from './riwayat.js'
+import { renderRekap } from './rekap.js' // Dipertahankan dari file 1
 import { renderPengajuan } from './pengajuan.js'
 import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
@@ -149,6 +150,7 @@ function renderMenu(role) {
         { key:'absensi',   name:'Absensi',      icon:'fa-clock' },
         { key:'pengajuan', name:'Pengajuan',    icon:'fa-file-alt' },
         { key:'riwayat',   name:'Riwayat',      icon:'fa-list' },
+        { key:'rekap',     name:'Rekap Absensi', icon:'fa-chart-bar' },
         { key:'kalender',  name:'Kalender',     icon:'fa-calendar-alt' },
         { key:'profile',   name:'Profil Saya',  icon:'fa-user' },
       ]
@@ -160,6 +162,7 @@ function renderMenu(role) {
         { key:'pengajuan', name:'Approval',     icon:'fa-inbox' },
         { key:'users',     name:'Karyawan',     icon:'fa-users' },
         { key:'riwayat',   name:'Riwayat',      icon:'fa-list' },
+        { key:'rekap',     name:'Rekap Absensi', icon:'fa-chart-bar' }, // Ditambahkan kembali untuk Admin
         { key:'kalender',  name:'Kalender',     icon:'fa-calendar' },
       ]
 
@@ -217,6 +220,7 @@ window.navigate = async function (page) {
     case 'jadwal':    renderJadwalManagement(); break
     case 'pengajuan': renderPengajuan(window.currentUser); break
     case 'riwayat':   renderRiwayat(window.currentUser); break
+    case 'rekap':     renderRekap(window.currentUser); break // Mengarah ke fungsi renderRekap asli
     case 'kalender':  renderKalenderHR(); break
     case 'profile':   renderProfile(); break
     case 'users':     await renderUsers(); break
@@ -322,6 +326,7 @@ window.uploadFotoProfil = async function (input) {
   renderProfile()
 }
 
+/* ================= KARYAWAN / USERS PAGE (UTUH DARI FILE 2) ================= */
 async function renderUsers() {
   const content  = document.getElementById('content')
   const canAdmin = window.currentUser.role === 'super_admin'
@@ -384,7 +389,7 @@ async function renderUsers() {
 
   renderUserList(window._allUsers)
 
-  // Tab
+  // Tab switcher
   window.switchTab = function(tab) {
     window._currentTab = tab
     document.getElementById('tabAktif').className   = tab==='aktif'   ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
@@ -393,6 +398,7 @@ async function renderUsers() {
     else renderPendingList(window._pendingList)
   }
 
+  // Filter Search
   window.filterUsers = function() {
     const q  = document.getElementById('searchUser').value.toLowerCase()
     const st = document.getElementById('filterStatusUser').value
@@ -465,7 +471,7 @@ async function renderUsers() {
   }
 }
 
-/* ---- Render list karyawan ---- */
+/* ---- Render list karyawan aktif ---- */
 function renderUserList(users) {
   const el = document.getElementById('userListContainer')
   if (!el) return
@@ -475,7 +481,7 @@ function renderUserList(users) {
   }
   el.innerHTML = users.map(u => {
     const masaKerja = hitungMasaKerja(u.tanggal_bergabung)
-    const jatah     = hitungJatahCuti(u.tanggal_bergabung)
+    const jatah      = hitungJatahCuti(u.tanggal_bergabung)
     const terpakai  = (window._cutiMap||{})[u.id] || 0
     const sisa      = jatah - terpakai
     const isAktif   = u.status_akun !== 'Non-Aktif'
