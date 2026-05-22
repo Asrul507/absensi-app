@@ -177,10 +177,15 @@ window.loadRiwayat = async function (user) {
                       ? new Date(r.waktu_masuk).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })
                       : '<span style="color:var(--gray-400);">-</span>'}
                   </td>
-                  <td style="font-weight:700;color:var(--primary);">
+                 <td style="font-weight:700;color:var(--primary);">
                     ${r.waktu_pulang
                       ? new Date(r.waktu_pulang).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })
                       : '<span style="color:var(--gray-400);">-</span>'}
+                    ${r.status_pulang === 'Pulang Cepat' 
+                      ? `<div style="font-size:.65rem; color:var(--danger); font-weight:700; margin-top:2px;">
+                          ⚠️ Pulang Cepat (${r.menit_pulang_cepat || 0}m)
+                         </div>` 
+                      : ''}
                   </td>
                   <td>
                     ${statusMasukHtml}
