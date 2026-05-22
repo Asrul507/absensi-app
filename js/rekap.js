@@ -278,6 +278,10 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
           terlambatMinutes += 15
         }
       }
+    }
+      if (a.status_pulang === 'Pulang Cepat') {
+        pulangCepatMinutes += a.menit_pulang_cepat || 0
+      }
     })
 
     totalJamKerjaMinutes += jamKerjaMinutes
