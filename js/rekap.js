@@ -72,17 +72,20 @@ export async function renderRekap(user) {
 
     <!-- SUMMARY CARDS (untuk tab absensi) -->
     <div id="summaryCar ds" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px;">
-      <div class="card fade-up" style="padding: 14px; text-align: center;">
+      <div class="card fade-up" style="padding: 14px; text-align: center; cursor: pointer;" onclick="showDetailModal('hariKerja')">
         <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Total Hari Kerja</div>
         <div style="font-size: 1.6rem; font-weight: 900; color: var(--primary);" id="totalHari">-</div>
+        <div style="font-size: .65rem; color: var(--primary); margin-top: 6px;">📋 Klik untuk detail</div>
       </div>
-      <div class="card fade-up" style="padding: 14px; text-align: center;">
+      <div class="card fade-up" style="padding: 14px; text-align: center; cursor: pointer;" onclick="showDetailModal('jamKerja')">
         <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Total Jam Kerja</div>
         <div style="font-size: 1.4rem; font-weight: 900; color: var(--success);" id="totalJamKerja">-</div>
+        <div style="font-size: .65rem; color: var(--success); margin-top: 6px;">📋 Klik untuk detail</div>
       </div>
-      <div class="card fade-up" style="padding: 14px; text-align: center;">
+      <div class="card fade-up" style="padding: 14px; text-align: center; cursor: pointer;" onclick="showDetailModal('terlambat')">
         <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Total Terlambat</div>
         <div style="font-size: 1.4rem; font-weight: 900; color: var(--warning);" id="totalTerlambat">-</div>
+        <div style="font-size: .65rem; color: var(--warning); margin-top: 6px;">📋 Klik untuk detail</div>
       </div>
     </div>
 
@@ -174,7 +177,7 @@ window.applyRekapFilter = async function (user) {
       // Load pengajuan data (izin/sakit/cuti)
       let queryPengajuan = supabase
         .from('pengajuan')
-        .select('*')
+        .select('*, nama, user_id, tanggal_pengajuan, jumlah_hari, keterangan')
         .eq('jenis', tab)
         .eq('status', 'approved')
         .order('tanggal_pengajuan', { ascending: false })
@@ -191,7 +194,14 @@ window.applyRekapFilter = async function (user) {
       const { data: pengajuanData, error: errPengajuan } = await queryPengajuan
       if (errPengajuan) throw errPengajuan
 
-      renderPengajuanTable(pengajuanData || [], tab, isAdmin)
+      // Filter by nama jika admin search
+      let filtered = pengajuanData || []
+      if (isAdmin && namaPencarian) {
+        filtered = filtered.filter(p => (p.nama || '').toLowerCase().includes(namaPencarian.toLowerCase()))
+      }
+
+      window._currentPengajuanData = filtered
+      renderPengajuanTable(filtered, tab, isAdmin)
     }
   } catch (err) {
     console.error('Error load rekap:', err)
@@ -340,7 +350,7 @@ function renderPengajuanTable(pengajuanData, jenis, isAdmin) {
           <thead>
             <tr>
               ${isAdmin ? '<th>Nama</th>' : ''}
-              <th>Tanggal</th>
+              <th>Tanggal Pengajuan</th>
               <th>Jumlah Hari</th>
               <th>Keterangan</th>
             </tr>
@@ -348,8 +358,8 @@ function renderPengajuanTable(pengajuanData, jenis, isAdmin) {
           <tbody>
             ${pengajuanData.map(p => `
               <tr>
-                ${isAdmin ? `<td style="font-weight: 600;">${p.user_name || '-'}</td>` : ''}
-                <td>${p.tanggal_pengajuan || '-'}</td>
+                ${isAdmin ? `<td style="font-weight: 600;">${p.nama || '-'}</td>` : ''}
+                <td>${p.tanggal_pengajuan || p.tanggal_mulai || '-'}</td>
                 <td style="text-align: center; font-weight: 700;">${p.jumlah_hari || 1}</td>
                 <td style="font-size: .85rem; color: var(--text-muted);">${p.keterangan || '-'}</td>
               </tr>
@@ -401,4 +411,128 @@ window.downloadExcelRekap = function () {
 
   XLSX.utils.book_append_sheet(wb, ws, 'Rekap Absensi')
   XLSX.writeFile(wb, `rekap-absensi-${new Date().toISOString().split('T')[0]}.xlsx`)
+}
+
+/* ===============================================================
+   SHOW DETAIL MODAL
+=============================================================== */
+window.showDetailModal = function (tipe) {
+  const data = window._currentRekapData || []
+  const isAdmin = window._isAdminRekap
+
+  if (!data.length) {
+    alert('Tidak ada data untuk ditampilkan')
+    return
+  }
+
+  let modalTitle = ''
+  let tableHtml = ''
+
+  if (tipe === 'hariKerja') {
+    modalTitle = '📅 Detail Hari Kerja per Karyawan'
+    tableHtml = `
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid var(--primary);">
+            <th style="padding: 10px; text-align: left; font-weight: 800;">Nama</th>
+            <th style="padding: 10px; text-align: center; font-weight: 800;">Hari Kerja</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(r => `
+            <tr style="border-bottom: 1px solid var(--gray-200);">
+              <td style="padding: 10px;">${r.nama}</td>
+              <td style="padding: 10px; text-align: center; font-weight: 700;">${r.hariKerja}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
+  } else if (tipe === 'jamKerja') {
+    modalTitle = '⏰ Detail Jam Kerja per Karyawan'
+    tableHtml = `
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid var(--success);">
+            <th style="padding: 10px; text-align: left; font-weight: 800;">Nama</th>
+            <th style="padding: 10px; text-align: center; font-weight: 800;">Total Jam Kerja</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(r => `
+            <tr style="border-bottom: 1px solid var(--gray-200);">
+              <td style="padding: 10px;">${r.nama}</td>
+              <td style="padding: 10px; text-align: center; font-weight: 700; color: var(--success);">${r.jamKerja}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
+  } else if (tipe === 'terlambat') {
+    modalTitle = '⏳ Detail Keterlambatan per Karyawan'
+    tableHtml = `
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid var(--warning);">
+            <th style="padding: 10px; text-align: left; font-weight: 800;">Nama</th>
+            <th style="padding: 10px; text-align: center; font-weight: 800;">Total Terlambat</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(r => `
+            <tr style="border-bottom: 1px solid var(--gray-200);">
+              <td style="padding: 10px;">${r.nama}</td>
+              <td style="padding: 10px; text-align: center; font-weight: 700; color: var(--warning);">${r.terlambat}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
+  }
+
+  // Create modal
+  let modal = document.getElementById('rekapDetailModal')
+  if (modal) modal.remove()
+
+  const modalBg = document.createElement('div')
+  modalBg.id = 'rekapDetailModal'
+  modalBg.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+  `
+
+  const modalBox = document.createElement('div')
+  modalBox.style.cssText = `
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 70vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  `
+
+  modalBox.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 style="font-size: 1.1rem; font-weight: 800; margin: 0;">${modalTitle}</h3>
+      <button onclick="document.getElementById('rekapDetailModal').remove()"
+        style="background: none; border: none; font-size: 1.4rem; cursor: pointer; padding: 0; width: 30px; height: 30px;
+          display: flex; align-items: center; justify-content: center;">
+        ✕
+      </button>
+    </div>
+    <div style="border-top: 1px solid var(--gray-200); padding-top: 16px;">
+      ${tableHtml}
+    </div>
+  `
+
+  modalBg.appendChild(modalBox)
+  modalBg.addEventListener('click', (e) => {
+    if (e.target === modalBg) modalBg.remove()
+  })
+
+  document.body.appendChild(modalBg)
 }
