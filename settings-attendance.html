@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pengaturan Absensi — Genius HR</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body style="background: #f8fafc; padding: 20px;">
+
+<div style="max-width: 600px; margin: 0 auto;">
+
+  <!-- HEADER -->
+  <div style="margin-bottom: 24px;">
+    <a href="index.html" style="color: var(--primary); text-decoration: none; font-size: .9rem;">
+      <i class="fa fa-arrow-left"></i> Kembali ke Dashboard
+    </a>
+    <h1 style="font-size: 1.6rem; font-weight: 900; margin-top: 12px; color: #0f172a;">
+      <i class="fa fa-sliders-h" style="color: var(--primary);"></i> Pengaturan Absensi
+    </h1>
+    <p style="color: #64748b; font-size: .85rem; margin-top: 4px;">
+      Konfigurasi kebijakan absensi perusahaan
+    </p>
+  </div>
+
+  <!-- GRACE PERIOD CARD -->
+  <div class="card" style="padding: 20px; margin-bottom: 16px;">
+    <h3 style="font-weight: 800; margin-bottom: 16px;">
+      <i class="fa fa-hourglass-start" style="color: var(--warning);"></i> Toleransi Keterlambatan
+    </h3>
+
+    <div class="field">
+      <label>Grace Period (menit) <span style="color: var(--danger);">*</span></label>
+      <input type="number" id="inputGracePeriod" placeholder="5" min="0" max="60" value="5">
+      <div style="font-size: .75rem; color: var(--text-muted); margin-top: 6px;">
+        Jika karyawan masuk <= grace period, tetap dianggap "Tepat Waktu"<br>
+        Contoh: 5 menit, jam masuk 07:00 → masuk sampai 07:05 tetap tepat waktu
+      </div>
+    </div>
+
+    <div class="field" style="margin-top: 12px;">
+      <label>Max Terlambat Diterima (menit) <span style="color: var(--danger);">*</span></label>
+      <input type="number" id="inputMaxLate" placeholder="60" min="0" max="180" value="60">
+      <div style="font-size: .75rem; color: var(--text-muted); margin-top: 6px;">
+        Jika terlambat lebih dari ini, dianggap tidak masuk/incomplete shift
+      </div>
+    </div>
+  </div>
+
+  <!-- ANNUAL LEAVE CARD -->
+  <div class="card" style="padding: 20px; margin-bottom: 16px;">
+    <h3 style="font-weight: 800; margin-bottom: 16px;">
+      <i class="fa fa-umbrella-beach" style="color: #8b5cf6;"></i> Cuti Tahunan
+    </h3>
+
+    <div class="field">
+      <label>Jatah Cuti per Tahun (hari) <span style="color: var(--danger);">*</span></label>
+      <input type="number" id="inputAnnualLeave" placeholder="12" min="0" max="30" value="12">
+    </div>
+
+    <div class="field" style="margin-top: 12px;">
+      <label>Minimal Masa Kerja untuk Eligible Cuti (bulan)</label>
+      <input type="number" id="inputMinTenure" placeholder="6" min="0" max="24" value="6">
+      <div style="font-size: .75rem; color: var(--text-muted); margin-top: 6px;">
+        Karyawan bisa ajukan cuti setelah bekerja X bulan
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATIONS CARD -->
+  <div class="card" style="padding: 20px; margin-bottom: 16px;">
+    <h3 style="font-weight: 800; margin-bottom: 16px;">
+      <i class="fa fa-bell" style="color: #06b6d4;"></i> Notifikasi & Alert
+    </h3>
+
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
+      <input type="checkbox" id="chkNotifyPulang" checked style="width: 18px; height: 18px; cursor: pointer;">
+      <label for="chkNotifyPulang" style="cursor: pointer; flex: 1; margin: 0;">
+        <span style="font-weight: 700;">Notifikasi Lupa Absen Pulang</span><br>
+        <span style="font-size: .75rem; color: var(--text-muted);">Ingatkan karyawan jika lupa absen pulang</span>
+      </label>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <input type="checkbox" id="chkRequirePhoto" checked style="width: 18px; height: 18px; cursor: pointer;">
+      <label for="chkRequirePhoto" style="cursor: pointer; flex: 1; margin: 0;">
+        <span style="font-weight: 700;">Wajib Upload Foto Absensi</span><br>
+        <span style="font-size: .75rem; color: var(--text-muted);">Karyawan harus upload foto saat absen</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- SAVE BUTTON -->
+  <button id="btnSimpanSettings" class="btn-primary" style="width: 100%;">
+    <i class="fa fa-save"></i> Simpan Pengaturan
+  </button>
+  <p id="msgStatus" style="font-size: .8rem; margin-top: 8px; min-height: 18px; text-align: center;"></p>
+
+  <!-- INFO -->
+  <div class="card" style="padding: 14px; margin-top: 20px; background: #f0fdf4; border-left: 4px solid var(--success);">
+    <div style="font-size: .8rem; color: #166534; line-height: 1.6;">
+      <i class="fa fa-info-circle"></i>
+      <strong>Catatan:</strong> Pengaturan ini tersimpan di file <code>js/config.js</code>. 
+      Untuk production, sebaiknya simpan ke database agar bisa di-update tanpa deploy ulang.
+    </div>
+  </div>
+
+</div>
+
+<!-- SCRIPTS -->
+<script type="module">
+  // Load settings (sekarang hardcoded, nanti dari database)
+  document.getElementById('inputGracePeriod').value = 5
+  document.getElementById('inputMaxLate').value = 60
+  document.getElementById('inputAnnualLeave').value = 12
+  document.getElementById('inputMinTenure').value = 6
+
+  document.getElementById('btnSimpanSettings').addEventListener('click', saveSettings)
+
+  function saveSettings() {
+    const gracePeriod = parseInt(document.getElementById('inputGracePeriod').value)
+    const maxLate = parseInt(document.getElementById('inputMaxLate').value)
+    const annualLeave = parseInt(document.getElementById('inputAnnualLeave').value)
+    const minTenure = parseInt(document.getElementById('inputMinTenure').value)
+    const notifyPulang = document.getElementById('chkNotifyPulang').checked
+    const requirePhoto = document.getElementById('chkRequirePhoto').checked
+
+    const msgEl = document.getElementById('msgStatus')
+    const btn = document.getElementById('btnSimpanSettings')
+
+    // Validasi
+    if (gracePeriod < 0 || gracePeriod > 60) {
+      msgEl.style.color = '#dc2626'
+      msgEl.textContent = '⚠ Grace period harus 0-60 menit'
+      return
+    }
+    if (maxLate < gracePeriod) {
+      msgEl.style.color = '#dc2626'
+      msgEl.textContent = '⚠ Max terlambat harus >= grace period'
+      return
+    }
+
+    btn.disabled = true
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Menyimpan...'
+
+    // TODO: Send ke backend/database
+    // Sekarang hanya simulasi
+    setTimeout(() => {
+      msgEl.style.color = '#16a34a'
+      msgEl.textContent = '✅ Pengaturan berhasil disimpan'
+
+      btn.disabled = false
+      btn.innerHTML = '<i class="fa fa-save"></i> Simpan Pengaturan'
+
+      console.log('Settings:', {
+        gracePeriod,
+        maxLate,
+        annualLeave,
+        minTenure,
+        notifyPulang,
+        requirePhoto,
+      })
+    }, 1000)
+  }
+</script>
+
+</body>
+</html>
