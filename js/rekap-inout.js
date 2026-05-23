@@ -7,10 +7,152 @@ export async function renderRekapInOut(user) {
   content.innerHTML = `
     <div class="page-header">
       <h2><i class="fa fa-clock"></i> Rekap In/Out</h2>
-      <button class="btn-primary btn-sm" onclick="downloadExcelRekapInOut()">
-        <i class="fa fa-download"></i> Download Excel
+      <button class="btn-primary btn-sm" onclick="downloadExcelRekapInOut()" style="display: ${isAdmin ? 'inline-block' : 'none'};">
+        <i class="fa fa-download"></i> Excel
       </button>
     </div>
+
+    <div id="rekapInOutView">
+      <!-- INITIAL: List Nama (Admin only) -->
+      <div id="namaListRekap" style="display: ${isAdmin ? 'block' : 'none'};" class="fade-up">
+        <div class="card" style="padding: 16px; margin-bottom: 12px;">
+          <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">
+            Pilih Karyawan
+          </div>
+          <div id="namaListRekapContainer" style="display: flex; flex-direction: column; gap: 8px;">
+            <div class="card" style="text-align: center; padding: 28px;">
+              <i class="fa fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--primary);"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DETAIL: Filter & Table -->
+      <div id="detailViewRekap" style="display: ${isAdmin ? 'none' : 'block'};">
+        ${isAdmin ? `<button onclick="backToNamaListRekap()" class="btn-secondary btn-sm" style="margin-bottom: 12px;"><i class="fa fa-arrow-left"></i> Kembali</button>` : ''}
+
+        <!-- FILTER -->
+        <div class="card fade-up" style="padding: 14px 18px; margin-bottom: 16px;">
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+            <div style="flex: 1; min-width: 130px;">
+              <label style="font-size: .7rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 5px;">Dari Tanggal</label>
+              <input type="date" id="filterDariRekap"
+                style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+                  font-size: .85rem; outline: none; font-family: inherit; color: var(--text);">
+            </div>
+            <div style="flex: 1; min-width: 130px;">
+              <label style="font-size: .7rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 5px;">Sampai Tanggal</label>
+              <input type="date" id="filterSampaiRekap"
+                style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+                  font-size: .85rem; outline: none; font-family: inherit; color: var(--text);">
+            </div>
+            <button class="btn-primary btn-sm" onclick="applyRekapInOutFilter(window.currentUser)" style="align-self: flex-end; white-space: nowrap;">
+              <i class="fa fa-search"></i> Cari
+            </button>
+          </div>
+        </div>
+
+        <!-- SUMMARY CARDS -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px;">
+          <div class="card fade-up" style="padding: 14px; text-align: center;">
+            <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Total Records</div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: var(--primary);" id="totalRecordsRekap">-</div>
+          </div>
+          <div class="card fade-up" style="padding: 14px; text-align: center;">
+            <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Masuk</div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: var(--success);" id="totalMasukRekap">-</div>
+          </div>
+          <div class="card fade-up" style="padding: 14px; text-align: center;">
+            <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Tidak Masuk</div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: var(--danger);" id="totalTidakMasukRekap">-</div>
+          </div>
+        </div>
+
+        <!-- DETAIL TABLE -->
+        <div id="rekapInOutDetail" class="fade-up">
+          <div class="card" style="text-align: center; padding: 28px;">
+            <i class="fa fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--primary);"></i>
+            <p style="color: var(--text-muted); margin-top: 8px; font-size: .85rem;">Memuat data...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+
+  window._isAdminRekapInOut = isAdmin
+  window._selectedRekapKaryawan = null
+
+  if (isAdmin) {
+    await loadNamaListRekap()
+  } else {
+    // Staff: langsung load data diri sendiri
+    const now = new Date()
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    document.getElementById('filterDariRekap').value = firstDay.toISOString().split('T')[0]
+    document.getElementById('filterSampaiRekap').value = lastDay.toISOString().split('T')[0]
+    window._selectedRekapKaryawan = user.nama_lengkap
+    await applyRekapInOutFilter(user)
+  }
+}
+
+async function loadNamaListRekap() {
+  const container = document.getElementById('namaListRekapContainer')
+
+  try {
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('id, nama_lengkap')
+      .eq('status_akun', 'Aktif')
+      .order('nama_lengkap', { ascending: true })
+
+    if (error) throw error
+
+    if (!profiles?.length) {
+      container.innerHTML = `<div class="empty-state" style="padding: 28px;"><i class="fa fa-inbox"></i><p>Tidak ada karyawan</p></div>`
+      return
+    }
+
+    let html = ''
+    profiles.forEach(p => {
+      html += `
+        <button onclick="selectKaryawanRekap('${p.nama_lengkap}')" 
+          style="padding: 12px 16px; background: #fff; border: 1.5px solid var(--border); border-radius: var(--r-md);
+            text-align: left; font-weight: 600; color: var(--text); cursor: pointer; transition: all 0.2s;
+            display: flex; justify-content: space-between; align-items: center;">
+          <span>${p.nama_lengkap}</span>
+          <i class="fa fa-chevron-right" style="color: var(--text-muted); font-size: .85rem;"></i>
+        </button>
+      `
+    })
+
+    container.innerHTML = html
+
+  } catch (err) {
+    container.innerHTML = `<div class="card"><p style="color: var(--danger);">Error: ${err.message}</p></div>`
+  }
+}
+
+window.selectKaryawanRekap = async function (namaKaryawan) {
+  window._selectedRekapKaryawan = namaKaryawan
+
+  document.getElementById('namaListRekap').style.display = 'none'
+  document.getElementById('detailViewRekap').style.display = 'block'
+
+  const now = new Date()
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  document.getElementById('filterDariRekap').value = firstDay.toISOString().split('T')[0]
+  document.getElementById('filterSampaiRekap').value = lastDay.toISOString().split('T')[0]
+
+  await applyRekapInOutFilter(window.currentUser)
+}
+
+window.backToNamaListRekap = function () {
+  document.getElementById('namaListRekap').style.display = 'block'
+  document.getElementById('detailViewRekap').style.display = 'none'
+  window._selectedRekapKaryawan = null
+}
 
     <!-- FILTER -->
     <div class="card fade-up" style="padding: 14px 18px; margin-bottom: 16px;">
@@ -80,22 +222,20 @@ export async function renderRekapInOut(user) {
 
 window.applyRekapInOutFilter = async function (user) {
   const isAdmin = window._isAdminRekapInOut
-  const namaPencarian = document.getElementById('filterNama')?.value?.trim() || ''
-  const dari = document.getElementById('filterDari')?.value
-  const sampai = document.getElementById('filterSampai')?.value
+  const dari = document.getElementById('filterDariRekap')?.value
+  const sampai = document.getElementById('filterSampaiRekap')?.value
 
   try {
-    // Fetch absensi data
     let query = supabase
       .from('absensi')
       .select('*')
       .order('tanggal', { ascending: false })
       .order('waktu_masuk', { ascending: false })
 
-    if (!isAdmin) {
+    if (window._selectedRekapKaryawan) {
+      query = query.eq('nama', window._selectedRekapKaryawan)
+    } else if (!isAdmin) {
       query = query.eq('nama', user.nama_lengkap)
-    } else if (namaPencarian) {
-      query = query.ilike('nama', `%${namaPencarian}%`)
     }
 
     if (dari) query = query.gte('tanggal', dari)
@@ -105,16 +245,11 @@ window.applyRekapInOutFilter = async function (user) {
 
     if (error) throw error
 
-    // Calculate summary & render
     const hasil = calculateRekapInOut(absensiData || [], isAdmin, user.nama_lengkap)
 
-    // Store for download
-    window._rekapInOutDetail = hasil.detail
-
-    // Update summary cards
-    document.getElementById('totalRecords').textContent = hasil.summary.total
-    document.getElementById('totalMasuk').textContent = hasil.summary.masuk
-    document.getElementById('totalTidakMasuk').textContent = hasil.summary.tidakMasuk
+    document.getElementById('totalRecordsRekap').textContent = hasil.summary.total
+    document.getElementById('totalMasukRekap').textContent = hasil.summary.masuk
+    document.getElementById('totalTidakMasukRekap').textContent = hasil.summary.tidakMasuk
 
     renderRekapInOutTable(hasil.detail, isAdmin)
 
@@ -169,6 +304,9 @@ function calculateRekapInOut(absensiData, isAdmin, currentUserName) {
 
 function renderRekapInOutTable(detail, isAdmin) {
   const el = document.getElementById('rekapInOutDetail')
+
+  // Store for download
+  window._rekapInOutDetail = detail
 
   if (!detail.length) {
     el.innerHTML = `
@@ -268,5 +406,5 @@ window.downloadExcelRekapInOut = function () {
   ]
 
   XLSX.utils.book_append_sheet(wb, ws, 'Rekap In/Out')
-  XLSX.writeFile(wb, `rekap-inout-${new Date().toISOString().split('T')[0]}.xlsx`)
+  XLSX.writeFile(wb, `rekap-inout-${window._selectedRekapKaryawan || 'all'}-${new Date().toISOString().split('T')[0]}.xlsx`)
 }
