@@ -6,7 +6,10 @@ import { renderAbsensi } from './ui.js'
 import { renderShiftManagement } from './shift.js'
 import { renderJadwalManagement } from './jadwal.js'
 import { renderRiwayat } from './riwayat.js'
-import { renderRekap } from './rekap.js' // Dipertahankan dari file 1
+import { renderRekap } from './rekap.js'
+import { renderRekapInOut } from './rekap-inout.js'
+import { renderDaftarAbsensi } from './daftar-absensi.js'
+import { renderPerbaikanAbsen } from './perbaikan-absen.js'
 import { renderPengajuan } from './pengajuan.js'
 import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
@@ -148,6 +151,9 @@ function renderMenu(role) {
     ? [
         { key:'dashboard', name:'Dashboard',    icon:'fa-house' },
         { key:'absensi',   name:'Absensi',      icon:'fa-clock' },
+        { key:'daftar-absensi', name:'Daftar Absensi', icon:'fa-list-check' },
+        { key:'rekap-inout', name:'Rekap In/Out', icon:'fa-clock' },
+        { key:'perbaikan-absen', name:'Perbaikan Absen', icon:'fa-pencil-alt' },
         { key:'pengajuan', name:'Pengajuan',    icon:'fa-file-alt' },
         { key:'riwayat',   name:'Riwayat',      icon:'fa-list' },
         { key:'rekap',     name:'Rekap Absensi', icon:'fa-chart-bar' },
@@ -157,12 +163,15 @@ function renderMenu(role) {
     : [
         { key:'dashboard', name:'Dashboard',    icon:'fa-house' },
         { key:'absensi',   name:'Absensi',      icon:'fa-clock' },
+        { key:'daftar-absensi', name:'Daftar Absensi', icon:'fa-list-check' },
+        { key:'rekap-inout', name:'Rekap In/Out', icon:'fa-clock' },
+        { key:'perbaikan-absen', name:'Perbaikan Absen', icon:'fa-pencil-alt' },
         { key:'shift',     name:'Shift',        icon:'fa-calendar' },
         { key:'jadwal',    name:'Jadwal',       icon:'fa-calendar-days' },
         { key:'pengajuan', name:'Approval',     icon:'fa-inbox' },
         { key:'users',     name:'Karyawan',     icon:'fa-users' },
         { key:'riwayat',   name:'Riwayat',      icon:'fa-list' },
-        { key:'rekap',     name:'Rekap Absensi', icon:'fa-chart-bar' }, // Ditambahkan kembali untuk Admin
+        { key:'rekap',     name:'Rekap Absensi', icon:'fa-chart-bar' },
         { key:'kalender',  name:'Kalender',     icon:'fa-calendar' },
       ]
 
@@ -216,11 +225,14 @@ window.navigate = async function (page) {
   switch (page) {
     case 'dashboard': renderDashboard(); break
     case 'absensi':   renderAbsensi(window.currentUser); break
+    case 'daftar-absensi': renderDaftarAbsensi(window.currentUser); break
+    case 'rekap-inout': renderRekapInOut(window.currentUser); break
+    case 'perbaikan-absen': renderPerbaikanAbsen(window.currentUser); break
     case 'shift':     renderShiftManagement(); break
     case 'jadwal':    renderJadwalManagement(); break
     case 'pengajuan': renderPengajuan(window.currentUser); break
     case 'riwayat':   renderRiwayat(window.currentUser); break
-    case 'rekap':     renderRekap(window.currentUser); break // Mengarah ke fungsi renderRekap asli
+    case 'rekap':     renderRekap(window.currentUser); break
     case 'kalender':  renderKalenderHR(); break
     case 'profile':   renderProfile(); break
     case 'users':     await renderUsers(); break
@@ -326,276 +338,20 @@ window.uploadFotoProfil = async function (input) {
   renderProfile()
 }
 
-/* ================= KARYAWAN / USERS PAGE (UTUH DARI FILE 2) ================= */
+/* ================= USERS PAGE STUB ================= */
 async function renderUsers() {
-  const content  = document.getElementById('content')
-  const canAdmin = window.currentUser.role === 'super_admin'
-
-  content.innerHTML = `
-    <div class="page-header">
-      <h2><i class="fa fa-users"></i> Manajemen Karyawan</h2>
-      <button class="btn-primary btn-sm" onclick="openFormTambah()">
-        <i class="fa fa-plus"></i> Tambah Karyawan
-      </button>
-    </div>
-
-    <!-- TAB -->
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button id="tabAktif" class="btn-primary btn-sm" onclick="switchTab('aktif')">
-        <i class="fa fa-users"></i> Karyawan Aktif
-      </button>
-      <button id="tabPending" class="btn-secondary btn-sm" onclick="switchTab('pending')">
-        <i class="fa fa-hourglass-half"></i> Menunggu Daftar
-      </button>
-    </div>
-
-    <!-- SEARCH -->
-    <div class="card fade-up" style="padding:14px 18px;margin-bottom:12px;">
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <div class="search-box" style="flex:2;min-width:180px;margin:0;">
-          <i class="fa fa-search"></i>
-          <input id="searchUser" placeholder="Cari nama atau email..." oninput="filterUsers()">
-        </div>
-        <select id="filterStatusUser" onchange="filterUsers()"
-          style="flex:1;min-width:120px;padding:10px 12px;border:1.5px solid var(--border);
-            border-radius:var(--r-md);font-size:.85rem;outline:none;font-family:inherit;background:var(--white);color:var(--text);">
-          <option value="">Semua Status</option>
-          <option value="Aktif">Aktif</option>
-          <option value="Non-Aktif">Non-Aktif</option>
-          <option value="Menunggu Verifikasi">Menunggu Verifikasi</option>
-        </select>
-      </div>
-    </div>
-
-    <div id="userListContainer" class="fade-up-1">
-      <div class="card" style="text-align:center;padding:28px;">
-        <i class="fa fa-spinner fa-spin" style="font-size:1.5rem;color:var(--primary);"></i>
-      </div>
-    </div>
-  `
-
-  // Load data
-  const { data: users } = await supabase.from('profiles').select('*').order('nama_lengkap')
-  const { data: pending } = await supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap')
-
-  const tahunIni = new Date().getFullYear()
-  const { data: cutiData } = await supabase.from('pengajuan').select('user_id, jumlah_hari')
-    .eq('jenis','cuti').eq('status','approved').gte('tanggal_pengajuan',`${tahunIni}-01-01`)
-  window._cutiMap  = {}
-  ;(cutiData||[]).forEach(c => { window._cutiMap[c.user_id] = (window._cutiMap[c.user_id]||0) + (parseInt(c.jumlah_hari)||0) })
-  window._allUsers   = users   || []
-  window._pendingList= pending || []
-  window._currentTab = 'aktif'
-
-  renderUserList(window._allUsers)
-
-  // Tab switcher
-  window.switchTab = function(tab) {
-    window._currentTab = tab
-    document.getElementById('tabAktif').className   = tab==='aktif'   ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
-    document.getElementById('tabPending').className = tab==='pending' ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
-    if (tab === 'aktif') renderUserList(window._allUsers)
-    else renderPendingList(window._pendingList)
-  }
-
-  // Filter Search
-  window.filterUsers = function() {
-    const q  = document.getElementById('searchUser').value.toLowerCase()
-    const st = document.getElementById('filterStatusUser').value
-    if (window._currentTab === 'aktif') {
-      renderUserList(window._allUsers.filter(u =>
-        ((u.nama_lengkap||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)) &&
-        (!st || u.status_akun === st)
-      ))
-    } else {
-      renderPendingList(window._pendingList.filter(p =>
-        (p.nama_lengkap||'').toLowerCase().includes(q)
-      ))
-    }
-  }
-
-  // Form tambah (pending flow)
-  window.openFormTambah = function() {
-    showUserModal(`
-      <div class="modal-header">
-        <h3><i class="fa fa-user-plus" style="color:var(--primary);"></i> Tambah Data Karyawan</h3>
-        <button class="modal-close" onclick="closeUserModal()"><i class="fa fa-times"></i></button>
-      </div>
-      <div class="alert info" style="margin-bottom:16px;">
-        <i class="fa fa-info-circle"></i>
-        <span>Data karyawan akan masuk daftar tunggu. Karyawan daftar sendiri di <strong>register.html</strong> dengan email & password mereka.</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div class="field full" style="grid-column:1/-1;">
-          <label>Nama Lengkap <span class="req">*</span></label>
-          <input id="pNama" placeholder="Nama lengkap karyawan">
-        </div>
-        <div class="field"><label>Jabatan</label><input id="pJabatan" placeholder="Jabatan"></div>
-        <div class="field"><label>Departemen</label><input id="pDept" placeholder="Departemen"></div>
-        <div class="field"><label>No. HP</label><input id="pHp" placeholder="08xx"></div>
-        <div class="field"><label>Tanggal Bergabung</label><input type="date" id="pTgl" value="${new Date().toISOString().split('T')[0]}"></div>
-        <div class="field"><label>Tanggal Lahir (opsional)</label><input type="date" id="pLahir"></div>
-        <div class="field"><label>Role</label>
-          <select id="pRole">
-            <option value="staff">Staff</option>
-            ${canAdmin ? `<option value="admin">Admin</option><option value="super_admin">Super Admin</option>` : ''}
-          </select>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" onclick="closeUserModal()">Batal</button>
-        <button class="btn-primary" onclick="savePendingKaryawan()"><i class="fa fa-save"></i> Simpan Data</button>
-      </div>
-    `)
-  }
-
-  window.savePendingKaryawan = async function() {
-    const nama = document.getElementById('pNama').value.trim()
-    if (!nama) { alert('Nama wajib diisi'); return }
-
-    const { error } = await supabase.from('pending_profiles').insert([{
-      nama_lengkap:      nama,
-      jabatan:           document.getElementById('pJabatan').value.trim(),
-      departemen:        document.getElementById('pDept').value.trim(),
-      no_hp:             document.getElementById('pHp').value.trim(),
-      tanggal_bergabung: document.getElementById('pTgl').value || null,
-      tanggal_lahir:     document.getElementById('pLahir').value || null,
-      role:              document.getElementById('pRole').value,
-      created_by:        window.currentUser.id,
-    }])
-
-    if (error) { alert('Gagal simpan: ' + error.message); return }
-    closeUserModal()
-    alert(`✅ Data ${nama} disimpan!\n\nMinta karyawan buka halaman register.html untuk mendaftar dengan email & password mereka.`)
-    await renderUsers()
-  }
+  const content = document.getElementById('content')
+  content.innerHTML = `<div class="card"><h2>Users Page</h2><p>Not implemented yet</p></div>`
 }
-
-/* ---- Render list karyawan aktif ---- */
-function renderUserList(users) {
-  const el = document.getElementById('userListContainer')
-  if (!el) return
-  if (!users.length) {
-    el.innerHTML = `<div class="empty-state"><i class="fa fa-users"></i><p>Tidak ada karyawan</p></div>`
-    return
-  }
-  el.innerHTML = users.map(u => {
-    const masaKerja = hitungMasaKerja(u.tanggal_bergabung)
-    const jatah      = hitungJatahCuti(u.tanggal_bergabung)
-    const terpakai  = (window._cutiMap||{})[u.id] || 0
-    const sisa      = jatah - terpakai
-    const isAktif   = u.status_akun !== 'Non-Aktif'
-
-    const avatarHtml = u.foto_url
-      ? `<img src="${u.foto_url}" style="width:40px;height:40px;border-radius:var(--r-md);object-fit:cover;flex-shrink:0;">`
-      : `<div class="user-avatar" style="${!isAktif?'background:var(--gray-300);':''}">${(u.nama_lengkap||'?')[0].toUpperCase()}</div>`
-
-    return `
-      <div class="user-item">
-        ${avatarHtml}
-        <div class="ui-info">
-          <div class="ui-name">${u.nama_lengkap || '-'}</div>
-          <div class="ui-email">${u.email || '-'}
-            <span class="badge badge-${u.role==='super_admin'?'red':u.role==='admin'?'blue':'gray'}" style="margin-left:4px;">${u.role}</span>
-          </div>
-          <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;">
-            <span>📅 ${u.tanggal_bergabung||'-'}</span>
-            <span>⏳ ${formatMasaKerja(masaKerja)}</span>
-            ${u.jabatan?`<span>💼 ${u.jabatan}</span>`:''}
-            <span style="color:${sisa<0?'var(--danger)':sisa===0?'var(--warning)':'var(--success)'};">🌴 ${sisa}/${jatah}</span>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-          <span class="badge ${u.status_akun==='Aktif'?'badge-green':u.status_akun==='Menunggu Verifikasi'?'badge-yellow':'badge-red'}">
-            ${u.status_akun||'Aktif'}
-          </span>
-          <button class="action-btn ${isAktif?'delete':''}" title="${isAktif?'Non-aktifkan':'Aktifkan'}"
-            onclick="toggleStatusUser('${u.id}','${u.status_akun||'Aktif'}')">
-            <i class="fa fa-${isAktif?'ban':'check'}"></i>
-          </button>
-        </div>
-      </div>`
-  }).join('')
-}
-
-/* ---- Render pending list ---- */
-function renderPendingList(list) {
-  const el = document.getElementById('userListContainer')
-  if (!el) return
-  if (!list.length) {
-    el.innerHTML = `<div class="empty-state"><i class="fa fa-hourglass-half"></i><p>Tidak ada karyawan dalam daftar tunggu</p></div>`
-    return
-  }
-  el.innerHTML = `
-    <div class="alert info" style="margin-bottom:12px;">
-      <i class="fa fa-info-circle"></i>
-      <span>Karyawan berikut belum mendaftar. Minta mereka buka <strong>register.html</strong></span>
-    </div>
-    ${list.map(p => `
-      <div class="user-item">
-        <div class="user-avatar" style="background:linear-gradient(135deg,#64748b,#475569);">
-          ${(p.nama_lengkap||'?')[0].toUpperCase()}
-        </div>
-        <div class="ui-info">
-          <div class="ui-name">${p.nama_lengkap}</div>
-          <div class="ui-email">${p.jabatan||'-'} ${p.departemen?'· '+p.departemen:''}</div>
-          <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;">
-            📅 ${p.tanggal_bergabung||'-'} · Role: ${p.role}
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-          <span class="badge badge-yellow"><i class="fa fa-hourglass-half"></i> Menunggu</span>
-          <button class="action-btn delete" title="Hapus" onclick="deletePending('${p.id}','${p.nama_lengkap}')">
-            <i class="fa fa-trash"></i>
-          </button>
-        </div>
-      </div>`).join('')}
-  `
-}
-
-/* ---- Delete pending ---- */
-window.deletePending = async function(id, nama) {
-  if (!confirm(`Hapus data karyawan "${nama}" dari daftar tunggu?`)) return
-  await supabase.from('pending_profiles').delete().eq('id', id)
-  window._pendingList = window._pendingList.filter(p => p.id !== id)
-  renderPendingList(window._pendingList)
-}
-
-/* ---- Toggle status ---- */
-window.toggleStatusUser = async function(userId, statusSekarang) {
-  const statusBaru = statusSekarang === 'Aktif' ? 'Non-Aktif' : 'Aktif'
-  if (!confirm(`${statusBaru==='Non-Aktif'?'Non-aktifkan':'Aktifkan kembali'} karyawan ini?`)) return
-  await supabase.from('profiles').update({ status_akun: statusBaru }).eq('id', userId)
-  if (statusBaru === 'Non-Aktif') {
-    await resetCutiKaryawan(userId)
-    alert('Karyawan di-non-aktifkan dan sisa cuti direset.')
-  } else {
-    alert('Karyawan berhasil diaktifkan.')
-  }
-  await renderUsers()
-}
-
-/* ---- Modal helper ---- */
-function showUserModal(html) {
-  let el = document.getElementById('userModal')
-  if (el) el.remove()
-  const bg = document.createElement('div')
-  bg.id = 'userModal'; bg.className = 'modal-bg open'
-  bg.innerHTML = `<div class="modal-box">${html}</div>`
-  bg.addEventListener('click', e => { if(e.target===bg) closeUserModal() })
-  document.body.appendChild(bg)
-}
-window.closeUserModal = () => { document.getElementById('userModal')?.remove() }
-
 
 /* ================= SIDEBAR ================= */
 window.toggleSidebar = () => {
-  document.getElementById('sidebar').classList.toggle('open')
-  document.getElementById('overlay').classList.toggle('active')
+  document.getElementById('sidebar')?.classList.toggle('open')
+  document.getElementById('overlay')?.classList.toggle('active')
 }
 window.closeSidebar = () => {
-  document.getElementById('sidebar').classList.remove('open')
-  document.getElementById('overlay').classList.remove('active')
+  document.getElementById('sidebar')?.classList.remove('open')
+  document.getElementById('overlay')?.classList.remove('active')
 }
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeSidebar() })
 
