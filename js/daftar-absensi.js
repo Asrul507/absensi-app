@@ -112,15 +112,7 @@ async function renderDaftarAbsensiCards(absensiData, isAdmin, user) {
   let html = ''
 
   for (const absen of absensiData) {
-    // Get shift info from jadwal
-    const { data: jadwal } = await supabase
-      .from('jadwal')
-      .select('shift_code, nama_shift')
-      .eq('user_id', absen.user_id || user.id)
-      .eq('tanggal', absen.tanggal)
-      .maybeSingle()
-
-    const shiftName = jadwal?.nama_shift || 'Regular'
+    const shiftName = 'Regular' // Default, karena jadwal query bermasalah
     const jamMasuk = absen.waktu_masuk ? new Date(absen.waktu_masuk).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
     const jamPulang = absen.waktu_pulang ? new Date(absen.waktu_pulang).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
 
