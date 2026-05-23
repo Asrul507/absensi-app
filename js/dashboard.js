@@ -10,7 +10,7 @@ export async function renderDashboard() {
     return
   }
 
-  // Get profile for display
+  // Get profile
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
@@ -18,11 +18,9 @@ export async function renderDashboard() {
     .maybeSingle()
 
   const fullName = profile?.nama_lengkap || user.email
-  const jabatan = profile?.jabatan || 'Staff'
-  const fotoUrl = profile?.foto_url || ''
   const sisaCuti = profile?.sisa_cuti || 0
 
-  // Default date range (current month)
+  // Date range (current month)
   const now = new Date()
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
@@ -48,92 +46,119 @@ export async function renderDashboard() {
 
   content.innerHTML = `
     <!-- HEADER -->
-    <div style="padding: 20px 0; margin-bottom: 24px;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-        <div>
-          <h1 style="font-size: 1.5rem; font-weight: 900; color: #0f172a; margin: 0;">Genius HR</h1>
-          <p style="font-size: .85rem; color: #64748b; margin: 4px 0 0;">Bring value for better life</p>
-        </div>
-        <div style="text-align: right;">
-          <img src="${fotoUrl || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2256%22 height=%2256%22%3E%3Ccircle cx=%2228%22 cy=%2228%22 r=%2224%22 fill=%22%232563eb%22 opacity=%220.2%22/%3E%3C/svg%3E'}" 
-            style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary);">
-        </div>
-      </div>
+    <div class="page-header" style="margin-bottom: 20px;">
+      <h2 style="margin: 0;"><i class="fa fa-tachometer-alt"></i> Dashboard</h2>
+    </div>
 
-      <!-- USER INFO -->
-      <div class="card" style="padding: 16px; background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);">
-        <div style="color: #fff;">
-          <div style="font-size: 1.1rem; font-weight: 900;">${fullName}</div>
-          <div style="font-size: .85rem; color: rgba(255,255,255,0.7); margin-top: 2px;">${jabatan}</div>
-          <div style="display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2);">
-            <div>
-              <div style="font-size: .7rem; color: rgba(255,255,255,0.7);">SALDO CUTI</div>
-              <div style="font-size: 1.3rem; font-weight: 900;">${sisaCuti}</div>
-            </div>
-          </div>
+    <!-- USER INFO CARD -->
+    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+          <div style="font-weight: 800; font-size: 1.1rem;">${fullName}</div>
+          <div style="font-size: .8rem; color: rgba(255,255,255,0.8); margin-top: 6px;">Saldo Cuti: <strong>${sisaCuti} hari</strong></div>
         </div>
+        <div style="text-align: right; font-size: 2.2rem; opacity: 0.3;">👔</div>
       </div>
     </div>
 
     <!-- FAVORITE MENU -->
-    <div style="margin-bottom: 24px;">
-      <div style="font-size: .85rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Favorit</div>
-      <div style="display: flex; gap: 10px; justify-content: space-around; flex-wrap: wrap;">
-        <button onclick="window.navigate('absensi')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #fff3cd; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
-          <div style="font-size: 1.8rem; margin-bottom: 6px;">✓</div>
-          <div style="font-size: .75rem; font-weight: 700; color: #92400e;">Check In</div>
+    <div style="margin-bottom: 20px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 10px;">
+        <button onclick="window.navigate('absensi')" class="fav-btn" style="padding: 14px; background: #fef3c7; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-sign-in-alt"></i></div>
+          <div style="font-size: .7rem; font-weight: 700; color: #92400e;">Masuk</div>
         </button>
-        <button onclick="window.navigate('absensi')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #dbeafe; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
-          <div style="font-size: 1.8rem; margin-bottom: 6px;">↪</div>
-          <div style="font-size: .75rem; font-weight: 700; color: #0284c7;">Check Out</div>
+        <button onclick="window.navigate('absensi')" class="fav-btn" style="padding: 14px; background: #dbeafe; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-sign-out-alt"></i></div>
+          <div style="font-size: .7rem; font-weight: 700; color: #0284c7;">Keluar</div>
         </button>
-        <button onclick="window.navigate('pengajuan')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #e0e7ff; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
-          <div style="font-size: 1.8rem; margin-bottom: 6px;">📋</div>
-          <div style="font-size: .75rem; font-weight: 700; color: #4f46e5;">Pengajuan</div>
+        <button onclick="window.navigate('pengajuan')" class="fav-btn" style="padding: 14px; background: #e0e7ff; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-file-alt"></i></div>
+          <div style="font-size: .7rem; font-weight: 700; color: #4f46e5;">Pengajuan</div>
         </button>
-        <button onclick="window.navigate('rekap-inout')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #f5d4d4; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
-          <div style="font-size: 1.8rem; margin-bottom: 6px;">⏰</div>
-          <div style="font-size: .75rem; font-weight: 700; color: #dc2626;">Riwayat</div>
+        <button onclick="window.navigate('rekap-inout')" class="fav-btn" style="padding: 14px; background: #fee2e2; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-history"></i></div>
+          <div style="font-size: .7rem; font-weight: 700; color: #dc2626;">Riwayat</div>
         </button>
-        <button onclick="window.navigate('daftar-absensi')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #dcfce7; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
-          <div style="font-size: 1.8rem; margin-bottom: 6px;">📊</div>
-          <div style="font-size: .75rem; font-weight: 700; color: #166534;">Data</div>
+        <button onclick="window.navigate('daftar-absensi')" class="fav-btn" style="padding: 14px; background: #dcfce7; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-chart-bar"></i></div>
+          <div style="font-size: .7rem; font-weight: 700; color: #166534;">Absensi</div>
         </button>
       </div>
     </div>
 
     <!-- TOTAL JAM KERJA -->
-    <div class="card fade-up" style="padding: 24px; margin-bottom: 24px; text-align: center;">
-      <div style="font-size: .85rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 16px;">Total Jam Kerja Saya</div>
-      <div style="position: relative; width: 200px; height: 200px; margin: 0 auto;">
-        <canvas id="jamKerjaChart" style="max-width: 100%;"></canvas>
+    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; text-align: center;">
+      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 14px;">Total Jam Kerja</div>
+      <div style="position: relative; width: 160px; height: 160px; margin: 0 auto;">
+        <canvas id="jamKerjaChart"></canvas>
         <div id="jamKerjaChart-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;"></div>
       </div>
     </div>
 
-    <!-- AKTIVITAS SAYA -->
-    <div class="card fade-up" style="padding: 24px; margin-bottom: 24px;">
-      <div style="font-size: .85rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Aktivitas Saya</div>
-      <div style="font-size: .75rem; color: var(--text-muted); margin-bottom: 16px;">
+    <!-- AKTIVITAS SAYA - SCROLLABLE -->
+    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px;">
+      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Aktivitas Saya (Jam Datang & Pulang)</div>
+      <div style="font-size: .75rem; color: var(--text-muted); margin-bottom: 12px;">
         ${firstDay.toLocaleDateString('id-ID')} - ${lastDay.toLocaleDateString('id-ID')}
       </div>
-      <div style="position: relative; width: 100%; height: 300px;">
-        <canvas id="aktivitasChart"></canvas>
+      <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+        <div style="position: relative; width: 100%; min-width: 600px; height: 300px;">
+          <canvas id="aktivitasChart"></canvas>
+        </div>
       </div>
     </div>
 
-    <!-- ABSENSI DISTRIBUTION -->
-    <div class="card fade-up" style="padding: 24px;">
-      <div style="font-size: .85rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 16px;">Distribusi Absensi</div>
-      <div style="position: relative; width: 100%; height: 300px;">
-        <canvas id="absensiChart"></canvas>
+    <!-- DISTRIBUSI ABSENSI - 3 PIE CHARTS -->
+    <div style="margin-bottom: 20px;">
+      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Distribusi Absensi</div>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+        <!-- Kehadiran -->
+        <div class="card fade-up" style="padding: 14px;">
+          <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Kehadiran</div>
+          <div style="position: relative; width: 100%; height: 200px;">
+            <canvas id="absensiChartKehadiran"></canvas>
+          </div>
+        </div>
+
+        <!-- Absen Masuk -->
+        <div class="card fade-up" style="padding: 14px;">
+          <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Absen Masuk</div>
+          <div style="position: relative; width: 100%; height: 200px;">
+            <canvas id="absensiChartMasuk"></canvas>
+          </div>
+        </div>
+
+        <!-- Absen Pulang -->
+        <div class="card fade-up" style="padding: 14px;">
+          <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Absen Pulang</div>
+          <div style="position: relative; width: 100%; height: 200px;">
+            <canvas id="absensiChartPulang"></canvas>
+          </div>
+        </div>
       </div>
     </div>
 
     <style>
-      .favorite-btn:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+      .fav-btn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+      
+      .fav-btn:active {
+        transform: translateY(-1px);
+      }
+
+      @media (max-width: 768px) {
+        .fav-btn {
+          padding: 12px !important;
+          font-size: .7rem !important;
+        }
+        
+        .fav-btn div:first-child {
+          font-size: 1.4rem !important;
+        }
       }
     </style>
   `
@@ -152,10 +177,9 @@ export async function renderDashboard() {
 }
 
 async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
-  // Small delay to ensure DOM is ready
   setTimeout(() => {
     createTotalJamKerjaChart('jamKerjaChart', totalJamKerja)
     createAktivitasChart('aktivitasChart', userId, dateFrom, dateTo)
-    createAbsensiChart('absensiChart', userId, dateFrom, dateTo)
+    createAbsensiChart('absensiChartKehadiran', 'absensiChartMasuk', 'absensiChartPulang', userId, dateFrom, dateTo)
   }, 100)
 }
