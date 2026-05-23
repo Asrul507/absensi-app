@@ -13,6 +13,7 @@ import { renderPerbaikanAbsen } from './perbaikan-absen.js'
 import { renderPengajuan } from './pengajuan.js'
 import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
+import './chart-helpers.js'
 
 /* ================= GLOBAL ================= */
 window.currentUser  = null
