@@ -141,12 +141,18 @@ export async function renderPengajuan(user) {
               &nbsp;·&nbsp; Diajukan: ${i.tanggal_pengajuan || '-'}
             </div>
             ${i.file ? `<a href="${i.file}" target="_blank" style="font-size:.8rem;color:var(--primary);"><i class="fa fa-paperclip"></i> Lihat Surat</a>` : ''}
+            ${i.catatan_approval ? `
+              <div style="margin-top: 12px; padding: 10px; background: #f3f4f6; border-left: 3px solid var(--primary); border-radius: 4px; font-size: .8rem;">
+                <strong style="color: var(--text-muted);">📝 Catatan Admin:</strong>
+                <div style="color: var(--text); margin-top: 4px;">${i.catatan_approval}</div>
+              </div>
+            ` : ''}
             ${isAdmin && i.status === 'pending' ? `
               <div class="pq-actions">
-                <button class="btn-primary btn-sm" onclick="approvePengajuan('${i.id}')">
+                <button class="btn-primary btn-sm" onclick="showApprovalModal('${i.id}', 'approve')">
                   <i class="fa fa-check"></i> Approve
                 </button>
-                <button class="btn-danger btn-sm" onclick="rejectPengajuan('${i.id}')">
+                <button class="btn-danger btn-sm" onclick="showApprovalModal('${i.id}', 'reject')">
                   <i class="fa fa-times"></i> Tolak
                 </button>
               </div>
@@ -263,48 +269,123 @@ function labelJenis(jenis) {
   return jenis || '-'
 }
 
-/* ================= APPROVE ================= */
-window.approvePengajuan = async function(id) {
-  const { data: pengajuan, error } = await supabase.from('pengajuan').select('*').eq('id', id).single()
-  if (error || !pengajuan) { alert('Data tidak ditemukan'); return }
+/* ================= SHOW APPROVAL MODAL ================= */
+window.showApprovalModal = function(id, type) {
+  const modal = document.createElement('div')
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+  `
 
-  const { user_id, jenis, tanggal_mulai, jumlah_hari } = pengajuan
+  const box = document.createElement('div')
+  box.style.cssText = `
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 450px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  `
 
-  // Update status
-  await supabase.from('pengajuan').update({ status: 'approved' }).eq('id', id)
+  const title = type === 'approve' ? 'Setujui Pengajuan' : 'Tolak Pengajuan'
+  const btnColor = type === 'approve' ? 'btn-primary' : 'btn-danger'
+  const btnText = type === 'approve' ? 'Setujui' : 'Tolak'
+  const placeholder = type === 'approve' ? 'Tambah catatan (opsional)...' : 'Alasan penolakan (wajib)...'
 
-  // Update jadwal per hari
-  for (let i = 0; i < (jumlah_hari || 1); i++) {
-    const date = new Date(tanggal_mulai)
-    date.setDate(date.getDate() + i)
-    const tgl = date.toISOString().split('T')[0]
+  box.innerHTML = `
+    <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 16px;">
+      ${type === 'approve' ? '✅' : '❌'} ${title}
+    </h3>
+    <textarea id="catatanApproval" placeholder="${placeholder}"
+      style="width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+        font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
+    <div style="display: flex; gap: 10px;">
+      <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-secondary" style="flex: 1;">
+        Batal
+      </button>
+      <button onclick="submitApprovalWithComment('${id}', '${type}', document.getElementById('catatanApproval').value); this.parentElement.parentElement.parentElement.remove();" class="${btnColor}" style="flex: 1;">
+        ${btnText}
+      </button>
+    </div>
+  `
 
-    const { data: existing } = await supabase.from('jadwal').select('id').eq('user_id', user_id).eq('tanggal', tgl).maybeSingle()
-
-    if (existing) {
-      await supabase.from('jadwal').update({ status_override: jenis, shift_id: null, pengajuan_id: id }).eq('id', existing.id)
-    } else {
-      await supabase.from('jadwal').insert([{ user_id, tanggal: tgl, shift_id: null, status_override: jenis, pengajuan_id: id }])
-    }
-  }
-
-  // Sync sisa cuti jika jenis cuti
-  if (jenis === 'cuti') {
-    const { data: prof } = await supabase.from('profiles').select('tanggal_bergabung').eq('id', user_id).single()
-    if (prof) await syncSisaCutiProfile(user_id, prof.tanggal_bergabung)
-  }
-
-  alert('✅ Pengajuan disetujui!')
-  renderPengajuan(window.currentUser)
+  modal.appendChild(box)
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove()
+  })
+  document.body.appendChild(modal)
 }
 
-/* ================= REJECT ================= */
-window.rejectPengajuan = async function(id) {
-  if (!confirm('Tolak pengajuan ini?')) return
+window.submitApprovalWithComment = async function(id, type, catatan) {
+  // Validation
+  if (type === 'reject' && !catatan.trim()) {
+    alert('⚠ Alasan penolakan wajib diisi')
+    return
+  }
 
-  const { error } = await supabase.from('pengajuan').update({ status: 'rejected' }).eq('id', id)
-  if (error) { alert('Gagal menolak'); return }
+  try {
+    if (type === 'approve') {
+      // Get pengajuan data
+      const { data: pengajuan } = await supabase.from('pengajuan').select('*').eq('id', id).single()
+      if (!pengajuan) return
 
-  alert('Pengajuan ditolak')
-  renderPengajuan(window.currentUser)
+      const { user_id, jenis, tanggal_mulai, jumlah_hari } = pengajuan
+
+      // Update with approval
+      await supabase.from('pengajuan').update({
+        status: 'approved',
+        catatan_approval: catatan || null,
+        approved_at: new Date().toISOString()
+      }).eq('id', id)
+
+      // Update jadwal per hari
+      for (let i = 0; i < (jumlah_hari || 1); i++) {
+        const date = new Date(tanggal_mulai)
+        date.setDate(date.getDate() + i)
+        const tgl = date.toISOString().split('T')[0]
+
+        const { data: existing } = await supabase.from('jadwal').select('id').eq('user_id', user_id).eq('tanggal', tgl).maybeSingle()
+
+        if (existing) {
+          await supabase.from('jadwal').update({ status_override: jenis, shift_id: null, pengajuan_id: id }).eq('id', existing.id)
+        } else {
+          await supabase.from('jadwal').insert([{ user_id, tanggal: tgl, shift_id: null, status_override: jenis, pengajuan_id: id }])
+        }
+      }
+
+      // Sync cuti if applicable
+      if (jenis === 'cuti') {
+        const { data: prof } = await supabase.from('profiles').select('tanggal_bergabung').eq('id', user_id).single()
+        if (prof) await syncSisaCutiProfile(user_id, prof.tanggal_bergabung)
+      }
+
+      alert('✅ Pengajuan disetujui!')
+
+    } else {
+      // Reject
+      await supabase.from('pengajuan').update({
+        status: 'rejected',
+        catatan_approval: catatan,
+        approved_at: new Date().toISOString()
+      }).eq('id', id)
+
+      alert('❌ Pengajuan ditolak')
+    }
+
+    renderPengajuan(window.currentUser)
+
+  } catch (err) {
+    alert('Error: ' + err.message)
+  }
+}
+
+/* ================= OLD FUNCTIONS (DEPRECATED) ================= */
+window.approvePengajuan = function(id) {
+  showApprovalModal(id, 'approve')
+}
+
+window.rejectPengajuan = function(id) {
+  showApprovalModal(id, 'reject')
 }
