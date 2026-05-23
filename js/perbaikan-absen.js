@@ -31,14 +31,14 @@ export async function renderPerbaikanAbsen(user) {
 
         <div class="field">
           <label>Tanggal <span style="color: var(--danger);">*</span></label>
-          <input type="date" id="inputTanggal"
+          <input type="date" id="inputTanggal" onchange="loadJadwalForDate(window.currentUser)"
             style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
               font-size: .85rem; font-family: inherit; outline: none;">
         </div>
 
         <div class="field">
           <label>Jenis Perbaikan <span style="color: var(--danger);">*</span></label>
-          <select id="inputJenis"
+          <select id="inputJenis" onchange="updatePerbaikanForm()"
             style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
               font-size: .85rem; font-family: inherit; outline: none;">
             <option value="">-- Pilih Jenis --</option>
@@ -48,21 +48,57 @@ export async function renderPerbaikanAbsen(user) {
           </select>
         </div>
 
-        <div class="field">
-          <label>Jam yang Seharusnya <span style="color: var(--danger);">*</span></label>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div>
-              <label style="font-size: .75rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Jam Masuk</label>
-              <input type="time" id="inputJamMasuk"
-                style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
-                  font-size: .85rem; font-family: inherit; outline: none;">
+        <!-- Kondisional: Lupa Masuk/Pulang -->
+        <div id="formJamShouldBe" style="display: none;">
+          <div class="field">
+            <label>Jam yang Seharusnya (dari jadwal) <span style="color: var(--text-muted);">Auto-filled</span></label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: .75rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Jam Masuk</label>
+                <input type="time" id="inputJamMasukShouldBe" disabled
+                  style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+                    font-size: .85rem; font-family: inherit; outline: none; background: #f3f4f6;">
+              </div>
+              <div>
+                <label style="font-size: .75rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Jam Pulang</label>
+                <input type="time" id="inputJamPulangShouldBe" disabled
+                  style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+                    font-size: .85rem; font-family: inherit; outline: none; background: #f3f4f6;">
+              </div>
             </div>
-            <div>
-              <label style="font-size: .75rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Jam Pulang</label>
-              <input type="time" id="inputJamPulang"
-                style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
-                  font-size: .85rem; font-family: inherit; outline: none;">
+          </div>
+
+          <div class="field">
+            <label>Jam yang Diinput (Isi Jika Lupa) <span style="color: var(--danger);">*</span></label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: .75rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Jam Masuk Anda</label>
+                <input type="time" id="inputJamMasukActual"
+                  style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+                    font-size: .85rem; font-family: inherit; outline: none;">
+              </div>
+              <div>
+                <label style="font-size: .75rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Jam Pulang Anda</label>
+                <input type="time" id="inputJamPulangActual"
+                  style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+                    font-size: .85rem; font-family: inherit; outline: none;">
+              </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Kondisional: Perubahan Shift -->
+        <div id="formPerubahanShift" style="display: none;">
+          <div class="field">
+            <label>Shift Baru <span style="color: var(--danger);">*</span></label>
+            <select id="inputShiftBaru"
+              style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+                font-size: .85rem; font-family: inherit; outline: none;">
+              <option value="">-- Pilih Shift --</option>
+              <option value="pagi">Shift Pagi (07:00 - 15:00)</option>
+              <option value="sore">Shift Sore (15:00 - 23:00)</option>
+              <option value="malam">Shift Malam (23:00 - 07:00)</option>
+            </select>
           </div>
         </div>
 
@@ -109,6 +145,42 @@ export async function renderPerbaikanAbsen(user) {
   }
 }
 
+window.updatePerbaikanForm = function () {
+  const jenis = document.getElementById('inputJenis').value
+  
+  document.getElementById('formJamShouldBe').style.display = (jenis === 'lupa_masuk' || jenis === 'lupa_pulang') ? 'block' : 'none'
+  document.getElementById('formPerubahanShift').style.display = jenis === 'perubahan_shift' ? 'block' : 'none'
+}
+
+window.loadJadwalForDate = async function (user) {
+  const tanggal = document.getElementById('inputTanggal').value
+  if (!tanggal) return
+
+  try {
+    const { data: jadwal } = await supabase
+      .from('jadwal')
+      .select('shift_code')
+      .eq('user_id', user.id)
+      .eq('tanggal', tanggal)
+      .maybeSingle()
+
+    // Map shift code to time
+    const shiftMap = {
+      '2': { jam_masuk: '07:00', jam_pulang: '15:00' },
+      '3': { jam_masuk: '15:00', jam_pulang: '23:00' },
+      '4': { jam_masuk: '23:00', jam_pulang: '07:00' },
+    }
+
+    const shiftData = shiftMap[jadwal?.shift_code] || { jam_masuk: '07:00', jam_pulang: '15:00' }
+
+    document.getElementById('inputJamMasukShouldBe').value = shiftData.jam_masuk
+    document.getElementById('inputJamPulangShouldBe').value = shiftData.jam_pulang
+
+  } catch (err) {
+    console.error('Error load jadwal:', err)
+  }
+}
+
 window.switchPerbaikanTab = async function (tab) {
   document.getElementById('tabBuat').className = tab === 'buat' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
   document.getElementById('tabDaftar').className = tab === 'daftar' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
@@ -135,8 +207,6 @@ window.switchPerbaikanTab = async function (tab) {
 window.submitPerbaikanAbsen = async function (user) {
   const tanggal = document.getElementById('inputTanggal').value
   const jenis = document.getElementById('inputJenis').value
-  const jamMasuk = document.getElementById('inputJamMasuk').value
-  const jamPulang = document.getElementById('inputJamPulang').value
   const keterangan = document.getElementById('inputKeterangan').value
   const msgEl = document.getElementById('msgStatusBuat')
   const btn = event.target
@@ -160,21 +230,29 @@ window.submitPerbaikanAbsen = async function (user) {
     return
   }
 
+  let payload = {
+    user_id: user.id,
+    nama: user.nama_lengkap,
+    tanggal,
+    jenis,
+    keterangan,
+    status: 'pending',
+    created_at: new Date().toISOString()
+  }
+
+  // Tambah data sesuai jenis
+  if (jenis === 'lupa_masuk' || jenis === 'lupa_pulang') {
+    payload.jam_masuk = document.getElementById('inputJamMasukActual').value || null
+    payload.jam_pulang = document.getElementById('inputJamPulangActual').value || null
+  } else if (jenis === 'perubahan_shift') {
+    payload.shift_baru = document.getElementById('inputShiftBaru').value
+  }
+
   btn.disabled = true
   btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mengirim...'
 
   try {
-    const { error } = await supabase.from('perbaikan_absen').insert([{
-      user_id: user.id,
-      nama: user.nama_lengkap,
-      tanggal,
-      jenis,
-      jam_masuk: jamMasuk || null,
-      jam_pulang: jamPulang || null,
-      keterangan,
-      status: 'pending',
-      created_at: new Date().toISOString()
-    }])
+    const { error } = await supabase.from('perbaikan_absen').insert([payload])
 
     if (error) throw error
 
@@ -185,9 +263,11 @@ window.submitPerbaikanAbsen = async function (user) {
     setTimeout(() => {
       document.getElementById('inputTanggal').value = ''
       document.getElementById('inputJenis').value = ''
-      document.getElementById('inputJamMasuk').value = ''
-      document.getElementById('inputJamPulang').value = ''
+      document.getElementById('inputJamMasukActual').value = ''
+      document.getElementById('inputJamPulangActual').value = ''
+      document.getElementById('inputShiftBaru').value = ''
       document.getElementById('inputKeterangan').value = ''
+      updatePerbaikanForm()
     }, 1500)
 
   } catch (err) {
@@ -252,6 +332,7 @@ async function loadDaftarRequest(user) {
           </div>
           ${req.jam_masuk ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Masuk: ${req.jam_masuk}</div>` : ''}
           ${req.jam_pulang ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Pulang: ${req.jam_pulang}</div>` : ''}
+          ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Shift Baru: ${req.shift_baru}</div>` : ''}
           ${req.catatan_approval ? `<div style="font-size: .8rem; color: var(--warning); margin-top: 8px;"><strong>Catatan Admin:</strong> ${req.catatan_approval}</div>` : ''}
         </div>
       `
@@ -313,6 +394,7 @@ async function loadApprovalRequest() {
           </div>
           ${req.jam_masuk ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Masuk: ${req.jam_masuk}</div>` : ''}
           ${req.jam_pulang ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Pulang: ${req.jam_pulang}</div>` : ''}
+          ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Shift Baru: ${req.shift_baru}</div>` : ''}
           
           <div style="display: flex; gap: 10px; margin-top: 12px;">
             <button onclick="approvePerbaikanRequest('${req.id}', true)" class="btn-success btn-sm" style="flex: 1;">
