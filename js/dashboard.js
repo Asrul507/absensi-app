@@ -51,38 +51,38 @@ export async function renderDashboard() {
     </div>
 
     <!-- USER INFO CARD -->
-    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white;">
+    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white; border: none;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
           <div style="font-weight: 800; font-size: 1.1rem;">${fullName}</div>
           <div style="font-size: .8rem; color: rgba(255,255,255,0.8); margin-top: 6px;">Saldo Cuti: <strong>${sisaCuti} hari</strong></div>
         </div>
-        <div style="text-align: right; font-size: 2.2rem; opacity: 0.3;">👔</div>
+        <div style="text-align: right; font-size: 2.2rem; opacity: 0.2;"><i class="fa fa-id-badge"></i></div>
       </div>
     </div>
 
     <!-- FAVORITE MENU -->
     <div style="margin-bottom: 20px;">
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 10px;">
-        <button onclick="window.navigate('absensi')" class="fav-btn" style="padding: 14px; background: #fef3c7; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+        <button onclick="window.navigate('absensi')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
           <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-sign-in-alt"></i></div>
-          <div style="font-size: .7rem; font-weight: 700; color: #92400e;">Masuk</div>
+          <div style="font-size: .7rem; font-weight: 700;">Masuk</div>
         </button>
-        <button onclick="window.navigate('absensi')" class="fav-btn" style="padding: 14px; background: #dbeafe; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+        <button onclick="window.navigate('absensi')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
           <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-sign-out-alt"></i></div>
-          <div style="font-size: .7rem; font-weight: 700; color: #0284c7;">Keluar</div>
+          <div style="font-size: .7rem; font-weight: 700;">Keluar</div>
         </button>
-        <button onclick="window.navigate('pengajuan')" class="fav-btn" style="padding: 14px; background: #e0e7ff; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+        <button onclick="window.navigate('pengajuan')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
           <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-file-alt"></i></div>
-          <div style="font-size: .7rem; font-weight: 700; color: #4f46e5;">Pengajuan</div>
+          <div style="font-size: .7rem; font-weight: 700;">Pengajuan</div>
         </button>
-        <button onclick="window.navigate('rekap-inout')" class="fav-btn" style="padding: 14px; background: #fee2e2; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+        <button onclick="window.navigate('rekap-inout')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
           <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-history"></i></div>
-          <div style="font-size: .7rem; font-weight: 700; color: #dc2626;">Riwayat</div>
+          <div style="font-size: .7rem; font-weight: 700;">Riwayat</div>
         </button>
-        <button onclick="window.navigate('daftar-absensi')" class="fav-btn" style="padding: 14px; background: #dcfce7; border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s;">
+        <button onclick="window.navigate('daftar-absensi')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
           <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-chart-bar"></i></div>
-          <div style="font-size: .7rem; font-weight: 700; color: #166534;">Absensi</div>
+          <div style="font-size: .7rem; font-weight: 700;">Absensi</div>
         </button>
       </div>
     </div>
