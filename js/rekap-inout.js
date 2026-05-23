@@ -7,6 +7,9 @@ export async function renderRekapInOut(user) {
   content.innerHTML = `
     <div class="page-header">
       <h2><i class="fa fa-clock"></i> Rekap In/Out</h2>
+      <button class="btn-primary btn-sm" onclick="downloadExcelRekapInOut()">
+        <i class="fa fa-download"></i> Download Excel
+      </button>
     </div>
 
     <!-- FILTER -->
@@ -105,6 +108,9 @@ window.applyRekapInOutFilter = async function (user) {
     // Calculate summary & render
     const hasil = calculateRekapInOut(absensiData || [], isAdmin, user.nama_lengkap)
 
+    // Store for download
+    window._rekapInOutDetail = hasil.detail
+
     // Update summary cards
     document.getElementById('totalRecords').textContent = hasil.summary.total
     document.getElementById('totalMasuk').textContent = hasil.summary.masuk
@@ -185,11 +191,20 @@ function renderRekapInOutTable(detail, isAdmin) {
               <th>Jam Masuk</th>
               <th>Jam Pulang</th>
               <th>Total Jam</th>
-              <th>Status</th>
+              <th>Keterangan</th>
             </tr>
           </thead>
           <tbody>
-            ${detail.map(d => `
+            ${detail.map(d => {
+              let keteranganDetail = d.status
+              
+              // Tambah info terlambat jika ada
+              if (d.status === 'Belum Pulang' && d.jamMasuk !== '-') {
+                const lateMin = Math.abs(new Date(d.jamMasuk).getHours() * 60 + new Date(d.jamMasuk).getMinutes() - (7 * 60))
+                if (lateMin > 5) keteranganDetail += ` (Terlambat ${lateMin}m)`
+              }
+              
+              return `
               <tr>
                 ${isAdmin ? `<td style="font-weight: 600;">${d.nama}</td>` : ''}
                 <td>${d.tanggal}</td>
@@ -206,11 +221,11 @@ function renderRekapInOutTable(detail, isAdmin) {
                     ${d.status === 'Belum Pulang' ? 'background: #fef3c7; color: #92400e;' : ''}
                     ${d.status === 'Tidak Absen' ? 'background: #fee2e2; color: #991b1b;' : ''}
                   ">
-                    ${d.status}
+                    ${keteranganDetail}
                   </span>
                 </td>
               </tr>
-            `).join('')}
+            `}).join('')}
           </tbody>
         </table>
       </div>
@@ -218,4 +233,40 @@ function renderRekapInOutTable(detail, isAdmin) {
   `
 
   el.innerHTML = tableHtml
+}
+
+window.downloadExcelRekapInOut = function () {
+  if (!window._rekapInOutDetail || !window._rekapInOutDetail.length) {
+    alert('Tidak ada data untuk didownload')
+    return
+  }
+
+  if (typeof XLSX === 'undefined') {
+    alert('Library XLSX belum dimuat')
+    return
+  }
+
+  const rows = window._rekapInOutDetail.map(d => ({
+    'Nama': d.nama,
+    'Tanggal': d.tanggal,
+    'Jam Masuk': d.jamMasuk,
+    'Jam Pulang': d.jamPulang,
+    'Total Jam': d.totalJam,
+    'Status': d.status
+  }))
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+
+  ws['!cols'] = [
+    { wch: 20 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 18 }
+  ]
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Rekap In/Out')
+  XLSX.writeFile(wb, `rekap-inout-${new Date().toISOString().split('T')[0]}.xlsx`)
 }
