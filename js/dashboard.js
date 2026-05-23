@@ -1,200 +1,161 @@
 import { supabase } from './supabase.js'
-import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti } from './cuti.js'
+import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
 
 export async function renderDashboard() {
   const content = document.getElementById('content')
   const user = window.currentUser
-  const role = user?.role || 'staff'
-  const today = new Date().toISOString().split('T')[0]
+
+  if (!user) {
+    content.innerHTML = `<div class="card"><p>Silakan login dulu</p></div>`
+    return
+  }
+
+  // Get profile for display
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const fullName = profile?.nama_lengkap || user.email
+  const jabatan = profile?.jabatan || 'Staff'
+  const fotoUrl = profile?.foto_url || ''
+  const sisaCuti = profile?.sisa_cuti || 0
+
+  // Default date range (current month)
+  const now = new Date()
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  const dateFrom = firstDay.toISOString().split('T')[0]
+  const dateTo = lastDay.toISOString().split('T')[0]
+
+  // Get total jam kerja
+  const { data: absensiMonth } = await supabase
+    .from('absensi')
+    .select('waktu_masuk, waktu_pulang')
+    .eq('nama', fullName)
+    .gte('tanggal', dateFrom)
+    .lte('tanggal', dateTo)
+
+  let totalJamKerja = 0
+  absensiMonth?.forEach(a => {
+    if (a.waktu_masuk && a.waktu_pulang) {
+      const masuk = new Date(a.waktu_masuk)
+      const pulang = new Date(a.waktu_pulang)
+      totalJamKerja += (pulang - masuk) / (1000 * 60 * 60)
+    }
+  })
 
   content.innerHTML = `
-    <div class="live-clock-card fade-up">
-      <div id="liveClock" class="live-clock">00:00:00</div>
-      <div id="liveDate" class="live-date">Loading...</div>
+    <!-- HEADER -->
+    <div style="padding: 20px 0; margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+        <div>
+          <h1 style="font-size: 1.5rem; font-weight: 900; color: #0f172a; margin: 0;">Genius HR</h1>
+          <p style="font-size: .85rem; color: #64748b; margin: 4px 0 0;">Bring value for better life</p>
+        </div>
+        <div style="text-align: right;">
+          <img src="${fotoUrl || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2256%22 height=%2256%22%3E%3Ccircle cx=%2228%22 cy=%2228%22 r=%2224%22 fill=%22%232563eb%22 opacity=%220.2%22/%3E%3C/svg%3E'}" 
+            style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary);">
+        </div>
+      </div>
+
+      <!-- USER INFO -->
+      <div class="card" style="padding: 16px; background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);">
+        <div style="color: #fff;">
+          <div style="font-size: 1.1rem; font-weight: 900;">${fullName}</div>
+          <div style="font-size: .85rem; color: rgba(255,255,255,0.7); margin-top: 2px;">${jabatan}</div>
+          <div style="display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2);">
+            <div>
+              <div style="font-size: .7rem; color: rgba(255,255,255,0.7);">SALDO CUTI</div>
+              <div style="font-size: 1.3rem; font-weight: 900;">${sisaCuti}</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="stats-grid fade-up-1">
-      <div class="stat-card blue"><div class="stat-icon"><i class="fa fa-users"></i></div><div class="stat-label">Total Staff</div><div class="stat-value" id="kpiTotal">-</div></div>
-      <div class="stat-card green"><div class="stat-icon"><i class="fa fa-check"></i></div><div class="stat-label">Hadir</div><div class="stat-value" id="kpiHadir">-</div></div>
-      <div class="stat-card yellow"><div class="stat-icon"><i class="fa fa-clock"></i></div><div class="stat-label">Belum Absen</div><div class="stat-value" id="kpiBelum">-</div></div>
-      <div class="stat-card red"><div class="stat-icon"><i class="fa fa-exclamation"></i></div><div class="stat-label">Terlambat</div><div class="stat-value" id="kpiTelat">-</div></div>
+
+    <!-- FAVORITE MENU -->
+    <div style="margin-bottom: 24px;">
+      <div style="font-size: .85rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Favorit</div>
+      <div style="display: flex; gap: 10px; justify-content: space-around; flex-wrap: wrap;">
+        <button onclick="window.navigate('absensi')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #fff3cd; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
+          <div style="font-size: 1.8rem; margin-bottom: 6px;">✓</div>
+          <div style="font-size: .75rem; font-weight: 700; color: #92400e;">Check In</div>
+        </button>
+        <button onclick="window.navigate('absensi')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #dbeafe; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
+          <div style="font-size: 1.8rem; margin-bottom: 6px;">↪</div>
+          <div style="font-size: .75rem; font-weight: 700; color: #0284c7;">Check Out</div>
+        </button>
+        <button onclick="window.navigate('pengajuan')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #e0e7ff; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
+          <div style="font-size: 1.8rem; margin-bottom: 6px;">📋</div>
+          <div style="font-size: .75rem; font-weight: 700; color: #4f46e5;">Pengajuan</div>
+        </button>
+        <button onclick="window.navigate('rekap-inout')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #f5d4d4; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
+          <div style="font-size: 1.8rem; margin-bottom: 6px;">⏰</div>
+          <div style="font-size: .75rem; font-weight: 700; color: #dc2626;">Riwayat</div>
+        </button>
+        <button onclick="window.navigate('daftar-absensi')" class="favorite-btn" style="flex: 1; min-width: 80px; padding: 16px; background: #dcfce7; border: none; border-radius: 16px; text-align: center; cursor: pointer; transition: all 0.2s;">
+          <div style="font-size: 1.8rem; margin-bottom: 6px;">📊</div>
+          <div style="font-size: .75rem; font-weight: 700; color: #166534;">Data</div>
+        </button>
+      </div>
     </div>
-    <div id="sectionMain"></div>
-    <div id="sectionCutiChart" class="fade-up-2"></div>
-    <div id="sectionAdmin"></div>
+
+    <!-- TOTAL JAM KERJA -->
+    <div class="card fade-up" style="padding: 24px; margin-bottom: 24px; text-align: center;">
+      <div style="font-size: .85rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 16px;">Total Jam Kerja Saya</div>
+      <div style="position: relative; width: 200px; height: 200px; margin: 0 auto;">
+        <canvas id="jamKerjaChart" style="max-width: 100%;"></canvas>
+        <div id="jamKerjaChart-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;"></div>
+      </div>
+    </div>
+
+    <!-- AKTIVITAS SAYA -->
+    <div class="card fade-up" style="padding: 24px; margin-bottom: 24px;">
+      <div style="font-size: .85rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Aktivitas Saya</div>
+      <div style="font-size: .75rem; color: var(--text-muted); margin-bottom: 16px;">
+        ${firstDay.toLocaleDateString('id-ID')} - ${lastDay.toLocaleDateString('id-ID')}
+      </div>
+      <div style="position: relative; width: 100%; height: 300px;">
+        <canvas id="aktivitasChart"></canvas>
+      </div>
+    </div>
+
+    <!-- ABSENSI DISTRIBUTION -->
+    <div class="card fade-up" style="padding: 24px;">
+      <div style="font-size: .85rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 16px;">Distribusi Absensi</div>
+      <div style="position: relative; width: 100%; height: 300px;">
+        <canvas id="absensiChart"></canvas>
+      </div>
+    </div>
+
+    <style>
+      .favorite-btn:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+      }
+    </style>
   `
 
-  function updateClock() {
-    const now = new Date()
-    const c = document.getElementById('liveClock')
-    const d = document.getElementById('liveDate')
-    if (c) c.innerText = now.toLocaleTimeString('id-ID')
-    if (d) d.innerText = now.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
-  }
-  updateClock()
-  setInterval(updateClock, 1000)
-
-  const { count: totalUser } = await supabase.from('profiles').select('*', { count:'exact', head:true }).eq('status_akun','Aktif')
-  const { data: absenHariIni } = await supabase.from('absensi').select('*').eq('tanggal', today)
-  const hadir = absenHariIni?.filter(a => a.waktu_masuk)?.length || 0
-  const telat = absenHariIni?.filter(a => a.status_masuk === 'Terlambat')?.length || 0
-  const belum = (totalUser || 0) - hadir
-  document.getElementById('kpiTotal').innerText = totalUser || 0
-  document.getElementById('kpiHadir').innerText = hadir
-  document.getElementById('kpiBelum').innerText = belum
-  document.getElementById('kpiTelat').innerText = telat
-
-  if (role === 'staff') {
-    const { data: myShift } = await supabase.from('jadwal').select('*').eq('user_id', user.id).eq('tanggal', today).maybeSingle()
-    const { data: myAbsen } = await supabase.from('absensi').select('*').eq('nama', user.nama_lengkap).eq('tanggal', today).maybeSingle()
-    const masaKerja = hitungMasaKerja(user.tanggal_bergabung)
-    const { jatah, terpakai, sisa } = await getSisaCuti(user.id, user.tanggal_bergabung)
-    let shiftText = getShiftLabel(myShift)
-    let statusAbsen = '❌ Belum Absen'
-    if (myAbsen?.waktu_masuk && !myAbsen?.waktu_pulang) statusAbsen = '🟡 Sedang Bekerja'
-    if (myAbsen?.waktu_masuk && myAbsen?.waktu_pulang)  statusAbsen = '🟢 Selesai'
-
-    document.getElementById('sectionMain').innerHTML = `
-      <div class="card fade-up-1">
-        <div class="card-title"><i class="fa fa-user-circle"></i> Info Hari Ini</div>
-        <div class="stats-grid" style="grid-template-columns:1fr 1fr;">
-          <div class="stat-card blue"><div class="stat-icon"><i class="fa fa-calendar-day"></i></div><div class="stat-label">Shift</div><div class="stat-value" style="font-size:1rem;">${shiftText}</div></div>
-          <div class="stat-card green"><div class="stat-icon"><i class="fa fa-fingerprint"></i></div><div class="stat-label">Status Absen</div><div class="stat-value" style="font-size:.9rem;">${statusAbsen}</div></div>
-        </div>
-        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
-          <button class="btn-primary" onclick="navigate('absensi')"><i class="fa fa-camera"></i> Absen Sekarang</button>
-          <button class="btn-secondary" onclick="navigate('pengajuan')"><i class="fa fa-file-alt"></i> Pengajuan</button>
-        </div>
-      </div>
-    `
-    document.getElementById('sectionCutiChart').innerHTML = `
-      <div class="card fade-up-2">
-        <div class="card-title"><i class="fa fa-umbrella-beach"></i> Info Cuti Saya</div>
-        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:160px;">
-            ${infoRow('Masa Kerja', formatMasaKerja(masaKerja))}
-            ${infoRow('Jatah Tahunan', jatah + ' hari')}
-            ${infoRow('Terpakai', terpakai + ' hari', '#f59e0b')}
-            ${infoRow('Sisa', sisa + ' hari' + (sisa < 0 ? ' (minus)' : ''), sisa < 0 ? 'var(--danger)' : 'var(--success)')}
-          </div>
-          <div style="flex-shrink:0;">${donutSVG(jatah, terpakai, sisa)}</div>
-        </div>
-        ${masaKerja < 6 ? `<div class="alert warning" style="margin-top:12px;"><i class="fa fa-info-circle"></i> Cuti aktif setelah 6 bulan kerja (${6-masaKerja} bulan lagi)</div>`
-          : masaKerja < 12 ? `<div class="alert info" style="margin-top:12px;"><i class="fa fa-info-circle"></i> Jatah 12 hari aktif setelah 12 bulan kerja (${12-masaKerja} bulan lagi)</div>` : ''}
-        <button class="btn-secondary btn-sm" onclick="navigate('pengajuan')" style="margin-top:12px;"><i class="fa fa-plus"></i> Ajukan Cuti</button>
-      </div>
-    `
-  }
-
-  if (role === 'admin' || role === 'super_admin') {
-    const { data: jadwalHariIni } = await supabase.from('jadwal').select('*, profiles:user_id(nama_lengkap)').eq('tanggal', today)
-    // FIX: pakai status_absensi bukan status_validasi
-    const { data: salahAbsen } = await supabase.from('absensi').select('*').eq('tanggal', today).eq('status_absensi', 'salah absen')
-    const { data: belumPulang } = await supabase.from('absensi').select('*').eq('tanggal', today).is('waktu_pulang', null)
-
-    document.getElementById('sectionAdmin').innerHTML = `
-      <div class="card fade-up-2">
-        <div class="card-title"><i class="fa fa-chart-line"></i> Live Monitoring</div>
-        <div class="stats-grid" style="grid-template-columns:1fr 1fr;">
-          <div class="stat-card red"><div class="stat-icon"><i class="fa fa-exclamation-circle"></i></div><div class="stat-label">Salah Absen</div><div class="stat-value">${salahAbsen?.length || 0}</div></div>
-          <div class="stat-card yellow"><div class="stat-icon"><i class="fa fa-door-open"></i></div><div class="stat-label">Belum Pulang</div><div class="stat-value">${belumPulang?.length || 0}</div></div>
-        </div>
-        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
-          <button class="btn-primary"   onclick="navigate('jadwal')">   <i class="fa fa-calendar"></i> Jadwal</button>
-          <button class="btn-secondary" onclick="navigate('users')">    <i class="fa fa-users"></i> Users</button>
-          <button class="btn-secondary" onclick="navigate('pengajuan')"><i class="fa fa-inbox"></i> Approval</button>
-          <button class="btn-secondary" onclick="navigate('riwayat')">  <i class="fa fa-list"></i> Riwayat</button>
-        </div>
-      </div>
-      <div class="card fade-up-3">
-        <div class="card-title"><i class="fa fa-calendar-day"></i> Jadwal Hari Ini</div>
-        ${!jadwalHariIni?.length
-          ? `<div class="empty-state"><i class="fa fa-calendar"></i><p>Belum ada jadwal</p></div>`
-          : jadwalHariIni.map(j => `
-            <div class="absen-record">
-              <div class="ar-top">
-                <div class="ar-date">${j.profiles?.nama_lengkap || '-'}</div>
-                <span class="badge badge-blue">${getShiftLabel(j)}</span>
-              </div>
-            </div>`).join('')}
-      </div>
-    `
-    await renderCutiChartAdmin()
+  // Load Chart.js if not loaded
+  if (typeof Chart === 'undefined') {
+    const script = document.createElement('script')
+    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
+    script.onload = () => {
+      loadCharts(user.id, dateFrom, dateTo, totalJamKerja)
+    }
+    document.head.appendChild(script)
+  } else {
+    loadCharts(user.id, dateFrom, dateTo, totalJamKerja)
   }
 }
 
-async function renderCutiChartAdmin() {
-  const el = document.getElementById('sectionCutiChart')
-  if (!el) return
-  const { data: profiles } = await supabase.from('profiles').select('id,nama_lengkap,tanggal_bergabung').eq('status_akun','Aktif').order('nama_lengkap')
-  if (!profiles?.length) return
-  const tahunIni = new Date().getFullYear()
-  const { data: approved } = await supabase.from('pengajuan').select('user_id,jumlah_hari').eq('jenis','cuti').eq('status','approved').gte('tanggal_pengajuan',`${tahunIni}-01-01`)
-  const { data: pending  } = await supabase.from('pengajuan').select('user_id,jumlah_hari').eq('jenis','cuti').eq('status','pending')
-  const mA = {}; (approved||[]).forEach(c => { mA[c.user_id] = (mA[c.user_id]||0) + (parseInt(c.jumlah_hari)||0) })
-  const mP = {}; (pending ||[]).forEach(c => { mP[c.user_id] = (mP[c.user_id]||0) + (parseInt(c.jumlah_hari)||0) })
-  const rows = profiles.map(p => { const j=hitungJatahCuti(p.tanggal_bergabung), t=mA[p.id]||0, pend=mP[p.id]||0; return {...p,jatah:j,terpakai:t,pending:pend,sisa:j-t} })
-
-  el.innerHTML = `
-    <div class="card fade-up-2">
-      <div class="card-title"><i class="fa fa-chart-bar"></i> Rekap Cuti Karyawan ${tahunIni}</div>
-      <div style="display:flex;gap:14px;margin-bottom:14px;font-size:.75rem;flex-wrap:wrap;">
-        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;margin-right:4px;"></span>Diambil</span>
-        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3b82f6;margin-right:4px;"></span>Pending</span>
-        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#22c55e;margin-right:4px;"></span>Sisa</span>
-      </div>
-      ${rows.map(r => {
-        const total = Math.max(r.jatah, r.terpakai+r.pending)||1
-        const pA = Math.min(100, r.terpakai/total*100)
-        const pP = Math.min(100-pA, r.pending/total*100)
-        const pS = Math.max(0, r.sisa)/total*100
-        return `<div style="margin-bottom:14px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:.82rem;">
-            <span style="font-weight:700;">${r.nama_lengkap}</span>
-            <span style="color:var(--text-muted);">
-              ${r.terpakai}/${r.jatah}
-              ${r.pending ? `· <span style="color:#3b82f6;">${r.pending}p</span>` : ''}
-              · <strong style="color:${r.sisa<0?'var(--danger)':'var(--success)'};">sisa ${r.sisa}</strong>
-            </span>
-          </div>
-          <div style="height:9px;background:var(--gray-100);border-radius:999px;overflow:hidden;display:flex;">
-            <div style="width:${pA}%;background:#f59e0b;"></div>
-            <div style="width:${pP}%;background:#3b82f6;opacity:.8;"></div>
-            <div style="width:${pS}%;background:#22c55e;"></div>
-          </div>
-          ${r.jatah===0?`<div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;">Belum eligible jatah cuti</div>`:''}
-        </div>`
-      }).join('')}
-    </div>
-  `
-}
-
-function infoRow(label, val, color='var(--text)') {
-  return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:.82rem;">
-    <span style="color:var(--text-muted);">${label}</span><strong style="color:${color};">${val}</strong></div>`
-}
-
-function donutSVG(jatah, terpakai, sisa) {
-  if (!jatah) return `<div style="font-size:.78rem;color:var(--text-muted);width:100px;text-align:center;">Belum ada jatah</div>`
-  const r=40, circ=2*Math.PI*r
-  const dA = Math.min(1, terpakai/jatah)*circ
-  const dS = Math.max(0,sisa)/jatah*circ
-  return `<svg viewBox="0 0 100 100" width="100" height="100">
-    <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--gray-100)" stroke-width="12"/>
-    <circle cx="50" cy="50" r="${r}" fill="none" stroke="#f59e0b" stroke-width="12" stroke-dasharray="${dA} ${circ}" stroke-dashoffset="${circ*.25}" stroke-linecap="round"/>
-    <circle cx="50" cy="50" r="${r}" fill="none" stroke="#22c55e" stroke-width="12" stroke-dasharray="${dS} ${circ}" stroke-dashoffset="${circ*.25-dA}" stroke-linecap="round"/>
-    <text x="50" y="47" text-anchor="middle" font-size="15" font-weight="900" fill="var(--text)">${sisa}</text>
-    <text x="50" y="60" text-anchor="middle" font-size="9" fill="var(--text-muted)">sisa</text>
-  </svg>`
-}
-
-function getShiftLabel(j) {
-  if (!j) return '-'
-  if (j?.status_override==='cuti')  return '🌴 Cuti'
-  if (j?.status_override==='sakit') return '🤒 Sakit'
-  if (j?.status_override==='izin')  return '📋 Izin'
-  if (j?.shift_code=='2') return '🌅 Pagi'
-  if (j?.shift_code=='3') return '🌇 Sore'
-  if (j?.shift_code=='4') return '🌙 Malam'
-  if (j?.shift_code=='8') return '⚫ OFF'
-  return '-'
+async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
+  // Small delay to ensure DOM is ready
+  setTimeout(() => {
+    createTotalJamKerjaChart('jamKerjaChart', totalJamKerja)
+    createAktivitasChart('aktivitasChart', userId, dateFrom, dateTo)
+    createAbsensiChart('absensiChart', userId, dateFrom, dateTo)
+  }, 100)
 }
