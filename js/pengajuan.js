@@ -143,7 +143,7 @@ export async function renderPengajuan(user) {
             ${i.file ? `<a href="${i.file}" target="_blank" style="font-size:.8rem;color:var(--primary);"><i class="fa fa-paperclip"></i> Lihat Surat</a>` : ''}
             ${i.catatan_approval ? `
               <div style="margin-top: 12px; padding: 10px; background: #f3f4f6; border-left: 3px solid var(--primary); border-radius: 4px; font-size: .8rem;">
-                <strong style="color: var(--text-muted);">📝 Catatan Admin:</strong>
+                <strong style="color: var(--text-muted);"><i class="fa fa-sticky-note" style="margin-right: 6px; color: #f59e0b;"></i>Catatan Admin:</strong>
                 <div style="color: var(--text); margin-top: 4px;">${i.catatan_approval}</div>
               </div>
             ` : ''}
@@ -263,9 +263,9 @@ export async function renderPengajuan(user) {
 }
 
 function labelJenis(jenis) {
-  if (jenis === 'cuti') return '🌴 Cuti'
-  if (jenis === 'sakit') return '🤒 Sakit'
-  if (jenis === 'izin') return '📋 Izin'
+  if (jenis === 'cuti') return '<i class="fa fa-umbrella" style="color: #16a34a;"></i> Cuti'
+  if (jenis === 'sakit') return '<i class="fa fa-heartbeat" style="color: #dc2626;"></i> Sakit'
+  if (jenis === 'izin') return '<i class="fa fa-file-alt" style="color: #2563eb;"></i> Izin'
   return jenis || '-'
 }
 
@@ -296,7 +296,7 @@ window.showApprovalModal = function(id, type) {
 
   box.innerHTML = `
     <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 16px;">
-      ${type === 'approve' ? '✅' : '❌'} ${title}
+      <i class="fa ${type === 'approve' ? 'fa-check-circle' : 'fa-times-circle'}" style="color: ${type === 'approve' ? '#16a34a' : '#dc2626'}; margin-right: 8px;"></i>${title}
     </h3>
     <textarea id="catatanApproval" placeholder="${placeholder}"
       style="width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
