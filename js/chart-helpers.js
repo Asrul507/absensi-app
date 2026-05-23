@@ -89,7 +89,7 @@ export function createTotalJamKerjaChart(canvasId, totalJam) {
 }
 
 /* ===============================================================
-   AKTIVITAS SAYA (LINE CHART)
+   AKTIVITAS SAYA (LINE CHART) - Jam Datang & Pulang
 =============================================================== */
 export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
   if (typeof Chart === 'undefined') {
@@ -108,7 +108,7 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
     .lte('tanggal', dateTo)
     .order('tanggal', { ascending: true })
 
-  // Group by date & calculate hours
+  // Group by date
   const dateMap = {}
   const dates = []
 
@@ -117,7 +117,7 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
   const endDate = new Date(dateTo)
   while (currentDate <= endDate) {
     const dateStr = currentDate.toISOString().split('T')[0]
-    dateMap[dateStr] = { sebelum: 0, jamKerja: 0, setelah: 0 }
+    dateMap[dateStr] = { jamMasuk: null, jamPulang: null }
     dates.push(dateStr)
     currentDate.setDate(currentDate.getDate() + 1)
   }
@@ -125,35 +125,24 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
   // Process absensi data
   absensiData?.forEach(a => {
     if (!dateMap[a.tanggal]) {
-      dateMap[a.tanggal] = { sebelum: 0, jamKerja: 0, setelah: 0 }
+      dateMap[a.tanggal] = { jamMasuk: null, jamPulang: null }
       dates.push(a.tanggal)
     }
 
-    if (a.waktu_masuk && a.waktu_pulang) {
+    if (a.waktu_masuk) {
       const masuk = new Date(a.waktu_masuk)
+      dateMap[a.tanggal].jamMasuk = masuk.getHours() + masuk.getMinutes() / 60
+    }
+
+    if (a.waktu_pulang) {
       const pulang = new Date(a.waktu_pulang)
-      const jamKerja = (pulang - masuk) / (1000 * 60 * 60) // in hours
-
-      dateMap[a.tanggal].jamKerja = jamKerja
-
-      // Assume 07:00 masuk, 15:00 pulang
-      const expectedMasuk = new Date(masuk.getFullYear(), masuk.getMonth(), masuk.getDate(), 7, 0)
-      const expectedPulang = new Date(pulang.getFullYear(), pulang.getMonth(), pulang.getDate(), 15, 0)
-
-      // Sebelum = jam sebelum masuk
-      const sebelumJam = (expectedMasuk - masuk) / (1000 * 60 * 60)
-      dateMap[a.tanggal].sebelum = Math.max(0, sebelumJam)
-
-      // Setelah = jam setelah pulang
-      const setelahJam = (pulang - expectedPulang) / (1000 * 60 * 60)
-      dateMap[a.tanggal].setelah = Math.max(0, setelahJam)
+      dateMap[a.tanggal].jamPulang = pulang.getHours() + pulang.getMinutes() / 60
     }
   })
 
   // Prepare chart data
-  const sebelumData = dates.map(d => dateMap[d].sebelum)
-  const jamKerjaData = dates.map(d => Math.round(dateMap[d].jamKerja * 10) / 10)
-  const setelahData = dates.map(d => dateMap[d].setelah)
+  const jamMasukData = dates.map(d => dateMap[d].jamMasuk)
+  const jamPulangData = dates.map(d => dateMap[d].jamPulang)
 
   new Chart(ctx, {
     type: 'line',
@@ -164,32 +153,22 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
       }),
       datasets: [
         {
-          label: 'Sebelum',
-          data: sebelumData,
-          borderColor: CHART_COLORS.danger,
-          backgroundColor: 'rgba(220, 38, 38, 0.1)',
-          tension: 0.4,
-          fill: false,
-          borderWidth: 2,
-          pointRadius: 4,
-        },
-        {
-          label: 'Jam Kerja',
-          data: jamKerjaData,
+          label: 'Jam Masuk',
+          data: jamMasukData,
           borderColor: CHART_COLORS.success,
-          backgroundColor: 'rgba(22, 163, 74, 0.2)',
+          backgroundColor: 'rgba(22, 163, 74, 0.1)',
           tension: 0.4,
           fill: true,
           borderWidth: 2,
           pointRadius: 4,
         },
         {
-          label: 'Setelah',
-          data: setelahData,
+          label: 'Jam Pulang',
+          data: jamPulangData,
           borderColor: CHART_COLORS.warning,
           backgroundColor: 'rgba(245, 158, 11, 0.1)',
           tension: 0.4,
-          fill: false,
+          fill: true,
           borderWidth: 2,
           pointRadius: 4,
         },
@@ -199,11 +178,17 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
       ...chartDefaultOptions,
       scales: {
         y: {
-          beginAtZero: true,
-          max: 12,
+          beginAtZero: false,
+          min: 5,
+          max: 19,
           ticks: {
             color: '#64748b',
             font: { size: 11 },
+            callback: function (value) {
+              const h = Math.floor(value)
+              const m = Math.round((value - h) * 60)
+              return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+            },
           },
           grid: {
             color: '#e2e8f0',
@@ -224,16 +209,13 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
 }
 
 /* ===============================================================
-   ABSENSI DISTRIBUTION (PIE CHART)
+   ABSENSI DISTRIBUTION (3 PIE CHARTS)
 =============================================================== */
-export async function createAbsensiChart(canvasId, userId, dateFrom, dateTo) {
+export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId, dateFrom, dateTo) {
   if (typeof Chart === 'undefined') {
     console.error('Chart.js not loaded')
     return
   }
-
-  const ctx = document.getElementById(canvasId)?.getContext('2d')
-  if (!ctx) return
 
   // Fetch data
   const { data: absensiData } = await supabase
@@ -242,58 +224,123 @@ export async function createAbsensiChart(canvasId, userId, dateFrom, dateTo) {
     .gte('tanggal', dateFrom)
     .lte('tanggal', dateTo)
 
-  // Count status
+  // Count total workdays
+  let totalDays = 0
   let hadir = 0
   let terlambat = 0
   let tidakAbsen = 0
-  let belumPulang = 0
+  let masukOk = 0
+  let pulangOk = 0
 
   absensiData?.forEach(a => {
+    totalDays++
+    
+    // Kehadiran
     if (!a.waktu_masuk) {
       tidakAbsen++
-    } else if (!a.waktu_pulang) {
-      belumPulang++
     } else if (a.status_masuk === 'Terlambat') {
       terlambat++
     } else {
       hadir++
     }
+
+    // Absen Masuk
+    if (a.waktu_masuk) masukOk++
+
+    // Absen Pulang
+    if (a.waktu_pulang) pulangOk++
   })
 
-  const total = hadir + terlambat + tidakAbsen + belumPulang || 1
+  const totalAbsen = absensiData?.length || 1
 
-  new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Hadir', 'Terlambat', 'Tidak Absen', 'Belum Pulang'],
-      datasets: [
-        {
+  // Chart 1: Kehadiran
+  const ctx1 = document.getElementById(canvasId1)?.getContext('2d')
+  if (ctx1) {
+    new Chart(ctx1, {
+      type: 'doughnut',
+      data: {
+        labels: ['Hadir', 'Terlambat', 'Tidak Hadir'],
+        datasets: [{
           data: [
-            ((hadir / total) * 100).toFixed(1),
-            ((terlambat / total) * 100).toFixed(1),
-            ((tidakAbsen / total) * 100).toFixed(1),
-            ((belumPulang / total) * 100).toFixed(1),
+            ((hadir / totalAbsen) * 100).toFixed(1),
+            ((terlambat / totalAbsen) * 100).toFixed(1),
+            ((tidakAbsen / totalAbsen) * 100).toFixed(1),
           ],
-          backgroundColor: [CHART_COLORS.success, CHART_COLORS.warning, CHART_COLORS.danger, CHART_COLORS.info],
+          backgroundColor: [CHART_COLORS.success, CHART_COLORS.warning, CHART_COLORS.danger],
           borderColor: '#fff',
           borderWidth: 2,
-        },
-      ],
-    },
-    options: {
-      ...chartDefaultOptions,
-      plugins: {
-        ...chartDefaultOptions.plugins,
-        tooltip: {
-          callbacks: {
-            label: function (context) {
-              const label = context.label || ''
-              const value = context.parsed || 0
-              return label + ': ' + value + '%'
-            },
+        }],
+      },
+      options: {
+        ...chartDefaultOptions,
+        plugins: {
+          ...chartDefaultOptions.plugins,
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 } },
           },
         },
       },
-    },
-  })
+    })
+  }
+
+  // Chart 2: Absen Masuk
+  const ctx2 = document.getElementById(canvasId2)?.getContext('2d')
+  if (ctx2) {
+    new Chart(ctx2, {
+      type: 'doughnut',
+      data: {
+        labels: ['Absen Masuk', 'Tidak Absen Masuk'],
+        datasets: [{
+          data: [
+            ((masukOk / totalAbsen) * 100).toFixed(1),
+            (((totalAbsen - masukOk) / totalAbsen) * 100).toFixed(1),
+          ],
+          backgroundColor: [CHART_COLORS.success, CHART_COLORS.danger],
+          borderColor: '#fff',
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        ...chartDefaultOptions,
+        plugins: {
+          ...chartDefaultOptions.plugins,
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 } },
+          },
+        },
+      },
+    })
+  }
+
+  // Chart 3: Absen Pulang
+  const ctx3 = document.getElementById(canvasId3)?.getContext('2d')
+  if (ctx3) {
+    new Chart(ctx3, {
+      type: 'doughnut',
+      data: {
+        labels: ['Absen Pulang', 'Tidak Absen Pulang'],
+        datasets: [{
+          data: [
+            ((pulangOk / totalAbsen) * 100).toFixed(1),
+            (((totalAbsen - pulangOk) / totalAbsen) * 100).toFixed(1),
+          ],
+          backgroundColor: [CHART_COLORS.info, CHART_COLORS.danger],
+          borderColor: '#fff',
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        ...chartDefaultOptions,
+        plugins: {
+          ...chartDefaultOptions.plugins,
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 } },
+          },
+        },
+      },
+    })
+  }
 }
