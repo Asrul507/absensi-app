@@ -1,5 +1,30 @@
 import { supabase } from './supabase.js'
 
+/* ===============================================================
+   HELPER: Hitung menit terlambat dan pulang cepat
+=============================================================== */
+function calculateLateDuration(waktu_masuk, jam_masuk_seharusnya) {
+  if (!waktu_masuk || !jam_masuk_seharusnya) return 0
+  
+  const masuk = new Date(waktu_masuk)
+  const jamMasuk = jam_masuk_seharusnya.split(':')
+  const jamMasukDate = new Date(masuk.getFullYear(), masuk.getMonth(), masuk.getDate(), jamMasuk[0], jamMasuk[1])
+  
+  const diffMs = masuk - jamMasukDate
+  return Math.max(0, Math.floor(diffMs / 60000))
+}
+
+function calculateEarlyDuration(waktu_pulang, jam_pulang_seharusnya) {
+  if (!waktu_pulang || !jam_pulang_seharusnya) return 0
+  
+  const pulang = new Date(waktu_pulang)
+  const jamPulang = jam_pulang_seharusnya.split(':')
+  const jamPulangDate = new Date(pulang.getFullYear(), pulang.getMonth(), pulang.getDate(), jamPulang[0], jamPulang[1])
+  
+  const diffMs = jamPulangDate - pulang
+  return Math.max(0, Math.floor(diffMs / 60000))
+}
+
 export async function renderDaftarAbsensi(user) {
   const content = document.getElementById('content')
   const isAdmin = user.role === 'admin' || user.role === 'super_admin'
@@ -7,6 +32,9 @@ export async function renderDaftarAbsensi(user) {
   content.innerHTML = `
     <div class="page-header">
       <h2><i class="fa fa-list-check"></i> Daftar Absensi</h2>
+      <button class="btn-primary btn-sm" onclick="downloadExcelDaftarAbsensi()">
+        <i class="fa fa-download"></i> Download Excel
+      </button>
     </div>
 
     <!-- FILTER -->
@@ -32,6 +60,19 @@ export async function renderDaftarAbsensi(user) {
             style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
               font-size: .85rem; outline: none; font-family: inherit; color: var(--text);">
         </div>
+        <div style="flex: 1; min-width: 130px;">
+          <label style="font-size: .7rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 5px;">Status</label>
+          <select id="filterStatus"
+            style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+              font-size: .85rem; outline: none; font-family: inherit;">
+            <option value="">Semua</option>
+            <option value="complete">Complete</option>
+            <option value="tepat_waktu">Tepat Waktu</option>
+            <option value="terlambat">Terlambat</option>
+            <option value="belum_pulang">Belum Pulang</option>
+            <option value="tidak_absen">Tidak Absen</option>
+          </select>
+        </div>
         <button class="btn-primary btn-sm" onclick="applyDaftarAbsensiFilter(window.currentUser)" style="align-self: flex-end; white-space: nowrap;">
           <i class="fa fa-search"></i> Cari
         </button>
@@ -55,6 +96,7 @@ export async function renderDaftarAbsensi(user) {
   document.getElementById('filterSampai').value = lastDay.toISOString().split('T')[0]
 
   window._isAdminDaftarAbsensi = isAdmin
+  window._daftarAbsensiAllData = []
 
   await applyDaftarAbsensiFilter(user)
 }
@@ -64,9 +106,9 @@ window.applyDaftarAbsensiFilter = async function (user) {
   const namaPencarian = document.getElementById('filterNama')?.value?.trim() || ''
   const dari = document.getElementById('filterDari')?.value
   const sampai = document.getElementById('filterSampai')?.value
+  const statusFilter = document.getElementById('filterStatus')?.value || ''
 
   try {
-    // Fetch absensi + jadwal data
     let query = supabase
       .from('absensi')
       .select('*')
@@ -85,8 +127,23 @@ window.applyDaftarAbsensiFilter = async function (user) {
 
     if (error) throw error
 
-    // Render cards
-    renderDaftarAbsensiCards(absensiData || [], isAdmin, user)
+    // Store all data for download
+    window._daftarAbsensiAllData = absensiData || []
+
+    // Apply status filter
+    let filtered = window._daftarAbsensiAllData
+    if (statusFilter) {
+      filtered = filtered.filter(a => {
+        if (statusFilter === 'complete') return a.status_absensi === 'complete'
+        if (statusFilter === 'tepat_waktu') return a.status_masuk === 'Tepat Waktu' && a.waktu_masuk
+        if (statusFilter === 'terlambat') return a.status_masuk === 'Terlambat'
+        if (statusFilter === 'belum_pulang') return a.waktu_masuk && !a.waktu_pulang
+        if (statusFilter === 'tidak_absen') return !a.waktu_masuk
+        return true
+      })
+    }
+
+    renderDaftarAbsensiCards(filtered, isAdmin, user)
 
   } catch (err) {
     console.error('Error load daftar absensi:', err)
@@ -96,7 +153,7 @@ window.applyDaftarAbsensiFilter = async function (user) {
   }
 }
 
-async function renderDaftarAbsensiCards(absensiData, isAdmin, user) {
+function renderDaftarAbsensiCards(absensiData, isAdmin, user) {
   const el = document.getElementById('daftarAbsensiCards')
 
   if (!absensiData.length) {
@@ -111,12 +168,12 @@ async function renderDaftarAbsensiCards(absensiData, isAdmin, user) {
 
   let html = ''
 
-  for (const absen of absensiData) {
-    const shiftName = 'Regular' // Default, karena jadwal query bermasalah
+  absensiData.forEach(absen => {
+    const shiftName = 'Regular'
     const jamMasuk = absen.waktu_masuk ? new Date(absen.waktu_masuk).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
     const jamPulang = absen.waktu_pulang ? new Date(absen.waktu_pulang).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
 
-    // Determine status badge
+    // Status & color
     let statusColor = '#f3f4f6'
     let statusTextColor = '#6b7280'
     let statusText = 'Open'
@@ -139,6 +196,24 @@ async function renderDaftarAbsensiCards(absensiData, isAdmin, user) {
       statusColor = '#dbeafe'
       statusTextColor = '#0284c7'
       statusText = 'Belum Pulang'
+    }
+
+    // Detail terlambat/pulang cepat
+    let detailInfo = ''
+    if (absen.status_masuk === 'Terlambat' && absen.waktu_masuk) {
+      // Assume shift masuk 07:00
+      const lateMinutes = calculateLateDuration(absen.waktu_masuk, '07:00')
+      if (lateMinutes > 0) {
+        detailInfo += `<div style="font-size: .8rem; color: #dc2626; margin-top: 4px;"><strong>⏳ Terlambat ${lateMinutes} menit</strong></div>`
+      }
+    }
+
+    if (absen.waktu_pulang && absen.waktu_masuk) {
+      // Assume shift pulang 15:00
+      const earlyMinutes = calculateEarlyDuration(absen.waktu_pulang, '15:00')
+      if (earlyMinutes > 0) {
+        detailInfo += `<div style="font-size: .8rem; color: #f59e0b; margin-top: 4px;"><strong>⏱ Pulang ${earlyMinutes} menit lebih awal</strong></div>`
+      }
     }
 
     html += `
@@ -183,10 +258,69 @@ async function renderDaftarAbsensiCards(absensiData, isAdmin, user) {
               <div style="font-weight: 700; font-size: .9rem; color: var(--warning);">${jamPulang}</div>
             </div>
           </div>
+
+          ${detailInfo}
         </div>
       </div>
     `
-  }
+  })
 
   el.innerHTML = html
+}
+
+window.downloadExcelDaftarAbsensi = function () {
+  const data = window._daftarAbsensiAllData || []
+  if (!data.length) {
+    alert('Tidak ada data untuk didownload')
+    return
+  }
+
+  if (typeof XLSX === 'undefined') {
+    alert('Library XLSX belum dimuat')
+    return
+  }
+
+  const rows = data.map(a => {
+    let status = a.status_absensi || 'open'
+    let terlambat = ''
+    let pulangCepat = ''
+
+    if (a.status_masuk === 'Terlambat') {
+      const lateMin = calculateLateDuration(a.waktu_masuk, '07:00')
+      terlambat = lateMin > 0 ? `${lateMin} menit` : ''
+    }
+
+    if (a.waktu_pulang && a.waktu_masuk) {
+      const earlyMin = calculateEarlyDuration(a.waktu_pulang, '15:00')
+      pulangCepat = earlyMin > 0 ? `${earlyMin} menit` : ''
+    }
+
+    return {
+      'Tanggal': a.tanggal,
+      'Nama': a.nama,
+      'Jam Masuk': a.waktu_masuk ? new Date(a.waktu_masuk).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
+      'Jam Pulang': a.waktu_pulang ? new Date(a.waktu_pulang).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
+      'Status Masuk': a.status_masuk || '-',
+      'Terlambat': terlambat,
+      'Pulang Cepat': pulangCepat,
+      'Keterangan': status
+    }
+  })
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+
+  ws['!cols'] = [
+    { wch: 12 },
+    { wch: 20 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 18 }
+  ]
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Daftar Absensi')
+  XLSX.writeFile(wb, `daftar-absensi-${new Date().toISOString().split('T')[0]}.xlsx`)
 }
