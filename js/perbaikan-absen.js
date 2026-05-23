@@ -333,7 +333,12 @@ async function loadDaftarRequest(user) {
           ${req.jam_masuk ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Masuk: ${req.jam_masuk}</div>` : ''}
           ${req.jam_pulang ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Pulang: ${req.jam_pulang}</div>` : ''}
           ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Shift Baru: ${req.shift_baru}</div>` : ''}
-          ${req.catatan_approval ? `<div style="font-size: .8rem; color: var(--warning); margin-top: 8px;"><strong>Catatan Admin:</strong> ${req.catatan_approval}</div>` : ''}
+          ${req.catatan_approval ? `
+            <div style="margin-top: 10px; padding: 10px; background: #f3f4f6; border-left: 3px solid var(--primary); border-radius: 4px; font-size: .8rem;">
+              <strong style="color: var(--text-muted);">📝 Catatan:</strong>
+              <div style="color: var(--text); margin-top: 4px;">${req.catatan_approval}</div>
+            </div>
+          ` : ''}
         </div>
       `
     })
@@ -397,7 +402,7 @@ async function loadApprovalRequest() {
           ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Shift Baru: ${req.shift_baru}</div>` : ''}
           
           <div style="display: flex; gap: 10px; margin-top: 12px;">
-            <button onclick="approvePerbaikanRequest('${req.id}', true)" class="btn-success btn-sm" style="flex: 1;">
+            <button onclick="showApprovePerbaikanModal('${req.id}', 'approve')" class="btn-success btn-sm" style="flex: 1;">
               <i class="fa fa-check"></i> Setujui
             </button>
             <button onclick="showRejectModal('${req.id}')" class="btn-danger btn-sm" style="flex: 1;">
@@ -432,6 +437,64 @@ window.approvePerbaikanRequest = async function (id, approve) {
   }
 }
 
+window.showApprovePerbaikanModal = function (id) {
+  const modal = document.createElement('div')
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+  `
+
+  const box = document.createElement('div')
+  box.style.cssText = `
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 450px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  `
+
+  box.innerHTML = `
+    <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 16px;">✅ Setujui Request</h3>
+    <textarea id="catatanPerbaikan" placeholder="Tambah catatan (opsional)..."
+      style="width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+        font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
+    <div style="display: flex; gap: 10px;">
+      <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-secondary" style="flex: 1;">Batal</button>
+      <button onclick="confirmApprovePerbaikan('${id}', document.getElementById('catatanPerbaikan').value); this.parentElement.parentElement.parentElement.remove();" class="btn-success" style="flex: 1;">Setujui</button>
+    </div>
+  `
+
+  modal.appendChild(box)
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove()
+  })
+  document.body.appendChild(modal)
+}
+
+window.confirmApprovePerbaikan = async function (id, catatan) {
+  try {
+    const { error } = await supabase
+      .from('perbaikan_absen')
+      .update({
+        status: 'approved',
+        catatan_approval: catatan || null,
+        approved_at: new Date().toISOString()
+      })
+      .eq('id', id)
+
+    if (error) throw error
+
+    alert('✅ Request disetujui')
+    await loadApprovalRequest()
+
+  } catch (err) {
+    alert('Error: ' + err.message)
+  }
+}
+
 window.showRejectModal = function (id) {
   const modal = document.createElement('div')
   modal.style.cssText = `
@@ -446,16 +509,16 @@ window.showRejectModal = function (id) {
     background: white;
     border-radius: 16px;
     padding: 24px;
-    max-width: 400px;
+    max-width: 450px;
     width: 90%;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   `
 
   box.innerHTML = `
-    <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 16px;">Tolak Request</h3>
-    <textarea id="catatan" placeholder="Masukkan catatan penolakan..."
-      style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
-        font-size: .85rem; font-family: inherit; outline: none; min-height: 80px; margin-bottom: 16px; resize: vertical;"></textarea>
+    <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 16px;">❌ Tolak Request</h3>
+    <textarea id="catatan" placeholder="Alasan penolakan (wajib)..."
+      style="width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
+        font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
     <div style="display: flex; gap: 10px;">
       <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-secondary" style="flex: 1;">Batal</button>
       <button onclick="confirmRejectPerbaikan('${id}', document.getElementById('catatan').value); this.parentElement.parentElement.parentElement.remove();" class="btn-danger" style="flex: 1;">Tolak</button>
@@ -470,10 +533,19 @@ window.showRejectModal = function (id) {
 }
 
 window.confirmRejectPerbaikan = async function (id, catatan) {
+  if (!catatan.trim()) {
+    alert('⚠ Alasan penolakan wajib diisi')
+    return
+  }
+
   try {
     const { error } = await supabase
       .from('perbaikan_absen')
-      .update({ status: 'rejected', catatan_approval: catatan })
+      .update({
+        status: 'rejected',
+        catatan_approval: catatan,
+        approved_at: new Date().toISOString()
+      })
       .eq('id', id)
 
     if (error) throw error
