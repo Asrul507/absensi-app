@@ -335,7 +335,7 @@ async function loadDaftarRequest(user) {
           ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Shift Baru: ${req.shift_baru}</div>` : ''}
           ${req.catatan_approval ? `
             <div style="margin-top: 10px; padding: 10px; background: #f3f4f6; border-left: 3px solid var(--primary); border-radius: 4px; font-size: .8rem;">
-              <strong style="color: var(--text-muted);">📝 Catatan:</strong>
+              <strong style="color: var(--text-muted);"><i class="fa fa-sticky-note" style="margin-right: 6px; color: #f59e0b;"></i>Catatan:</strong>
               <div style="color: var(--text); margin-top: 4px;">${req.catatan_approval}</div>
             </div>
           ` : ''}
@@ -457,7 +457,9 @@ window.showApprovePerbaikanModal = function (id) {
   `
 
   box.innerHTML = `
-    <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 16px;">✅ Setujui Request</h3>
+    <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 16px;">
+      <i class="fa fa-check-circle" style="color: #16a34a; margin-right: 8px;"></i>Setujui Request
+    </h3>
     <textarea id="catatanPerbaikan" placeholder="Tambah catatan (opsional)..."
       style="width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
         font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
@@ -515,7 +517,9 @@ window.showRejectModal = function (id) {
   `
 
   box.innerHTML = `
-    <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 16px;">❌ Tolak Request</h3>
+    <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 16px;">
+      <i class="fa fa-times-circle" style="color: #dc2626; margin-right: 8px;"></i>Tolak Request
+    </h3>
     <textarea id="catatan" placeholder="Alasan penolakan (wajib)..."
       style="width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
         font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
