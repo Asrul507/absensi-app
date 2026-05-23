@@ -4019,3 +4019,386 @@ body, body * {
 .loading-spinner, @keyframes, .skeleton {
   transition: none !important;
 }
+
+/* =============================================
+   MODERN BUTTON IMPROVEMENTS
+   ============================================= */
+
+/* Primary Button - Solid & Modern */
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  border-radius: var(--r-md);
+  padding: 10px 16px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-btn);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Secondary Button */
+.btn-secondary {
+  background: var(--gray-100);
+  color: var(--text);
+  border: 1.5px solid var(--gray-300);
+  border-radius: var(--r-md);
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background: var(--gray-200);
+  border-color: var(--gray-400);
+  transform: translateY(-2px);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
+}
+
+/* Success Button */
+.btn-success {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: white;
+  border: none;
+  border-radius: var(--r-md);
+  padding: 10px 16px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-btn);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-success:hover {
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.btn-success:active {
+  transform: translateY(0);
+}
+
+/* Danger Button */
+.btn-danger {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+  border: none;
+  border-radius: var(--r-md);
+  padding: 10px 16px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-btn);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.btn-danger:active {
+  transform: translateY(0);
+}
+
+/* Small Button Variant */
+.btn-sm {
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  border-radius: var(--r-sm);
+}
+
+/* Full Width Button */
+.btn-full {
+  width: 100%;
+}
+
+/* =============================================
+   RESPONSIVE LAYOUT IMPROVEMENTS
+   ============================================= */
+
+/* Mobile First */
+@media (max-width: 640px) {
+  .page-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .page-header h2 {
+    font-size: 1.3rem;
+  }
+
+  .page-header button {
+    width: 100%;
+  }
+
+  .card {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .btn-primary, .btn-secondary, .btn-success, .btn-danger {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Grid reduce columns on mobile */
+  [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Table responsive */
+  table {
+    font-size: 0.75rem;
+  }
+
+  th, td {
+    padding: 8px 6px;
+  }
+
+  /* Modal responsive */
+  .modal {
+    margin: 16px;
+  }
+
+  /* Favorite buttons smaller */
+  .fav-btn {
+    padding: 12px 8px !important;
+    font-size: 0.65rem !important;
+  }
+
+  .fav-btn i {
+    font-size: 1.3rem !important;
+  }
+}
+
+/* Tablet */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .card {
+    padding: 14px;
+  }
+
+  [style*="grid-template-columns: repeat"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Desktop */
+@media (min-width: 1025px) {
+  .card {
+    padding: 16px;
+  }
+
+  [style*="grid-template-columns: repeat(auto"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+/* =============================================
+   BUTTON GROUP RESPONSIVE
+   ============================================= */
+
+.btn-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .btn-group {
+    flex-direction: column;
+  }
+
+  .btn-group button {
+    width: 100%;
+  }
+}
+
+/* =============================================
+   FAVORITE MENU RESPONSIVE
+   ============================================= */
+
+.favorite-menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 480px) {
+  .favorite-menu {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+
+  .favorite-menu button {
+    padding: 10px 6px !important;
+  }
+
+  .favorite-menu button i {
+    font-size: 1.3rem !important;
+  }
+
+  .favorite-menu button div:last-child {
+    font-size: 0.6rem !important;
+  }
+}
+
+/* =============================================
+   MODAL RESPONSIVE
+   ============================================= */
+
+@media (max-width: 640px) {
+  .modal-box {
+    max-width: calc(100vw - 32px) !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-box textarea,
+  .modal-box input {
+    font-size: 16px !important; /* Prevent zoom on iOS */
+  }
+}
+
+/* =============================================
+   FILTER BAR RESPONSIVE
+   ============================================= */
+
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+@media (max-width: 768px) {
+  .filter-bar {
+    flex-direction: column;
+  }
+
+  .filter-bar > div,
+  .filter-bar button {
+    width: 100%;
+  }
+
+  .filter-bar button {
+    margin-top: 8px;
+  }
+}
+
+/* =============================================
+   FORM RESPONSIVE
+   ============================================= */
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+@media (max-width: 640px) {
+  .field input,
+  .field textarea,
+  .field select {
+    font-size: 16px; /* Prevent zoom */
+  }
+}
+
+/* =============================================
+   ICON + TEXT BUTTON
+   ============================================= */
+
+.btn-primary i,
+.btn-secondary i,
+.btn-success i,
+.btn-danger i {
+  font-size: 0.9rem;
+}
+
+.btn-sm i {
+  font-size: 0.8rem;
+}
+
+/* =============================================
+   UTILITY: FLEX RESPONSIVE
+   ============================================= */
+
+@media (max-width: 768px) {
+  [style*="display: flex"] {
+    flex-wrap: wrap;
+  }
+
+  [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
