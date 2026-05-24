@@ -2,7 +2,16 @@ import { supabase } from './supabase.js'
 
 export async function renderJadwalManagement(user) {
   const content = document.getElementById('content')
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  
+  // FIX CRASH: Jika user tidak dikirim dari app.js, ambil otomatis dari variabel global session
+  const currentUserObj = user || window.currentUser
+  
+  if (!currentUserObj) {
+    content.innerHTML = `<div class="card"><p>Silakan login terlebih dahulu.</p></div>`
+    return
+  }
+
+  const isAdmin = currentUserObj.role === 'admin' || currentUserObj.role === 'super_admin'
 
   // Buat opsi dropdown Bulan & Tahun dinamis
   const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
@@ -60,183 +69,170 @@ export async function renderJadwalManagement(user) {
       <p style="color: var(--text-muted); font-size: .85rem; text-align: center; padding: 20px 0;">Silakan klik tombol Tampilkan untuk memuat data jadwal.</p>
     </div>
   `
+}
 
-  window.loadDaftarJadwalMaster = async function() {
-    const m = document.getElementById('selMonth').value
-    const y = document.getElementById('selYear').value
-    const container = document.getElementById('jadwalContainer')
-    
-    container.innerHTML = `<div style="text-align:center; padding:20px 0;"><i class="fa fa-spinner fa-spin" style="color:var(--primary);"></i><p style="font-size:.8rem; color:var(--text-muted); margin-top:6px;">Memuat data jadwal...</p></div>`
-    
+window.loadDaftarJadwalMaster = async function() {
+  const m = document.getElementById('selMonth').value
+  const y = document.getElementById('selYear').value
+  const container = document.getElementById('jadwalContainer')
+  
+  container.innerHTML = `<div style="text-align:center; padding:20px 0;"><i class="fa fa-spinner fa-spin" style="color:var(--primary);"></i><p style="font-size:.8rem; color:var(--text-muted); margin-top:6px;">Memuat data jadwal...</p></div>`
+  
+  try {
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const startStr = `${y}-${String(m).padStart(2,'0')}-01`
+    const endStr = `${y}-${String(m).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`
+
+    const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').order('nama_lengkap')
+    const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
+
+    if(!profiles?.length) {
+      container.innerHTML = `<p style="text-align:center; font-size:.85rem; color:var(--text-muted);">Tidak ada karyawan terdaftar.</p>`
+      return
+    }
+
+    const jadwalMap = {}
+    jadwalData?.forEach(j => {
+      if (!jadwalMap[j.user_id]) jadwalMap[j.user_id] = {}
+      jadwalMap[j.user_id][j.tanggal] = j.shift_code
+    })
+
+    const shiftLabels = { '2': 'Pagi', '3': 'Sore', '4': 'Malam', '8': 'OFF' }
+
+    let tableHtml = `
+      <table class="table-jadwal" style="width: 100%; border-collapse: collapse; font-size: .75rem; min-width: 900px;">
+        <thead>
+          <tr style="background: var(--gray-100); border-bottom: 2px solid var(--border);">
+            <th style="padding: 10px; text-align: left; position: sticky; left: 0; background: var(--gray-100); z-index: 2; width: 140px;">Nama Karyawan</th>
+            ${Array.from({ length: daysInMonth }, (_, i) => `<th style="padding: 6px; text-align: center; width: 35px;">${i + 1}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+    `
+
+    profiles.forEach(p => {
+      tableHtml += `
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 10px; font-weight: 700; position: sticky; left: 0; background: #fff; box-shadow: 2px 0 5px rgba(0,0,0,0.03); z-index: 1;">${p.nama_lengkap}</td>
+      `
+      for (let d = 1; d <= daysInMonth; d++) {
+        const currentTgl = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+        const sCode = jadwalMap[p.id]?.[currentTgl] || '-'
+        const label = shiftLabels[sCode] || sCode
+
+        let bgCell = 'transparent', textCell = 'var(--text)'
+        if (sCode === '2') { bgCell = '#e0f2fe'; textCell = '#0369a1' } 
+        else if (sCode === '3') { bgCell = '#fef3c7'; textCell = '#b45309' } 
+        else if (sCode === '4') { bgCell = '#e0e7ff'; textCell = '#4338ca' } 
+        else if (sCode === '8') { bgCell = '#f1f5f9'; textCell = '#64748b' } 
+
+        tableHtml += `<td style="padding: 6px; text-align: center; background: ${bgCell}; color: ${textCell}; font-weight: 700; border: 1px solid var(--border);">${label}</td>`
+      }
+      tableHtml += '</tr>'
+    })
+
+    tableHtml += '</tbody></table>'
+    container.innerHTML = tableHtml
+
+  } catch (err) {
+    container.innerHTML = `<p style="color:var(--danger); font-size:.82rem; text-align:center;">Gagal memuat tabel: ${err.message}</p>`
+  }
+}
+
+window.uploadJadwalExcel = async function() {
+  if (typeof XLSX === 'undefined') {
+    alert('Library XLSX belum siap dimuat. Mohon tunggu sebentar.')
+    return
+  }
+
+  const fileInput = document.getElementById('excelFile')
+  const statusText = document.getElementById('uploadStatusText')
+  const btn = document.getElementById('btnUploadExcel')
+  
+  const selectedMonth = document.getElementById('selMonth').value
+  const selectedYear = document.getElementById('selYear').value
+
+  if (!fileInput.files.length) {
+    statusText.style.color = 'var(--danger)'
+    statusText.textContent = '⚠ Mohon pilih file Excel terlebih dahulu.'
+    return
+  }
+
+  statusText.style.color = 'var(--primary)'
+  statusText.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Membaca file...'
+  btn.disabled = true
+
+  const file = fileInput.files[0]
+  const reader = new FileReader()
+
+  reader.onload = async function(e) {
     try {
-      const daysInMonth = new Date(y, m, 0).getDate()
-      const startStr = `${y}-${String(m).padStart(2,'0')}-01`
-      const endStr = `${y}-${String(m).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`
-
-      // Ambil profile staff & jadwal sekaligus
-      const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').order('nama_lengkap')
+      const data = new Uint8Array(e.target.result)
+      const workbook = XLSX.read(data, { type: 'array' })
+      const firstSheetName = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[firstSheetName]
       
-      // FIX AUDIT: Mengubah .lte('end', endStr) menjadi .lte('tanggal', endStr) agar tidak crash
-      const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
+      const jsonData = XLSX.utils.sheet_to_json(worksheet)
 
-      if(!profiles?.length) {
-        container.innerHTML = `<p style="text-align:center; font-size:.85rem; color:var(--text-muted);">Tidak ada karyawan terdaftar.</p>`
-        return
+      if (!jsonData || jsonData.length === 0) {
+        throw new Error('File Excel kosong atau format tidak sesuai.')
       }
 
-      const jadwalMap = {}
-      jadwalData?.forEach(j => {
-        if (!jadwalMap[j.user_id]) jadwalMap[j.user_id] = {}
-        jadwalMap[j.user_id][j.tanggal] = j.shift_code
+      const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap')
+      if (errUser) throw errUser
+
+      const userMap = {}
+      users.forEach(u => {
+        userMap[u.nama_lengkap.trim().toLowerCase()] = u.id
       })
 
-      const shiftLabels = { '2': 'Pagi', '3': 'Sore', '4': 'Malam', '8': 'OFF' }
+      const bulkPayload = [] 
+      const totalDays = new Date(selectedYear, selectedMonth, 0).getDate()
 
-      let tableHtml = `
-        <table class="table-jadwal" style="width: 100%; border-collapse: collapse; font-size: .75rem; min-width: 900px;">
-          <thead>
-            <tr style="background: var(--gray-100); border-bottom: 2px solid var(--border);">
-              <th style="padding: 10px; text-align: left; position: sticky; left: 0; background: var(--gray-100); z-index: 2; width: 140px;">Nama Karyawan</th>
-              ${Array.from({ length: daysInMonth }, (_, i) => `<th style="padding: 6px; text-align: center; width: 35px;">${i + 1}</th>`).join('')}
-            </tr>
-          </thead>
-          <tbody>
-      `
+      jsonData.forEach((row, rowIndex) => {
+        const excelName = row['nama'] || row['Nama']
+        if (!excelName) return
 
-      profiles.forEach(p => {
-        tableHtml += `
-          <tr style="border-bottom: 1px solid var(--border);">
-            <td style="padding: 10px; font-weight: 700; position: sticky; left: 0; background: #fff; box-shadow: 2px 0 5px rgba(0,0,0,0.03); z-index: 1;">${p.nama_lengkap}</td>
-        `
-        for (let d = 1; d <= daysInMonth; d++) {
-          const currentTgl = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-          const sCode = jadwalMap[p.id]?.[currentTgl] || '-'
-          const label = shiftLabels[sCode] || sCode
+        const matchedUserId = userMap[excelName.trim().toLowerCase()]
+        if (!matchedUserId) return
 
-          let bgCell = 'transparent', textCell = 'var(--text)'
-          if (sCode === '2') { bgCell = '#e0f2fe'; textCell = '#0369a1' } 
-          else if (sCode === '3') { bgCell = '#fef3c7'; textCell = '#b45309' } 
-          else if (sCode === '4') { bgCell = '#e0e7ff'; textCell = '#4338ca' } 
-          else if (sCode === '8') { bgCell = '#f1f5f9'; textCell = '#64748b' } 
-
-          tableHtml += `<td style="padding: 6px; text-align: center; background: ${bgCell}; color: ${textCell}; font-weight: 700; border: 1px solid var(--border);">${label}</td>`
+        for (let d = 1; d <= totalDays; d++) {
+          const shiftCodeVal = row[String(d)] || row[d]
+          if (shiftCodeVal !== undefined && shiftCodeVal !== null) {
+            const currentTanggalStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+            bulkPayload.push({
+              user_id: matchedUserId,
+              tanggal: currentTanggalStr,
+              shift_code: String(shiftCodeVal).trim()
+            })
+          }
         }
-        tableHtml += '</tr>'
       })
 
-      tableHtml += '</tbody></table>'
-      container.innerHTML = tableHtml
+      if (bulkPayload.length === 0) {
+        throw new Error('Tidak ada baris data kecocokan karyawan yang valid.')
+      }
+
+      statusText.innerHTML = `<i class="fa fa-cloud-upload-alt"></i> Menunggah massal data ke Supabase...`
+
+      const { error: upsertErr } = await supabase
+        .from('jadwal')
+        .upsert(bulkPayload, { onConflict: 'user_id,tanggal' })
+
+      if (upsertErr) throw upsertErr
+
+      statusText.style.color = 'var(--success)'
+      statusText.innerHTML = `✅ Sukses mengunggah ${bulkPayload.length} jadwal secara instan.`
+      fileInput.value = '' 
+
+      await loadDaftarJadwalMaster()
 
     } catch (err) {
-      container.innerHTML = `<p style="color:var(--danger); font-size:.82rem; text-align:center;">Gagal memuat tabel: ${err.message}</p>`
-    }
-  }
-
-  // ===============================================================
-  // BULK UPSERT EXCEL MASSAL (ANTI-HANG & INSTAN)
-  // ===============================================================
-  window.uploadJadwalExcel = async function() {
-    if (typeof XLSX === 'undefined') {
-      alert('Library XLSX belum siap dimuat. Mohon tunggu sebentar atau muat ulang halaman.')
-      return
-    }
-
-    const fileInput = document.getElementById('excelFile')
-    const statusText = document.getElementById('uploadStatusText')
-    const btn = document.getElementById('btnUploadExcel')
-    
-    const selectedMonth = document.getElementById('selMonth').value
-    const selectedYear = document.getElementById('selYear').value
-
-    if (!fileInput.files.length) {
       statusText.style.color = 'var(--danger)'
-      statusText.textContent = '⚠ Mohon pilih file Excel terlebih dahulu.'
-      return
+      statusText.textContent = `❌ Gagal Import: ${err.message}`
+    } finally {
+      btn.disabled = false
     }
-
-    statusText.style.color = 'var(--primary)'
-    statusText.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Membaca file dan memetakan data...'
-    btn.disabled = true
-
-    const file = fileInput.files[0]
-    const reader = new FileReader()
-
-    reader.onload = async function(e) {
-      try {
-        const data = new Uint8Array(e.target.result)
-        const workbook = XLSX.read(data, { type: 'array' })
-        const firstSheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[firstSheetName]
-        
-        const jsonData = XLSX.utils.sheet_to_json(worksheet)
-
-        if (!jsonData || jsonData.length === 0) {
-          throw new Error('File Excel kosong atau format tidak sesuai.')
-        }
-
-        const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap')
-        if (errUser) throw errUser
-
-        const userMap = {}
-        users.forEach(u => {
-          userMap[u.nama_lengkap.trim().toLowerCase()] = u.id
-        })
-
-        const bulkPayload = [] 
-        const totalDays = new Date(selectedYear, selectedMonth, 0).getDate()
-
-        jsonData.forEach((row, rowIndex) => {
-          const excelName = row['nama'] || row['Nama']
-          if (!excelName) return
-
-          const matchedUserId = userMap[excelName.trim().toLowerCase()]
-          if (!matchedUserId) {
-            console.warn(`Nama "${excelName}" di baris ${rowIndex + 2} tidak terdaftar di aplikasi.`);
-            return
-          }
-
-          for (let d = 1; d <= totalDays; d++) {
-            const shiftCodeVal = row[String(d)] || row[d]
-            if (shiftCodeVal !== undefined && shiftCodeVal !== null) {
-              
-              const currentTanggalStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-              
-              bulkPayload.push({
-                user_id: matchedUserId,
-                tanggal: currentTanggalStr,
-                shift_code: String(shiftCodeVal).trim()
-              })
-            }
-          }
-        })
-
-        if (bulkPayload.length === 0) {
-          throw new Error('Tidak ada baris kecocokan jadwal yang valid untuk di-import.')
-        }
-
-        statusText.innerHTML = `<i class="fa fa-cloud-upload-alt"></i> Menembak ${bulkPayload.length} data sekaligus ke Supabase...`
-
-        const { error: upsertErr } = await supabase
-          .from('jadwal')
-          .upsert(bulkPayload, { onConflict: 'user_id,tanggal' })
-
-        if (upsertErr) throw upsertErr
-
-        statusText.style.color = 'var(--success)'
-        statusText.innerHTML = `✅ Sukses! Berhasil mengunggah ${bulkPayload.length} jadwal harian secara instan.`
-        fileInput.value = '' 
-
-        await loadDaftarJadwalMaster()
-
-      } catch (err) {
-        statusText.style.color = 'var(--danger)'
-        statusText.textContent = `❌ Gagal Import: ${err.message}`
-        console.error(err)
-      } finally {
-        btn.disabled = false
-      }
-    }
-
-    reader.readAsArrayBuffer(file)
   }
+  reader.readAsArrayBuffer(file)
 }
