@@ -65,8 +65,10 @@ export async function renderJadwalManagement(user) {
       ` : ''}
     </div>
 
-    <div id="jadwalContainer" class="card fade-up-1" style="padding: 0; overflow: auto; max-height: 500px; border: 1px solid var(--border);">
-      <p style="color: var(--text-muted); font-size: .85rem; text-align: center; padding: 20px 0;">Silakan klik tombol Tampilkan untuk memuat data jadwal.</p>
+    <div id="jadwalContainer" style="width: 100%;">
+      <div class="card" style="padding: 20px 0; text-align: center; color: var(--text-muted); font-size: .85rem;">
+        Silakan klik tombol Tampilkan untuk memuat data jadwal.
+      </div>
     </div>
   `
 }
@@ -76,7 +78,7 @@ window.loadDaftarJadwalMaster = async function() {
   const y = document.getElementById('selYear').value
   const container = document.getElementById('jadwalContainer')
   
-  container.innerHTML = `<div style="text-align:center; padding:20px 0;"><i class="fa fa-spinner fa-spin" style="color:var(--primary);"></i><p style="font-size:.8rem; color:var(--text-muted); margin-top:6px;">Memuat data jadwal...</p></div>`
+  container.innerHTML = `<div class="card" style="text-align:center; padding:30px 0;"><i class="fa fa-spinner fa-spin" style="color:var(--primary); font-size: 1.5rem;"></i><p style="font-size:.85rem; color:var(--text-muted); margin-top:10px;">Memuat data jadwal...</p></div>`
   
   try {
     const daysInMonth = new Date(y, m, 0).getDate()
@@ -87,7 +89,7 @@ window.loadDaftarJadwalMaster = async function() {
     const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
 
     if(!profiles?.length) {
-      container.innerHTML = `<p style="text-align:center; font-size:.85rem; color:var(--text-muted);">Tidak ada karyawan terdaftar.</p>`
+      container.innerHTML = `<div class="card" style="padding:20px; text-align:center; font-size:.85rem; color:var(--text-muted);">Tidak ada karyawan terdaftar.</div>`
       return
     }
 
@@ -99,42 +101,59 @@ window.loadDaftarJadwalMaster = async function() {
 
     const shiftLabels = { '2': 'Pagi', '3': 'Sore', '4': 'Malam', '8': 'OFF' }
 
-    // PEMBAHARUAN CSS: Mengunci posisi baris dan kolom secara mutlak (Sticky System)
+    // SOLUSI ABSOLUT: Membuka pembungkus (wrapper) mandiri yang memotong batasan CSS luar
     let tableHtml = `
-      <table class="table-jadwal" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: .75rem; min-width: 1000px;">
-        <thead>
-          <tr>
-            <th style="
-              padding: 12px 10px; 
-              text-align: left; 
-              position: sticky; 
-              left: 0; 
-              top: 0; 
-              background: #f1f5f9; 
-              z-index: 10; 
-              width: 150px;
-              border-bottom: 2px solid #cbd5e1;
-              border-right: 2px solid #cbd5e1;
-              box-shadow: 2px 2px 0 rgba(0,0,0,0.05);
-            ">Nama Karyawan</th>
-            
-            ${Array.from({ length: daysInMonth }, (_, i) => `
+      <div class="card table-freeze-box" style="
+        padding: 0 !important; 
+        overflow: auto !important; 
+        max-height: 480px !important; 
+        max-width: 100% !important;
+        border: 1px solid #e2e8f0;
+        position: relative;
+      ">
+        <table style="
+          width: 100%; 
+          border-collapse: separate !important; 
+          border-spacing: 0 !important; 
+          font-size: .75rem; 
+          min-width: 1100px;
+        ">
+          <thead>
+            <tr>
               <th style="
-                padding: 10px 6px; 
-                text-align: center; 
-                width: 38px;
-                position: sticky;
-                top: 0;
-                background: #f1f5f9;
-                z-index: 5;
+                padding: 12px 10px; 
+                text-align: left; 
+                position: sticky !important; 
+                left: 0 !important; 
+                top: 0 !important; 
+                background: #f1f5f9 !important; 
+                z-index: 99 !important; 
+                width: 150px;
+                min-width: 150px;
                 border-bottom: 2px solid #cbd5e1;
-                border-right: 1px solid #e2e8f0;
-              ">${i + 1}</th>
-            `).join('')}
-          </tr>
-        </thead>
-        <tbody>
-    `
+                border-right: 2px solid #cbd5e1;
+              ">Nama Karyawan</th>
+              
+              ${Array.from({ length: daysInMonth }, (_, i) => `
+                <th style="
+                  padding: 12px 6px; 
+                  text-align: center; 
+                  width: 40px;
+                  min-width: 40px;
+                  position: sticky !important;
+                  top: 0 !important;
+                  background: #f1f5f9 !important;
+                  z-index: 90 !important;
+                  border-bottom: 2px solid #cbd5e1;
+                  border-right: 1px solid #e2e8f0;
+                  color: #475569;
+                  font-weight: 800;
+                ">${i + 1}</th>
+              `).join('')}
+            </tr>
+          </thead>
+          <tbody>
+      `
 
     profiles.forEach(p => {
       tableHtml += `
@@ -142,14 +161,14 @@ window.loadDaftarJadwalMaster = async function() {
           <td style="
             padding: 12px 10px; 
             font-weight: 700; 
-            position: sticky; 
-            left: 0; 
-            background: #ffffff; 
-            z-index: 4; 
+            position: sticky !important; 
+            left: 0 !important; 
+            background: #ffffff !important; 
+            z-index: 80 !important; 
             border-bottom: 1px solid #e2e8f0;
             border-right: 2px solid #cbd5e1;
-            box-shadow: 2px 0 4px rgba(0,0,0,0.04);
             white-space: nowrap;
+            color: #1e293b;
           ">${p.nama_lengkap}</td>
       `
       for (let d = 1; d <= daysInMonth; d++) {
@@ -165,7 +184,7 @@ window.loadDaftarJadwalMaster = async function() {
 
         tableHtml += `
           <td style="
-            padding: 10px 6px; 
+            padding: 12px 6px; 
             text-align: center; 
             background: ${bgCell}; 
             color: ${textCell}; 
@@ -178,11 +197,11 @@ window.loadDaftarJadwalMaster = async function() {
       tableHtml += '</tr>'
     })
 
-    tableHtml += '</tbody></table>'
+    tableHtml += '</tbody></table></div>'
     container.innerHTML = tableHtml
 
   } catch (err) {
-    container.innerHTML = `<p style="color:var(--danger); font-size:.82rem; text-align:center;">Gagal memuat tabel: ${err.message}</p>`
+    container.innerHTML = `<div class="card" style="color:var(--danger); font-size:.85rem; text-align:center; padding:20px;">Gagal memuat tabel: ${err.message}</div>`
   }
 }
 
