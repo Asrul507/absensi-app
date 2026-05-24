@@ -75,7 +75,7 @@ export async function renderJadwal(user) {
 
       // Ambil profile staff & jadwal sekaligus
       const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').order('nama_lengkap')
-      const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
+      const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('end', endStr)
 
       if(!profiles?.length) {
         container.innerHTML = `<p style="text-align:center; font-size:.85rem; color:var(--text-muted);">Tidak ada karyawan terdaftar.</p>`
@@ -185,7 +185,7 @@ export async function renderJadwal(user) {
         const bulkPayload = [] // Wadah penampung array massal
         const totalDays = new Date(selectedYear, selectedMonth, 0).getDate()
 
-        // Looping baris data di file Excel (Per Karyawan)
+        // Looping data di file Excel
         jsonData.forEach((row, rowIndex) => {
           const excelName = row['nama'] || row['Nama']
           if (!excelName) return
