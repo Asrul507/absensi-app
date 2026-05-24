@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+// FIX: getTodayAbsen dan getTodayShift dimasukkan ke baris import dari absensi.js
 import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
 
@@ -11,9 +12,14 @@ function stopCamera(video) {
   window.activeVideoStream = null
 }
 
+/* ===============================================================
+   HITUNG KETERANGAN STATUS ABSENSI
+   Return: { label, color, icon, bg }
+=============================================================== */
 function hitungKeterangan(absen, shift) {
   const shiftSpecial = ['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(shift?.nama_shift)
 
+  // Salah absen — cek duluan sebelum apapun
   if (absen?.status_absensi === 'salah absen') {
     return {
       label: 'Salah Absen',
@@ -24,6 +30,7 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
+  // Shift special (OFF/CUTI/SAKIT/IZIN) tanpa salah absen → complete
   if (shiftSpecial) {
     return {
       label: `Complete · ${shift.nama_shift}`,
@@ -34,6 +41,7 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
+  // Masuk & pulang sudah ada → complete
   if (absen?.waktu_masuk && absen?.waktu_pulang) {
     return {
       label: 'Complete',
@@ -44,6 +52,7 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
+  // Sudah masuk tapi belum pulang
   if (absen?.waktu_masuk && !absen?.waktu_pulang) {
     return {
       label: 'Belum Absen Pulang',
@@ -54,6 +63,7 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
+  // Lupa absen datang (ada record pulang tapi tidak ada masuk)
   if (!absen?.waktu_masuk && absen?.waktu_pulang) {
     return {
       label: 'Tidak Absen Masuk',
@@ -64,6 +74,7 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
+  // Ada record tapi status open
   if (absen && absen.status_absensi === 'open') {
     return {
       label: 'Open',
@@ -74,6 +85,7 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
+  // lupa absen pulang / approved manual
   if (absen?.status_absensi === 'lupa absen pulang') {
     return {
       label: 'Lupa Absen Pulang',
@@ -102,6 +114,7 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
+  // Belum ada data absensi sama sekali & shift kerja biasa
   if (!absen && shift) {
     return {
       label: 'Tidak Absen',
@@ -112,6 +125,7 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
+  // Default open
   return {
     label: 'Open',
     color: '#d97706',
@@ -121,6 +135,7 @@ function hitungKeterangan(absen, shift) {
   }
 }
 
+/* ================= RENDER ABSENSI ================= */
 export async function renderAbsensi(user) {
   const content    = document.getElementById('content')
   const absen      = await getTodayAbsen(user.nama_lengkap)
@@ -129,6 +144,7 @@ export async function renderAbsensi(user) {
   const shiftSpecial = ['CUTI', 'SAKIT', 'IZIN', 'OFF'].includes(todayShift?.nama_shift)
   const ket          = hitungKeterangan(absen, todayShift)
 
+  // Status atas (sedang bekerja / tidak absen / selesai)
   let statusLabel = 'Belum Absen'
   let statusColor = 'var(--gray-400)'
   let statusIcon  = 'fa-circle-minus'
@@ -214,6 +230,7 @@ export async function renderAbsensi(user) {
 
   const actionCard = document.getElementById('absensiActionCard')
 
+  /* ---- Shift special (OFF/CUTI/SAKIT/IZIN) tanpa salah absen ---- */
   if (shiftSpecial && absen?.status_absensi !== 'salah absen') {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
@@ -224,6 +241,7 @@ export async function renderAbsensi(user) {
     return
   }
 
+  /* ---- Tidak ada shift ---- */
   if (!todayShift) {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
@@ -233,6 +251,7 @@ export async function renderAbsensi(user) {
     return
   }
 
+  /* ---- Sudah complete (masuk + pulang) ---- */
   if (absen?.waktu_masuk && absen?.waktu_pulang) {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
@@ -242,13 +261,17 @@ export async function renderAbsensi(user) {
     return
   }
 
+  /* ---- Render kamera + tombol ---- */
+  // KEAMANAN BARU: Menambahkan info helper "Wajib Ambil Foto" dan me-lock tombol aksi utama di awal
   actionCard.innerHTML = `
     <div style="position:relative;border-radius:var(--r-md);overflow:hidden;background:#000;margin-bottom:14px;" id="camWrap">
       <video id="video" autoplay playsinline style="width:100%;display:block;max-height:260px;object-fit:cover;"></video>
     </div>
     <canvas id="canvas" style="display:none;"></canvas>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="actionBox"></div>
-    <p id="photoStatus" style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:8px;min-height:18px;"></p>
+    <p id="photoStatus" style="text-align:center;font-size:.75rem;font-weight:700;color:var(--danger);margin-top:8px;min-height:18px;">
+      <i class="fa fa-info-circle"></i> Ambil foto terlebih dahulu untuk membuka tombol absen
+    </p>
   `
 
   const video       = document.getElementById('video')
@@ -265,20 +288,27 @@ export async function renderAbsensi(user) {
       </div>`
   }
 
-  function makeBtn(id, icon, label, primary = false) {
-    return `<button id="${id}" class="${primary ? 'btn-primary' : 'btn-secondary'}" style="width:100%;">
+  function makeBtn(id, icon, label, primary = false, disabled = false) {
+    return `<button id="${id}" class="${primary ? 'btn-primary' : 'btn-secondary'}" style="width:100%;" ${disabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
       <i class="fa ${icon}"></i> ${label}
     </button>`
   }
 
+  window.photo = null // Reset frame photo state saat render awal
+
+  /* ---- Belum absen masuk ---- */
   if (!absen) {
     actionBox.innerHTML =
       makeBtn('btnFoto', 'fa-camera', 'Ambil Foto') +
-      makeBtn('btnMasuk', 'fa-sign-in-alt', 'Absen Masuk', true)
+      makeBtn('btnMasuk', 'fa-sign-in-alt', 'Absen Masuk', true, true) // Disabled di awal
 
     document.getElementById('btnFoto').onclick = () => {
       window.photo = takePhoto(video, canvas)
-      photoStatus.innerHTML = '<i class="fa fa-check" style="color:var(--success);"></i> Foto berhasil diambil'
+      photoStatus.style.color = 'var(--success)'
+      photoStatus.innerHTML = '<i class="fa fa-check-circle"></i> Foto berhasil disimpan! Tombol absen telah terbuka.'
+      document.getElementById('btnMasuk').disabled = false
+      document.getElementById('btnMasuk').style.opacity = '1'
+      document.getElementById('btnMasuk').style.cursor = 'pointer'
     }
 
     document.getElementById('btnMasuk').onclick = async () => {
@@ -328,14 +358,19 @@ export async function renderAbsensi(user) {
     return
   }
 
+  /* ---- Sudah masuk, belum pulang ---- */
   if (absen && !absen.waktu_pulang) {
     actionBox.innerHTML =
       makeBtn('btnFoto2', 'fa-camera', 'Ambil Foto') +
-      makeBtn('btnPulang', 'fa-sign-out-alt', 'Absen Pulang', true)
+      makeBtn('btnPulang', 'fa-sign-out-alt', 'Absen Pulang', true, true) // Disabled di awal
 
     document.getElementById('btnFoto2').onclick = () => {
       window.photo = takePhoto(video, canvas)
-      photoStatus.innerHTML = '<i class="fa fa-check" style="color:var(--success);"></i> Foto berhasil diambil'
+      photoStatus.style.color = 'var(--success)'
+      photoStatus.innerHTML = '<i class="fa fa-check-circle"></i> Foto berhasil disimpan! Tombol absen telah terbuka.'
+      document.getElementById('btnPulang').disabled = false
+      document.getElementById('btnPulang').style.opacity = '1'
+      document.getElementById('btnPulang').style.cursor = 'pointer'
     }
 
     document.getElementById('btnPulang').onclick = async () => {
@@ -370,7 +405,6 @@ export async function renderRiwayat() {
   rr(window.currentUser)
 }
 
-// FITUR BARU: FUNGSI PREVIEW GAMBAR FULL SCREEN MODAL POP-UP
 window.previewImageFullScreen = function(urlSrc) {
   if (!urlSrc) return
   
@@ -404,7 +438,6 @@ window.previewImageFullScreen = function(urlSrc) {
   overlay.appendChild(img)
   document.body.appendChild(overlay)
   
-  // Trigger animation smoother
   setTimeout(() => {
     overlay.style.opacity = '1'
     img.style.transform = 'scale(1)'
