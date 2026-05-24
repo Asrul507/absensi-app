@@ -1,6 +1,26 @@
 import { supabase } from './supabase.js'
 
 /* ===============================================================
+   CHART INSTANCE TRACKER (FIXED: Mencegah Konflik Canvas)
+=============================================================== */
+// Wadah memori untuk melacak grafik yang sedang aktif di layar aplikasi
+const activeCharts = {}
+
+function destroyExistingChart(canvasId) {
+  // Jika canvas masih mengikat chart lama, hancurkan instansinya dari memori
+  if (activeCharts[canvasId]) {
+    activeCharts[canvasId].destroy()
+    activeCharts[canvasId] = null
+  }
+  
+  // Fallback cadangan menggunakan detektor internal Chart.js
+  const nativeChart = Chart.getChart(canvasId)
+  if (nativeChart) {
+    nativeChart.destroy()
+  }
+}
+
+/* ===============================================================
    CHART COLORS & CONFIG
 =============================================================== */
 export const CHART_COLORS = {
@@ -38,15 +58,17 @@ export function createTotalJamKerjaChart(canvasId, totalJam) {
   const ctx = document.getElementById(canvasId)?.getContext('2d')
   if (!ctx) return
 
-  // Convert decimal jam to HH:MM format
+  // FIX: Hancurkan chart lama sebelum memuat yang baru
+  destroyExistingChart(canvasId)
+
   const jam = Math.floor(totalJam)
   const menit = Math.round((totalJam - jam) * 60)
   const jamText = `${String(jam).padStart(2, '0')}:${String(menit).padStart(2, '0')}`
 
-  // Progress circle (assume 160 jam/bulan target)
   const percentage = Math.min((totalJam / 160) * 100, 100)
 
-  new Chart(ctx, {
+  // Simpan hasil render baru ke dalam tracker objek global
+  activeCharts[canvasId] = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: ['Tercapai', 'Sisa'],
@@ -78,7 +100,6 @@ export function createTotalJamKerjaChart(canvasId, totalJam) {
     },
   })
 
-  // Display text in center
   const textElement = document.getElementById(`${canvasId}-text`)
   if (textElement) {
     textElement.innerHTML = `
@@ -100,7 +121,9 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
   const ctx = document.getElementById(canvasId)?.getContext('2d')
   if (!ctx) return
 
-  // Fetch data absensi in range
+  // FIX: Hancurkan chart lama sebelum memuat yang baru
+  destroyExistingChart(canvasId)
+
   const { data: absensiData } = await supabase
     .from('absensi')
     .select('*')
@@ -108,11 +131,9 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
     .lte('tanggal', dateTo)
     .order('tanggal', { ascending: true })
 
-  // Group by date
   const dateMap = {}
   const dates = []
 
-  // Generate all dates in range
   let currentDate = new Date(dateFrom)
   const endDate = new Date(dateTo)
   while (currentDate <= endDate) {
@@ -122,7 +143,6 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
     currentDate.setDate(currentDate.getDate() + 1)
   }
 
-  // Process absensi data
   absensiData?.forEach(a => {
     if (!dateMap[a.tanggal]) {
       dateMap[a.tanggal] = { jamMasuk: null, jamPulang: null }
@@ -140,11 +160,11 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
     }
   })
 
-  // Prepare chart data
   const jamMasukData = dates.map(d => dateMap[d].jamMasuk)
   const jamPulangData = dates.map(d => dateMap[d].jamPulang)
 
-  new Chart(ctx, {
+  // Simpan hasil render baru ke dalam tracker objek global
+  activeCharts[canvasId] = new Chart(ctx, {
     type: 'line',
     data: {
       labels: dates.map(d => {
@@ -217,14 +237,17 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
     return
   }
 
-  // Fetch data
+  // FIX: Hancurkan ketiga chart lama sebelum memuat rangkaian chart baru
+  destroyExistingChart(canvasId1)
+  destroyExistingChart(canvasId2)
+  destroyExistingChart(canvasId3)
+
   const { data: absensiData } = await supabase
     .from('absensi')
     .select('*')
     .gte('tanggal', dateFrom)
     .lte('tanggal', dateTo)
 
-  // Count total workdays
   let totalDays = 0
   let hadir = 0
   let terlambat = 0
@@ -235,7 +258,6 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
   absensiData?.forEach(a => {
     totalDays++
     
-    // Kehadiran
     if (!a.waktu_masuk) {
       tidakAbsen++
     } else if (a.status_masuk === 'Terlambat') {
@@ -244,10 +266,7 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
       hadir++
     }
 
-    // Absen Masuk
     if (a.waktu_masuk) masukOk++
-
-    // Absen Pulang
     if (a.waktu_pulang) pulangOk++
   })
 
@@ -256,7 +275,7 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
   // Chart 1: Kehadiran
   const ctx1 = document.getElementById(canvasId1)?.getContext('2d')
   if (ctx1) {
-    new Chart(ctx1, {
+    activeCharts[canvasId1] = new Chart(ctx1, {
       type: 'doughnut',
       data: {
         labels: ['Hadir', 'Terlambat', 'Tidak Hadir'],
@@ -287,7 +306,7 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
   // Chart 2: Absen Masuk
   const ctx2 = document.getElementById(canvasId2)?.getContext('2d')
   if (ctx2) {
-    new Chart(ctx2, {
+    activeCharts[canvasId2] = new Chart(ctx2, {
       type: 'doughnut',
       data: {
         labels: ['Absen Masuk', 'Tidak Absen Masuk'],
@@ -317,7 +336,7 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
   // Chart 3: Absen Pulang
   const ctx3 = document.getElementById(canvasId3)?.getContext('2d')
   if (ctx3) {
-    new Chart(ctx3, {
+    activeCharts[canvasId3] = new Chart(ctx3, {
       type: 'doughnut',
       data: {
         labels: ['Absen Pulang', 'Tidak Absen Pulang'],
