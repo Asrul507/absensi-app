@@ -814,10 +814,13 @@ window.openEditKaryawan = async function(id) {
 /* ================= SIMPAN EDIT DATA KARYAWAN (FIXED) ================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
   const newPassword = document.getElementById('editPassword').value.trim()
+  
+  // Tangkap teks lokasi yang baru saja dipilih oleh Admin dari dropdown
+  const titikRadiusBaru = document.getElementById('editTitikRadius').value || null
 
   try {
     if (canEditAll) {
-      // FIX 3: MEMASUKKAN KOLOM titik_radius AGAR IKUT TER-UPDATE MASUK KE SUPABASE
+      // 1. Perbarui data profil ke tabel 'profiles' di Supabase
       const { error: profileErr } = await supabase
         .from('profiles')
         .update({
@@ -826,7 +829,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
           departemen:   document.getElementById('editDept').value.trim(),
           no_hp:        document.getElementById('editHp').value.trim(),
           tanggal_lahir: document.getElementById('editLahir').value || null,
-          titik_radius:  document.getElementById('editTitikRadius').value || null // Menyimpan jatah radius terupdate ke DB
+          titik_radius:  titikRadiusBaru // Menyimpan jatah radius terupdate ke DB
         })
         .eq('id', id)
 
@@ -842,13 +845,37 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
         if (passErr) throw passErr
       } else {
-        alert('ℹ️ Reset password karyawan lain memerlukan Supabase Admin Function. Hubungi super admin atau aktifkan Edge Function untuk fitur ini.')
+        alert('ℹ️ Reset password karyawan lain memerlukan Supabase Admin Function. Hubungi super admin untuk fitur ini.')
       }
     }
 
+    // ====================================================================
+    // SOLUSI UTAMA: UPDATE DATA CACHE LOKAL AGAR DETAIL POP-UP LANGSUNG SYNC
+    // ====================================================================
+    const userIndex = (window._allUsers || []).findIndex(u => u.id === id)
+    if (userIndex !== -1) {
+      window._allUsers[userIndex].nama_lengkap  = document.getElementById('editNama').value.trim()
+      window._allUsers[userIndex].jabatan       = document.getElementById('editJabatan').value.trim()
+      window._allUsers[userIndex].departemen    = document.getElementById('editDept').value.trim()
+      window._allUsers[userIndex].no_hp         = document.getElementById('editHp').value.trim()
+      window._allUsers[userIndex].tanggal_lahir = document.getElementById('editLahir').value || null
+      window._allUsers[userIndex].titik_radius  = titikRadiusBaru // Update langsung di memori browser
+    }
+
+    // Jika admin mengedit profilnya sendiri, perbarui juga session globalnya
+    if (isMe && window.currentUser) {
+      window.currentUser.titik_radius = titikRadiusBaru
+    }
+
     window.closeUserModal()
-    alert('✅ Seluruh perubahan data berhasil disimpan!')
-    await renderUsers()
+    alert('✅ Seluruh perubahan data karyawan berhasil disimpan!')
+    
+    // Jalankan ulang fungsi render data agar baris di halaman list ikut ter-update live
+    if (typeof renderUsers === 'function') {
+      await renderUsers()
+    } else {
+      location.reload()
+    }
 
   } catch (err) {
     alert('Gagal memperbarui data: ' + err.message)
