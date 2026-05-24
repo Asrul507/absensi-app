@@ -533,56 +533,91 @@ async function renderUsers() {
     }
   }
 
-  window.openFormTambah = function() {
-    window.showUserModal(`
-      <div class="modal-header">
-        <h3><i class="fa fa-user-plus" style="color:var(--primary);"></i> Tambah Data Karyawan</h3>
-        <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:10px;">
-        <div class="field full" style="grid-column:1/-1;">
-          <label>Nama Lengkap <span class="req">*</span></label>
-          <input id="pNama" placeholder="Nama lengkap karyawan">
-        </div>
-        <div class="field"><label>Jabatan</label><input id="pJabatan" placeholder="Jabatan"></div>
-        <div class="field"><label>Departemen</label><input id="pDept" placeholder="Departemen"></div>
-        <div class="field"><label>No. HP</label><input id="pHp" placeholder="08xx"></div>
-        <div class="field"><label>Tanggal Bergabung</label><input type="date" id="pTgl" value="${new Date().toISOString().split('T')[0]}"></div>
-        <div class="field"><label>Tanggal Lahir</label><input type="date" id="pLahir"></div>
-        <div class="field"><label>Role</label>
-          <select id="pRole">
-            <option value="staff">Staff</option>
-            ${viewerRole === 'super_admin' ? `<option value="admin">Admin</option><option value="super_admin">Super Admin</option>` : ''}
-          </select>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
-        <button class="btn-primary" onclick="savePendingKaryawan()"><i class="fa fa-save"></i> Simpan Data</button>
-      </div>
-    `)
+ // ====================================================================
+// SOLUSI TOTAL: FORM TAMBAH KARYAWAN AKTIF LIVE DI js/app.js
+// ====================================================================
+window.openFormTambah = async function() {
+  let opsiLokasi = ''
+  try {
+    // Ambil daftar lokasi absen langsung dari database Supabase
+    const { data: lokAsiList, error } = await supabase.from('lokasi_absen').select('*')
+    if (!error && lokAsiList) {
+      opsiLokasi = lokAsiList.map(l => {
+        // Antisipasi aman jika nama kolom di database Anda berbeda
+        const namaTitik = l.nama_titik || l.nama_lokasi || l.nama || '';
+        return `<option value="${namaTitik}">${namaTitik}</option>`
+      }).join('')
+    }
+  } catch (e) {
+    console.error("Gagal menarik daftar lokasi absen:", e)
   }
 
-  window.savePendingKaryawan = async function() {
-    const nama = document.getElementById('pNama').value.trim()
-    if (!nama) { alert('Nama wajib diisi'); return }
+  const currentViewerRole = window.currentUser?.role || 'admin'
 
-    const { error } = await supabase.from('pending_profiles').insert([{
-      nama_lengkap:      nama,
-      jabatan:           document.getElementById('pJabatan').value.trim(),
-      departemen:        document.getElementById('pDept').value.trim(),
-      no_hp:             document.getElementById('pHp').value.trim(),
-      tanggal_bergabung: document.getElementById('pTgl').value || null,
-      tanggal_lahir:     document.getElementById('pLahir').value || null,
-      role:              document.getElementById('pRole').value,
-      created_by:        window.currentUser.id,
-    }])
+  window.showUserModal(`
+    <div class="modal-header">
+      <h3><i class="fa fa-user-plus" style="color:var(--primary);"></i> Tambah Data Karyawan</h3>
+      <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:10px;">
+      <div class="field full" style="grid-column:1/-1;">
+        <label>Nama Lengkap <span class="req">*</span></label>
+        <input id="pNama" placeholder="Nama lengkap karyawan">
+      </div>
+      <div class="field"><label>Jabatan</label><input id="pJabatan" placeholder="Jabatan"></div>
+      <div class="field"><label>Departemen</label><input id="pDept" placeholder="Departemen"></div>
+      <div class="field"><label>No. HP</label><input id="pHp" placeholder="08xx"></div>
+      <div class="field"><label>Tanggal Bergabung</label><input type="date" id="pTgl" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="field"><label>Tanggal Lahir</label><input type="date" id="pLahir"></div>
+      <div class="field"><label>Role</label>
+        <select id="pRole">
+          <option value="staff">Staff</option>
+          ${currentViewerRole === 'super_admin' ? `<option value="admin">Admin</option><option value="super_admin">Super Admin</option>` : ''}
+        </select>
+      </div>
+      
+      <div class="field">
+        <label>Jatah Titik Radius</label>
+        <select id="pTitikRadius" style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700; background:#fff; color:#000;">
+          <option value="">-- Bebas Radius (Bypass) --</option>
+          ${opsiLokasi}
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
+      <button class="btn-primary" onclick="savePendingKaryawan()"><i class="fa fa-save"></i> Simpan Data</button>
+    </div>
+  `)
+}
 
-    if (error) { alert('Gagal simpan: ' + error.message); return }
-    window.closeUserModal()
-    alert(`✅ Data ${nama} disimpan ke daftar tunggu!`)
+ window.savePendingKaryawan = async function() {
+  const nama = document.getElementById('pNama').value.trim()
+  if (!nama) { alert('Nama wajib diisi'); return }
+
+  const { error } = await supabase.from('pending_profiles').insert([{
+    nama_lengkap:      nama,
+    jabatan:           document.getElementById('pJabatan').value.trim(),
+    departemen:        document.getElementById('pDept').value.trim(),
+    no_hp:             document.getElementById('pHp').value.trim(),
+    tanggal_bergabung: document.getElementById('pTgl').value || null,
+    tanggal_lahir:     document.getElementById('pLahir').value || null,
+    role:              document.getElementById('pRole').value,
+    titik_radius:      document.getElementById('pTitikRadius').value || null, // data jatah radius sukses tersimpan
+    created_by:        window.currentUser?.id || null
+  }])
+
+  if (error) { alert('Gagal menyimpan ke daftar tunggu: ' + error.message); return }
+  window.closeUserModal()
+  alert(`✅ Data Karyawan Baru (${nama}) Berhasil disimpan ke Daftar Tunggu!`)
+  
+  // Panggil kembali fungsi render untuk memperbarui layar halaman utama
+  if (typeof renderUsers === 'function') {
     await renderUsers()
+  } else {
+    location.reload()
   }
+}
 }
 
 /* ================= RENDER LIST KARYAWAN AKTIF ================= */
