@@ -11,7 +11,7 @@ import { renderDaftarAbsensi } from './daftar-absensi.js'
 import { renderPerbaikanAbsen } from './perbaikan-absen.js'
 import { renderPengajuan } from './pengajuan.js'
 import { renderKalenderHR } from './kalender.js'
-import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungjatahCuti, resetCutiKaryawan } from './cuti.js'
+import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
 
