@@ -2,8 +2,6 @@ import { supabase } from './supabase.js'
 
 export async function renderJadwalManagement(user) {
   const content = document.getElementById('content')
-  
-  // Ambil otomatis dari variabel global session jika user tidak dikirim dari app.js
   const currentUserObj = user || window.currentUser
   
   if (!currentUserObj) {
@@ -13,7 +11,6 @@ export async function renderJadwalManagement(user) {
 
   const isAdmin = currentUserObj.role === 'admin' || currentUserObj.role === 'super_admin'
 
-  // Buat opsi dropdown Bulan & Tahun dinamis
   const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
   const now = new Date()
   const currentMonth = now.getMonth()
@@ -25,6 +22,79 @@ export async function renderJadwalManagement(user) {
                      <option value="${currentYear+1}">${currentYear+1}</option>`
 
   content.innerHTML = `
+    <style>
+      .schedule-split-wrapper {
+        display: flex;
+        width: 100%;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+      /* Sisi Kiri: Kolom Nama Mati */
+      .left-name-side {
+        width: 140px;
+        min-width: 140px;
+        flex-shrink: 0;
+        background: #f8fafc;
+        border-right: 2px solid #cbd5e1;
+        box-shadow: 3px 0 5px rgba(0,0,0,0.05);
+      }
+      /* Sisi Kanan: Konten Tanggal & Shift yang Bisa Digeser */
+      .right-data-side {
+        flex-grow: 1;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .table-split {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.75rem;
+      }
+      .table-split th, .table-split td {
+        box-sizing: border-box;
+        border-bottom: 1px solid #e2e8f0;
+        border-right: 1px solid #e2e8f0;
+        text-align: center;
+      }
+      .table-split th {
+        background: #f1f5f9;
+        font-weight: 800;
+        color: #475569;
+        padding: 12px 4px;
+        height: 43px;
+      }
+      .table-split td {
+        padding: 12px 4px;
+        height: 43px;
+        font-weight: 700;
+      }
+      .name-cell-fixed {
+        padding: 12px 8px;
+        font-weight: 700;
+        font-size: 0.75rem;
+        color: #1e293b;
+        border-bottom: 1px solid #e2e8f0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        height: 43px;
+        display: flex;
+        align-items: center;
+      }
+      .header-corner-fixed {
+        padding: 12px 8px;
+        font-weight: 800;
+        font-size: 0.75rem;
+        color: #475569;
+        background: #f1f5f9;
+        border-bottom: 2px solid #cbd5e1;
+        height: 43px;
+        display: flex;
+        align-items: center;
+      }
+    </style>
+
     <div class="page-header">
       <h2><i class="fa fa-calendar-alt"></i> Pengaturan Jadwal Kerja</h2>
     </div>
@@ -101,76 +171,28 @@ window.loadDaftarJadwalMaster = async function() {
 
     const shiftLabels = { '2': 'Pagi', '3': 'Sore', '4': 'Malam', '8': 'OFF' }
 
-    // SOLUSI ABSOLUT: Membuka pembungkus (wrapper) mandiri yang memotong batasan CSS luar
-    let tableHtml = `
-      <div class="card table-freeze-box" style="
-        padding: 0 !important; 
-        overflow: auto !important; 
-        max-height: 480px !important; 
-        max-width: 100% !important;
-        border: 1px solid #e2e8f0;
-        position: relative;
-      ">
-        <table style="
-          width: 100%; 
-          border-collapse: separate !important; 
-          border-spacing: 0 !important; 
-          font-size: .75rem; 
-          min-width: 1100px;
-        ">
-          <thead>
-            <tr>
-              <th style="
-                padding: 12px 10px; 
-                text-align: left; 
-                position: sticky !important; 
-                left: 0 !important; 
-                top: 0 !important; 
-                background: #f1f5f9 !important; 
-                z-index: 99 !important; 
-                width: 150px;
-                min-width: 150px;
-                border-bottom: 2px solid #cbd5e1;
-                border-right: 2px solid #cbd5e1;
-              ">Nama Karyawan</th>
-              
-              ${Array.from({ length: daysInMonth }, (_, i) => `
-                <th style="
-                  padding: 12px 6px; 
-                  text-align: center; 
-                  width: 40px;
-                  min-width: 40px;
-                  position: sticky !important;
-                  top: 0 !important;
-                  background: #f1f5f9 !important;
-                  z-index: 90 !important;
-                  border-bottom: 2px solid #cbd5e1;
-                  border-right: 1px solid #e2e8f0;
-                  color: #475569;
-                  font-weight: 800;
-                ">${i + 1}</th>
-              `).join('')}
-            </tr>
-          </thead>
-          <tbody>
-      `
+    // PEMBUATAN STRUKTUR SPLIT DATA
+    let leftHtml = `<div class="left-name-side">
+                      <div class="header-corner-fixed">Nama Karyawan</div>`
+    
+    let rightHtml = `<div class="right-data-side">
+                      <table class="table-split" style="min-width: ${daysInMonth * 40}px;">
+                        <thead>
+                          <tr>`
+    
+    // Render Header Tanggal di sisi kanan
+    for (let i = 1; i <= daysInMonth; i++) {
+      rightHtml += `<th style="width: 40px; min-width: 40px;">${i}</th>`
+    }
+    rightHtml += `</tr></thead><tbody>`
 
+    // Render Baris Karyawan
     profiles.forEach(p => {
-      tableHtml += `
-        <tr>
-          <td style="
-            padding: 12px 10px; 
-            font-weight: 700; 
-            position: sticky !important; 
-            left: 0 !important; 
-            background: #ffffff !important; 
-            z-index: 80 !important; 
-            border-bottom: 1px solid #e2e8f0;
-            border-right: 2px solid #cbd5e1;
-            white-space: nowrap;
-            color: #1e293b;
-          ">${p.nama_lengkap}</td>
-      `
+      // Masukkan nama ke panel kiri yang terkunci
+      leftHtml += `<div class="name-cell-fixed">${p.nama_lengkap}</div>`
+      
+      // Masukkan baris data shift ke panel kanan yang bisa digeser
+      rightHtml += `<tr>`
       for (let d = 1; d <= daysInMonth; d++) {
         const currentTgl = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
         const sCode = jadwalMap[p.id]?.[currentTgl] || '-'
@@ -182,23 +204,16 @@ window.loadDaftarJadwalMaster = async function() {
         else if (sCode === '4') { bgCell = '#e0e7ff'; textCell = '#4338ca' } 
         else if (sCode === '8') { bgCell = '#f1f5f9'; textCell = '#64748b' } 
 
-        tableHtml += `
-          <td style="
-            padding: 12px 6px; 
-            text-align: center; 
-            background: ${bgCell}; 
-            color: ${textCell}; 
-            font-weight: 700; 
-            border-bottom: 1px solid #e2e8f0;
-            border-right: 1px solid #e2e8f0;
-          ">${label}</td>
-        `
+        rightHtml += `<td style="background: ${bgCell} !important; color: ${textCell} !important; width: 40px; min-width: 40px;">${label}</td>`
       }
-      tableHtml += '</tr>'
+      rightHtml += `</tr>`
     })
 
-    tableHtml += '</tbody></table></div>'
-    container.innerHTML = tableHtml
+    leftHtml += `</div>`
+    rightHtml += `</tbody></table></div>`
+
+    // Satukan kedua sisi ke dalam satu wrapper flexbox
+    container.innerHTML = `<div class="schedule-split-wrapper">${leftHtml}${rightHtml}</div>`
 
   } catch (err) {
     container.innerHTML = `<div class="card" style="color:var(--danger); font-size:.85rem; text-align:center; padding:20px;">Gagal memuat tabel: ${err.message}</div>`
