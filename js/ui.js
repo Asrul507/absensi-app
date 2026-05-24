@@ -1,5 +1,4 @@
 import { supabase } from './supabase.js'
-// FIX: getTodayAbsen dan getTodayShift dimasukkan ke baris import dari absensi.js
 import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
 
@@ -12,14 +11,9 @@ function stopCamera(video) {
   window.activeVideoStream = null
 }
 
-/* ===============================================================
-   HITUNG KETERANGAN STATUS ABSENSI
-   Return: { label, color, icon, bg }
-=============================================================== */
 function hitungKeterangan(absen, shift) {
   const shiftSpecial = ['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(shift?.nama_shift)
 
-  // Salah absen — cek duluan sebelum apapun
   if (absen?.status_absensi === 'salah absen') {
     return {
       label: 'Salah Absen',
@@ -30,7 +24,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  // Shift special (OFF/CUTI/SAKIT/IZIN) tanpa salah absen → complete
   if (shiftSpecial) {
     return {
       label: `Complete · ${shift.nama_shift}`,
@@ -41,7 +34,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  // Masuk & pulang sudah ada → complete
   if (absen?.waktu_masuk && absen?.waktu_pulang) {
     return {
       label: 'Complete',
@@ -52,7 +44,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  // Sudah masuk tapi belum pulang
   if (absen?.waktu_masuk && !absen?.waktu_pulang) {
     return {
       label: 'Belum Absen Pulang',
@@ -63,7 +54,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  // Lupa absen datang (ada record pulang tapi tidak ada masuk)
   if (!absen?.waktu_masuk && absen?.waktu_pulang) {
     return {
       label: 'Tidak Absen Masuk',
@@ -74,7 +64,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  // Ada record tapi status open
   if (absen && absen.status_absensi === 'open') {
     return {
       label: 'Open',
@@ -85,7 +74,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  // lupa absen pulang / approved manual
   if (absen?.status_absensi === 'lupa absen pulang') {
     return {
       label: 'Lupa Absen Pulang',
@@ -114,7 +102,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  // Belum ada data absensi sama sekali & shift kerja biasa
   if (!absen && shift) {
     return {
       label: 'Tidak Absen',
@@ -125,7 +112,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  // Default open
   return {
     label: 'Open',
     color: '#d97706',
@@ -135,7 +121,6 @@ function hitungKeterangan(absen, shift) {
   }
 }
 
-/* ================= RENDER ABSENSI ================= */
 export async function renderAbsensi(user) {
   const content    = document.getElementById('content')
   const absen      = await getTodayAbsen(user.nama_lengkap)
@@ -144,7 +129,6 @@ export async function renderAbsensi(user) {
   const shiftSpecial = ['CUTI', 'SAKIT', 'IZIN', 'OFF'].includes(todayShift?.nama_shift)
   const ket          = hitungKeterangan(absen, todayShift)
 
-  // Status atas (sedang bekerja / tidak absen / selesai)
   let statusLabel = 'Belum Absen'
   let statusColor = 'var(--gray-400)'
   let statusIcon  = 'fa-circle-minus'
@@ -170,7 +154,6 @@ export async function renderAbsensi(user) {
   content.innerHTML = `
     <div style="max-width:480px;margin:0 auto;">
 
-      <!-- STATUS CARD -->
       <div class="card fade-up" style="text-align:center;padding:24px 20px 20px;">
         <i class="fa ${statusIcon}" style="font-size:2.4rem;color:${statusColor};margin-bottom:10px;display:block;"></i>
         <div style="font-size:1rem;font-weight:800;color:${statusColor};">${statusLabel}</div>
@@ -178,18 +161,13 @@ export async function renderAbsensi(user) {
           ${new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}
         </div>
 
-        <!-- BADGE KETERANGAN -->
-        <div style="margin-top:14px;display:inline-flex;align-items:center;gap:8px;
-          padding:8px 16px;border-radius:999px;
-          background:${ket.bg};border:1.5px solid ${ket.border};">
+        <div style="margin-top:14px;display:inline-flex;align-items:center;gap:8px; padding:8px 16px;border-radius:999px; background:${ket.bg};border:1.5px solid ${ket.border};">
           <i class="fa ${ket.icon}" style="color:${ket.color};font-size:.9rem;"></i>
           <span style="font-size:.82rem;font-weight:800;color:${ket.color};">${ket.label}</span>
         </div>
 
-        <!-- SHIFT INFO -->
         ${todayShift ? `
-          <div style="margin-top:14px;background:var(--gray-50);border-radius:var(--r-md);
-            padding:12px 16px;display:inline-flex;gap:20px;align-items:center;">
+          <div style="margin-top:14px;background:var(--gray-50);border-radius:var(--r-md); padding:12px 16px;display:inline-flex;gap:20px;align-items:center;">
             <div style="text-align:left;">
               <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Shift</div>
               <div style="font-weight:800;font-size:.9rem;">${todayShift.nama_shift}</div>
@@ -200,12 +178,10 @@ export async function renderAbsensi(user) {
                 <div style="font-weight:700;font-size:.85rem;">${todayShift.jam_masuk} – ${todayShift.jam_pulang}</div>
               </div>` : ''}
           </div>` : `
-          <div style="margin-top:14px;background:var(--warning-light);border-radius:var(--r-md);
-            padding:10px 16px;font-size:.82rem;color:var(--warning-dark);">
+          <div style="margin-top:14px;background:var(--warning-light);border-radius:var(--r-md); padding:10px 16px;font-size:.82rem;color:var(--warning-dark);">
             ⚠ Tidak ada jadwal hari ini
           </div>`}
 
-        <!-- WAKTU ABSEN -->
         ${absen?.waktu_masuk ? `
           <div style="margin-top:16px;display:flex;justify-content:center;gap:28px;">
             <div style="text-align:center;">
@@ -213,8 +189,7 @@ export async function renderAbsensi(user) {
               <div style="font-weight:900;font-size:1.1rem;color:var(--success);">
                 ${new Date(absen.waktu_masuk).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })}
               </div>
-              ${absen.status_masuk ? `<div style="font-size:.65rem;font-weight:700;margin-top:2px;
-                color:${absen.status_masuk==='Terlambat'?'var(--danger)':'var(--success)'};">
+              ${absen.status_masuk ? `<div style="font-size:.65rem;font-weight:700;margin-top:2px; color:${absen.status_masuk==='Terlambat'?'var(--danger)':'var(--success)'};">
                 ${absen.status_masuk}</div>` : ''}
             </div>
             ${absen.waktu_pulang ? `
@@ -232,7 +207,6 @@ export async function renderAbsensi(user) {
           </div>` : ''}
       </div>
 
-      <!-- AKSI CARD -->
       <div class="card fade-up-1" id="absensiActionCard"></div>
 
     </div>
@@ -240,7 +214,6 @@ export async function renderAbsensi(user) {
 
   const actionCard = document.getElementById('absensiActionCard')
 
-  /* ---- Shift special (OFF/CUTI/SAKIT/IZIN) tanpa salah absen ---- */
   if (shiftSpecial && absen?.status_absensi !== 'salah absen') {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
@@ -251,7 +224,6 @@ export async function renderAbsensi(user) {
     return
   }
 
-  /* ---- Tidak ada shift ---- */
   if (!todayShift) {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
@@ -261,7 +233,6 @@ export async function renderAbsensi(user) {
     return
   }
 
-  /* ---- Sudah complete (masuk + pulang) ---- */
   if (absen?.waktu_masuk && absen?.waktu_pulang) {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
@@ -271,11 +242,9 @@ export async function renderAbsensi(user) {
     return
   }
 
-  /* ---- Render kamera + tombol ---- */
   actionCard.innerHTML = `
     <div style="position:relative;border-radius:var(--r-md);overflow:hidden;background:#000;margin-bottom:14px;" id="camWrap">
-      <video id="video" autoplay playsinline
-        style="width:100%;display:block;max-height:260px;object-fit:cover;"></video>
+      <video id="video" autoplay playsinline style="width:100%;display:block;max-height:260px;object-fit:cover;"></video>
     </div>
     <canvas id="canvas" style="display:none;"></canvas>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="actionBox"></div>
@@ -291,8 +260,7 @@ export async function renderAbsensi(user) {
     await openCamera(video)
   } catch {
     document.getElementById('camWrap').innerHTML = `
-      <div style="background:var(--gray-100);border-radius:var(--r-md);padding:20px;
-        text-align:center;color:var(--text-muted);font-size:.82rem;">
+      <div style="background:var(--gray-100);border-radius:var(--r-md);padding:20px; text-align:center;color:var(--text-muted);font-size:.82rem;">
         <i class="fa fa-camera-slash"></i> Kamera tidak tersedia
       </div>`
   }
@@ -303,7 +271,6 @@ export async function renderAbsensi(user) {
     </button>`
   }
 
-  /* ---- Belum absen masuk ---- */
   if (!absen) {
     actionBox.innerHTML =
       makeBtn('btnFoto', 'fa-camera', 'Ambil Foto') +
@@ -314,7 +281,7 @@ export async function renderAbsensi(user) {
       photoStatus.innerHTML = '<i class="fa fa-check" style="color:var(--success);"></i> Foto berhasil diambil'
     }
 
-  document.getElementById('btnMasuk').onclick = async () => {
+    document.getElementById('btnMasuk').onclick = async () => {
       const btn = document.getElementById('btnMasuk')
       btn.disabled = true
       btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
@@ -340,7 +307,6 @@ export async function renderAbsensi(user) {
         }
       }
 
-      // Hitung status dan menit keterlambatan secara riil
       const hasilCheck = checkStatus(todayShift.jam_masuk)
 
       await submitAbsen({
@@ -350,9 +316,9 @@ export async function renderAbsensi(user) {
         lat_masuk:      loc.lat,
         lng_masuk:      loc.lng,
         foto_masuk:     window.photo || null,
-        status_masuk:   hasilCheck.status,                     // 'Tepat Waktu' atau 'Terlambat'
-        menit_terlambat: hasilCheck.status === 'Terlambat' ? hasilCheck.minutesLate : 0, // Catat menit aslinya
-        jam_jadwal_masuk: todayShift.jam_masuk,                // Catat jam jadwal (misal: '07:00')
+        status_masuk:   hasilCheck.status,
+        menit_terlambat: hasilCheck.status === 'Terlambat' ? hasilCheck.minutesLate : 0,
+        jam_jadwal_masuk: todayShift.jam_masuk,
         status_absensi
       })
 
@@ -362,7 +328,6 @@ export async function renderAbsensi(user) {
     return
   }
 
-  /* ---- Sudah masuk, belum pulang ---- */
   if (absen && !absen.waktu_pulang) {
     actionBox.innerHTML =
       makeBtn('btnFoto2', 'fa-camera', 'Ambil Foto') +
@@ -382,8 +347,6 @@ export async function renderAbsensi(user) {
       try { loc = await getLocation() } catch {}
 
       const status_absensi = absen.status_absensi === 'open' ? 'complete' : absen.status_absensi
-
-      // 1. Jalankan fungsi hitung status pulang dinamis di sini
       const hasilPulang = checkStatusPulang(todayShift.jam_pulang)
 
       await supabase.from('absensi').update({
@@ -392,9 +355,8 @@ export async function renderAbsensi(user) {
         lng_pulang:     loc.lng,
         foto_pulang:    window.photo || null,
         status_absensi,
-        // 2. Simpan data status pulang cepat ke kolom baru Supabase
-        status_pulang:  hasilPulang.status, 
-        menit_pulang_cepat: hasilPulang.minutesEarly 
+        status_pulang:  hasilPulang.status,
+        menit_pulang_cepat: hasilPulang.minutesEarly
       }).eq('id', absen.id)
 
       stopCamera(video)
@@ -403,8 +365,62 @@ export async function renderAbsensi(user) {
   }
 }
 
-/* ================= RIWAYAT (delegate) ================= */
 export async function renderRiwayat() {
   const { renderRiwayat: rr } = await import('./riwayat.js')
   rr(window.currentUser)
+}
+
+// FITUR BARU: FUNGSI PREVIEW GAMBAR FULL SCREEN MODAL POP-UP
+window.previewImageFullScreen = function(urlSrc) {
+  if (!urlSrc) return
+  
+  let existingOverlay = document.getElementById('imagePreviewOverlay')
+  if (existingOverlay) existingOverlay.remove()
+  
+  const overlay = document.createElement('div')
+  overlay.id = 'imagePreviewOverlay'
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10000;
+    cursor: zoom-out;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  `
+  
+  const img = document.createElement('img')
+  img.src = urlSrc
+  img.style.cssText = `
+    max-width: 90%;
+    max-height: 85vh;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    transform: scale(0.9);
+    transition: transform 0.25s ease;
+  `
+  
+  overlay.appendChild(img)
+  document.body.appendChild(overlay)
+  
+  // Trigger animation smoother
+  setTimeout(() => {
+    overlay.style.opacity = '1'
+    img.style.transform = 'scale(1)'
+  }, 10)
+  
+  const closeHandler = () => {
+    overlay.style.opacity = '0'
+    img.style.transform = 'scale(0.9)'
+    setTimeout(() => overlay.remove(), 250)
+  }
+  
+  overlay.onclick = closeHandler
+  document.addEventListener('keydown', function escClose(e) {
+    if (e.key === 'Escape') {
+      closeHandler()
+      document.removeEventListener('keydown', escClose)
+    }
+  })
 }
