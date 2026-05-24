@@ -86,7 +86,9 @@ async function checkUser() {
     const userNameEl = document.getElementById('userName')
     if (userNameEl) userNameEl.innerText = profile.nama_lengkap || user.email
 
-    updateTopbarAvatar(profile)
+    // Selalu load foto dari DB (bukan dari cache lokal) agar persisten
+    await syncAvatarFromDB(profile)
+
     renderMenu(profile.role)
     renderBottomNav(profile.role)
     navigate('dashboard')
@@ -95,6 +97,17 @@ async function checkUser() {
     console.error('checkUser error:', err)
     showLoginPage()
   }
+}
+
+/* ================= SYNC AVATAR DARI DB ================= */
+// Fungsi ini memastikan foto profil selalu dibaca dari database,
+// sehingga tidak reset saat user logout lalu login kembali.
+async function syncAvatarFromDB(profile) {
+  // Jika profile sudah punya foto_url dari DB, gunakan itu
+  if (profile && profile.foto_url) {
+    window.currentUser.foto_url = profile.foto_url
+  }
+  updateTopbarAvatar(window.currentUser)
 }
 
 /* ================= SHOW LOGIN PAGE ================= */
@@ -117,13 +130,13 @@ function showAppPage() {
 function updateTopbarAvatar(profile) {
   const el = document.getElementById('topbarAvatar')
   if (!el) return
-  if (profile.foto_url) {
+  if (profile && profile.foto_url) {
     el.style.backgroundImage = `url(${profile.foto_url})`
     el.style.backgroundSize  = 'cover'
     el.textContent = ''
   } else {
     el.style.backgroundImage = ''
-    el.textContent = (profile.nama_lengkap || '?')[0].toUpperCase()
+    el.textContent = (profile?.nama_lengkap || '?')[0].toUpperCase()
   }
 }
 
@@ -147,7 +160,6 @@ function renderMenu(role) {
   const sidebar = document.getElementById('sidebar')
   if (!sidebar) return
 
-  // FIXED: Menu Riwayat sudah dieliminasi total dari navigasi sidebar
   const menu = role === 'staff'
     ? [
         { key:'dashboard', name:'Dashboard',    icon:'fa-house' },
@@ -230,7 +242,6 @@ window.navigate = async function (page) {
     case 'shift':      renderShiftManagement(); break
     case 'jadwal':     renderJadwalManagement(); break
     case 'pengajuan': renderPengajuan(window.currentUser); break
-    // FIXED: Jalur case 'riwayat' sudah dicabut menyeluruh
     case 'rekap':      renderRekap(window.currentUser); break
     case 'kalender':  renderKalenderHR(); break
     case 'profile':   renderProfile(); break
@@ -254,6 +265,7 @@ function renderProfile() {
   content.innerHTML = `
     <div style="max-width:520px;margin:0 auto;">
 
+      <!-- PROFILE HERO CARD -->
       <div class="profile-card fade-up">
         <div style="position:relative;display:inline-block;margin-bottom:14px;">
           ${avatarHtml}
@@ -272,6 +284,7 @@ function renderProfile() {
         <div class="profile-role">${(u.role||'').replace('_',' ')}</div>
       </div>
 
+      <!-- INFORMASI PRIBADI -->
       <div class="card fade-up-1">
         <div class="card-title"><i class="fa fa-id-card"></i> Informasi Pribadi</div>
         ${infoRow('Email', u.email || '-')}
@@ -281,13 +294,62 @@ function renderProfile() {
         ${infoRow('Status', `<span class="badge ${u.status_akun==='Aktif'?'badge-green':'badge-yellow'}">${u.status_akun||'Aktif'}</span>`)}
       </div>
 
+      <!-- INFO KERJA -->
       <div class="card fade-up-2">
         <div class="card-title"><i class="fa fa-briefcase"></i> Info Kerja</div>
         ${infoRow('Bergabung', u.tanggal_bergabung || '-')}
         ${infoRow('Masa Kerja', formatMasaKerja(masaKerja))}
       </div>
 
+      <!-- EDIT PROFIL — fitur baru: ganti password & foto permanen -->
       <div class="card fade-up-3">
+        <div class="card-title"><i class="fa fa-user-edit"></i> Edit Profil</div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;">
+
+          <!-- Ganti Foto via Kamera Icon sudah ada di atas, info helper saja -->
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--gray-50,#f8fafc);border-radius:var(--r-md);border:1px solid var(--border);">
+            <i class="fa fa-camera" style="color:var(--primary);font-size:1rem;"></i>
+            <div>
+              <div style="font-size:.8rem;font-weight:700;">Foto Profil</div>
+              <div style="font-size:.72rem;color:var(--text-muted);">Ketuk ikon kamera di foto untuk mengganti. Foto tersimpan permanen.</div>
+            </div>
+          </div>
+
+          <!-- Ganti Password -->
+          <div style="border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;">
+            <div style="padding:12px 14px;background:var(--gray-50,#f8fafc);border-bottom:1px solid var(--border);">
+              <div style="font-size:.8rem;font-weight:700;"><i class="fa fa-lock" style="color:var(--primary);"></i> Ganti Password</div>
+            </div>
+            <div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
+              <div>
+                <label style="font-size:.78rem;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px;">Password Baru</label>
+                <input type="password" id="profileNewPassword"
+                  placeholder="Minimal 6 karakter"
+                  style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);
+                    font-size:.85rem;outline:none;font-family:inherit;background:var(--white);color:var(--text);box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:.78rem;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px;">Konfirmasi Password</label>
+                <input type="password" id="profileConfirmPassword"
+                  placeholder="Ulangi password baru"
+                  style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);
+                    font-size:.85rem;outline:none;font-family:inherit;background:var(--white);color:var(--text);box-sizing:border-box;">
+              </div>
+              <div id="passwordMsg" style="font-size:.75rem;min-height:18px;"></div>
+              <button onclick="saveProfilePassword()"
+                style="padding:10px 16px;background:var(--primary);color:#fff;border:none;border-radius:var(--r-md);
+                  font-size:.85rem;font-weight:700;cursor:pointer;transition:opacity .2s;">
+                <i class="fa fa-save"></i> Simpan Password
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- AKUN -->
+      <div class="card fade-up-4">
         <div class="card-title"><i class="fa fa-lock"></i> Akun</div>
         <button class="btn-danger" onclick="logout()">
           <i class="fa fa-sign-out-alt"></i> Keluar
@@ -302,7 +364,40 @@ function infoRow(label, value) {
   return `<div class="info-row"><div class="ir-label">${label}</div><div class="ir-val">${value}</div></div>`
 }
 
-/* ================= UPLOAD FOTO ================= */
+/* ================= SAVE PASSWORD DARI HALAMAN PROFIL ================= */
+window.saveProfilePassword = async function () {
+  const newPass  = document.getElementById('profileNewPassword').value
+  const confPass = document.getElementById('profileConfirmPassword').value
+  const msgEl    = document.getElementById('passwordMsg')
+
+  if (!newPass) {
+    msgEl.innerHTML = '<span style="color:var(--danger);">⚠ Password baru tidak boleh kosong.</span>'
+    return
+  }
+  if (newPass.length < 6) {
+    msgEl.innerHTML = '<span style="color:var(--danger);">⚠ Password minimal 6 karakter.</span>'
+    return
+  }
+  if (newPass !== confPass) {
+    msgEl.innerHTML = '<span style="color:var(--danger);">⚠ Konfirmasi password tidak cocok.</span>'
+    return
+  }
+
+  msgEl.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Menyimpan...'
+
+  const { error } = await supabase.auth.updateUser({ password: newPass })
+
+  if (error) {
+    msgEl.innerHTML = `<span style="color:var(--danger);">⚠ Gagal: ${error.message}</span>`
+    return
+  }
+
+  msgEl.innerHTML = '<span style="color:var(--success,#22c55e);"><i class="fa fa-check"></i> Password berhasil diperbarui!</span>'
+  document.getElementById('profileNewPassword').value  = ''
+  document.getElementById('profileConfirmPassword').value = ''
+}
+
+/* ================= UPLOAD FOTO PROFIL (PERMANEN KE DB) ================= */
 window.uploadFotoProfil = async function (input) {
   const file   = input.files[0]
   const status = document.getElementById('uploadStatus')
@@ -315,24 +410,39 @@ window.uploadFotoProfil = async function (input) {
 
   if (status) status.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mengupload...'
 
-  const fileName = `avatar-${window.currentUser.id}-${Date.now()}.${file.name.split('.').pop()}`
+  // Gunakan nama file yang konsisten berdasarkan user ID (bukan timestamp)
+  // sehingga file lama otomatis tertimpa (upsert), tidak menumpuk di storage
+  const ext      = file.name.split('.').pop()
+  const fileName = `avatar-${window.currentUser.id}.${ext}`
 
   const { error: uploadErr } = await supabase.storage
     .from('avatars')
     .upload(fileName, file, { upsert: true })
 
   if (uploadErr) {
-    if (status) status.textContent = '⚠ Upload gagal'
+    if (status) status.textContent = '⚠ Upload gagal: ' + uploadErr.message
     return
   }
 
   const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
-  const foto_url = urlData.publicUrl
+  // Tambahkan cache-buster agar browser tidak pakai foto lama dari cache
+  const foto_url = urlData.publicUrl + '?t=' + Date.now()
 
-  await supabase.from('profiles').update({ foto_url }).eq('id', window.currentUser.id)
+  // Simpan permanen ke tabel profiles di database
+  const { error: dbErr } = await supabase
+    .from('profiles')
+    .update({ foto_url })
+    .eq('id', window.currentUser.id)
+
+  if (dbErr) {
+    if (status) status.textContent = '⚠ Gagal simpan ke DB: ' + dbErr.message
+    return
+  }
+
+  // Update state global agar foto persisten selama sesi
   window.currentUser.foto_url = foto_url
 
-  if (status) status.innerHTML = '<i class="fa fa-check"></i> Foto diperbarui'
+  if (status) status.innerHTML = '<i class="fa fa-check"></i> Foto diperbarui & tersimpan!'
   updateTopbarAvatar(window.currentUser)
   renderProfile()
 }
@@ -340,11 +450,11 @@ window.uploadFotoProfil = async function (input) {
 /* =============================================================================
    MANAJEMEN KARYAWAN / USERS MODUL (INTEGRASI DETAIL & EDIT BERBASIS PRIVILEGE)
 ============================================================================= */
-import { updateUserPassword } from './auth.js' // Mengimpor fungsi pembantu ganti password
+import { updateUserPassword } from './auth.js'
 
 async function renderUsers() {
   const content  = document.getElementById('content')
-  const viewerRole = window.currentUser.role // Mendeteksi role user yang sedang login aktif ('super_admin', 'admin', 'staff')
+  const viewerRole = window.currentUser.role
 
   content.innerHTML = `
     <div class="page-header">
@@ -391,7 +501,6 @@ async function renderUsers() {
     </div>
   `
 
-  // Mengambil data terupdate dari database Supabase
   const { data: users } = await supabase.from('profiles').select('*').order('nama_lengkap')
   const { data: pending } = await supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap')
 
@@ -408,7 +517,6 @@ async function renderUsers() {
 
   renderUserList(window._allUsers)
 
-  // Tab Switcher Handler
   window.switchTab = function(tab) {
     window._currentTab = tab
     document.getElementById('tabAktif').className   = tab==='aktif'   ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
@@ -419,7 +527,6 @@ async function renderUsers() {
     else renderPendingList(window._pendingList)
   }
 
-  // Live Filter Input Pencarian
   window.filterUsers = function() {
     const q  = document.getElementById('searchUser').value.toLowerCase()
     const st = document.getElementById('filterStatusUser').value
@@ -435,7 +542,6 @@ async function renderUsers() {
     }
   }
 
-  // Buka Form Input Tambah Karyawan Baru (Pending Row Flow)
   window.openFormTambah = function() {
     window.showUserModal(`
       <div class="modal-header">
@@ -501,12 +607,11 @@ function renderUserList(users) {
 
   el.innerHTML = users.map(u => {
     const masaKerja = hitungMasaKerja(u.tanggal_bergabung)
-    const jatah      = hitungJatahCuti(u.tanggal_bergabung)
+    const jatah     = hitungJatahCuti(u.tanggal_bergabung)
     const terpakai  = (window._cutiMap||{})[u.id] || 0
     const sisa      = jatah - terpakai
     const isAktif   = u.status_akun !== 'Non-Aktif'
 
-    // Aturan filter hak edit (Diri sendiri, Admin -> Staff, Super Admin -> Semua)
     let bisaEdit = false
     if (me.role === 'super_admin') {
       bisaEdit = true
@@ -558,7 +663,7 @@ function renderUserList(users) {
   }).join('')
 }
 
-/* ================= POPUP MODAL: DETAIL KARYAWAN (FIXED GLOBAL) ================= */
+/* ================= POPUP MODAL: DETAIL KARYAWAN ================= */
 window.openDetailKaryawan = function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
@@ -589,7 +694,7 @@ window.openDetailKaryawan = function(id) {
   `)
 }
 
-/* ================= POPUP MODAL: EDIT KARYAWAN (FIXED GLOBAL) ================= */
+/* ================= POPUP MODAL: EDIT KARYAWAN ================= */
 window.openEditKaryawan = function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
@@ -603,7 +708,30 @@ window.openEditKaryawan = function(id) {
       <h3><i class="fa fa-user-edit" style="color:var(--warning);"></i> Edit Data: ${target.nama_lengkap}</h3>
       <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
     </div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; padding-top:10px;">
+
+    <!-- FOTO PROFIL EDIT -->
+    <div style="text-align:center;padding:14px 0 10px;border-bottom:1px solid var(--border);margin-bottom:14px;">
+      <div style="position:relative;display:inline-block;">
+        ${target.foto_url
+          ? `<img src="${target.foto_url}" id="editAvatarPreview" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);">`
+          : `<div class="profile-avatar" id="editAvatarPreview" style="width:64px;height:64px;font-size:1.4rem;display:flex;align-items:center;justify-content:center;">${target.nama_lengkap[0].toUpperCase()}</div>`
+        }
+        ${isMe || canEditAllFields ? `
+          <label for="editFotoInput" title="Ganti foto"
+            style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;
+              border-radius:50%;background:var(--primary);color:#fff;cursor:pointer;
+              display:flex;align-items:center;justify-content:center;font-size:.6rem;
+              box-shadow:0 2px 6px rgba(0,0,0,.25);border:2px solid #fff;">
+            <i class="fa fa-camera"></i>
+          </label>
+          <input type="file" id="editFotoInput" accept="image/*" style="display:none;"
+            onchange="uploadFotoEditModal(this,'${target.id}')">
+        ` : ''}
+      </div>
+      <div id="editFotoStatus" style="font-size:.72rem;color:var(--text-muted);margin-top:6px;min-height:16px;"></div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; padding-top:4px;">
       <div class="field full" style="grid-column:1/-1;">
         <label>Nama Lengkap</label>
         <input id="editNama" value="${target.nama_lengkap}" ${canEditAllFields ? '' : 'disabled'}>
@@ -624,6 +752,8 @@ window.openEditKaryawan = function(id) {
         <label>Tanggal Lahir</label>
         <input type="date" id="editLahir" value="${target.tanggal_lahir || ''}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
+
+      <!-- PASSWORD -->
       <div class="field full" style="grid-column:1/-1; border-top:1px solid var(--border); padding-top:10px; margin-top:5px;">
         <label style="color:var(--primary); font-weight:800;"><i class="fa fa-key"></i> ${isMe ? 'Ganti Password Anda' : 'Reset Password Karyawan'}</label>
         <input type="password" id="editPassword" placeholder="Masukkan password baru jika ingin diubah">
@@ -638,7 +768,66 @@ window.openEditKaryawan = function(id) {
   `)
 }
 
-/* ================= SIMPAN PROSES EDIT DATA (FIXED GLOBAL) ================= */
+/* ================= UPLOAD FOTO DI MODAL EDIT ================= */
+window.uploadFotoEditModal = async function(input, targetUserId) {
+  const file    = input.files[0]
+  const statusEl = document.getElementById('editFotoStatus')
+  if (!file) return
+
+  if (file.size > 2 * 1024 * 1024) {
+    if (statusEl) statusEl.textContent = '⚠ Ukuran foto max 2MB'
+    return
+  }
+
+  if (statusEl) statusEl.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mengupload...'
+
+  const ext      = file.name.split('.').pop()
+  const fileName = `avatar-${targetUserId}.${ext}`
+
+  const { error: uploadErr } = await supabase.storage
+    .from('avatars')
+    .upload(fileName, file, { upsert: true })
+
+  if (uploadErr) {
+    if (statusEl) statusEl.textContent = '⚠ Upload gagal: ' + uploadErr.message
+    return
+  }
+
+  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
+  const foto_url = urlData.publicUrl + '?t=' + Date.now()
+
+  // Simpan permanen ke DB
+  const { error: dbErr } = await supabase
+    .from('profiles')
+    .update({ foto_url })
+    .eq('id', targetUserId)
+
+  if (dbErr) {
+    if (statusEl) statusEl.textContent = '⚠ Gagal simpan ke DB: ' + dbErr.message
+    return
+  }
+
+  // Update preview di modal
+  const preview = document.getElementById('editAvatarPreview')
+  if (preview) {
+    preview.style.backgroundImage = `url(${foto_url})`
+    preview.src = foto_url
+  }
+
+  // Jika yang diedit adalah diri sendiri, update juga state global
+  if (targetUserId === window.currentUser.id) {
+    window.currentUser.foto_url = foto_url
+    updateTopbarAvatar(window.currentUser)
+  }
+
+  // Update data lokal cache
+  const idx = (window._allUsers || []).findIndex(u => u.id === targetUserId)
+  if (idx !== -1) window._allUsers[idx].foto_url = foto_url
+
+  if (statusEl) statusEl.innerHTML = '<i class="fa fa-check" style="color:var(--success,#22c55e);"></i> Foto berhasil diperbarui!'
+}
+
+/* ================= SIMPAN EDIT DATA KARYAWAN ================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
   const newPassword = document.getElementById('editPassword').value.trim()
 
@@ -648,9 +837,9 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         .from('profiles')
         .update({
           nama_lengkap: document.getElementById('editNama').value.trim(),
-          jabatan: document.getElementById('editJabatan').value.trim(),
-          departemen: document.getElementById('editDept').value.trim(),
-          no_hp: document.getElementById('editHp').value.trim(),
+          jabatan:      document.getElementById('editJabatan').value.trim(),
+          departemen:   document.getElementById('editDept').value.trim(),
+          no_hp:        document.getElementById('editHp').value.trim(),
           tanggal_lahir: document.getElementById('editLahir').value || null
         })
         .eq('id', id)
@@ -659,11 +848,19 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
     }
 
     if (newPassword) {
+      if (newPassword.length < 6) {
+        alert('⚠ Password minimal 6 karakter!')
+        return
+      }
       if (isMe) {
-        const passOk = await updateUserPassword(newPassword)
-        if (!passOk) return
+        // Ganti password user sendiri via Supabase Auth
+        const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
+        if (passErr) throw passErr
       } else {
-        alert('ℹ️ Permintaan Reset Password dikirim. Pastikan Supabase Admin Trigger aktif untuk User ID ini.');
+        // Admin/super_admin reset password orang lain
+        // Supabase Admin SDK diperlukan untuk ini dari sisi server.
+        // Dari client, hanya bisa reset password user sendiri.
+        alert('ℹ️ Reset password karyawan lain memerlukan Supabase Admin Function. Hubungi super admin atau aktifkan Edge Function untuk fitur ini.')
       }
     }
 
@@ -733,7 +930,7 @@ window.toggleStatusUser = async function(userId, statusSekarang) {
   await renderUsers()
 }
 
-/* ================= UTILLITY: CORE GLOBAL MODAL HELPER (FIXED) ================= */
+/* ================= UTILITY: CORE GLOBAL MODAL HELPER ================= */
 window.showUserModal = function(html) {
   let el = document.getElementById('userModal')
   if (el) el.remove()
