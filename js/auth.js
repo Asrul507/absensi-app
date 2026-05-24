@@ -272,3 +272,25 @@ function showRegError(msg) {
   else alert(msg)
 }
 
+
+/* ===============================================================
+   UPDATE PASSWORD USER (Bisa untuk diri sendiri atau di-reset Admin)
+=============================================================== */
+export async function updateUserPassword(newPassword) {
+  if (!newPassword || newPassword.length < 6) {
+    alert('Password baru minimal 6 karakter!')
+    return false
+  }
+
+  // Supabase otomatis mendeteksi user aktif saat ini untuk diganti password-nya
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword
+  })
+
+  if (error) {
+    alert('Gagal memperbarui password: ' + error.message)
+    return false
+  }
+  return true
+}
+
