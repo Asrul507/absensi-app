@@ -1,26 +1,31 @@
 import { supabase } from './supabase.js'
 
 /* ===============================================================
-   CHART INSTANCE TRACKER (Mencegah Konflik Canvas)
+   CHART INSTANCE TRACKER (DIPERKETAT: FIX CONFLICT CANVAS)
 =============================================================== */
 const activeCharts = {}
 
 function destroyExistingChart(canvasId) {
-  // 1. Hancurkan instansi dari penampung memori internal kita
+  // 1. Hancurkan dari tracking memori objek internal kita jika ada
   if (activeCharts[canvasId]) {
     try {
       activeCharts[canvasId].destroy()
-    } catch (e) { console.warn(e) }
+    } catch (e) { 
+      console.warn("Gagal destroy chart internal:", e) 
+    }
     activeCharts[canvasId] = null
   }
   
-  // 2. Paksa deteksi dan hancurkan instansi dari Chart.js native tracker global
+  // 2. SOLUSI UTAMA: Paksa deteksi objek grafik native yang masih mengunci canvas HTML
   try {
-    const nativeChart = Chart.getChart(canvasId)
-    if (nativeChart) {
-      nativeChart.destroy()
+    const existingChartInstance = Chart.getChart(canvasId)
+    if (existingChartInstance) {
+      existingChartInstance.destroy() // Hancurkan total grafik yang mengganjal
+      console.log(`Sukses mengosongkan sisa memori grafik pada canvas: ${canvasId}`)
     }
-  } catch (e) { console.warn(e) }
+  } catch (e) { 
+    console.warn("Gagal destroy objek native chart:", e) 
+  }
 }
 
 /* ===============================================================
@@ -105,7 +110,7 @@ export function createTotalJamKerjaChart(canvasId, totalJam) {
 export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
   if (typeof Chart === 'undefined') return
 
-  destroyExistingChart(canvasId) // Reset Canvas
+  destroyExistingChart(canvasId) // Reset & bersihkan Canvas terlebih dahulu
 
   const ctx = document.getElementById(canvasId)?.getContext('2d')
   if (!ctx) return
@@ -254,6 +259,7 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
 export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId, dateFrom, dateTo) {
   if (typeof Chart === 'undefined') return
 
+  // BERSIHKAN KANVAS MASSAL SEBELUM PROSES QUERY SUPABASE DIMULAI
   destroyExistingChart(canvasId1)
   destroyExistingChart(canvasId2)
   destroyExistingChart(canvasId3)
@@ -306,6 +312,7 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
     })
   }
 
+  // Menggambar ulang 3 doughnut chart mini secara aman
   renderDoughnutMini(canvasId1, ['Hadir', 'Terlambat', 'Absen'], [hadir, terlambat, tidakAbsen], [CHART_COLORS.success, CHART_COLORS.warning, CHART_COLORS.danger])
   renderDoughnutMini(canvasId2, ['Masuk', 'Kosong'], [masukOk, totalAbsen - masukOk], [CHART_COLORS.success, CHART_COLORS.danger])
   renderDoughnutMini(canvasId3, ['Pulang', 'Kosong'], [pulangOk, totalAbsen - pulangOk], [CHART_COLORS.info, CHART_COLORS.danger])
