@@ -20,10 +20,8 @@ export async function renderDashboard() {
   const fullName = profile?.nama_lengkap || user.email
   const sisaCuti = profile?.sisa_cuti || 0
 
-  // Sync foto_url dari DB ke currentUser supaya avatar tidak reset saat navigate
   if (profile?.foto_url && profile.foto_url !== window.currentUser.foto_url) {
     window.currentUser.foto_url = profile.foto_url
-    // Update topbar avatar
     const el = document.getElementById('topbarAvatar')
     if (el) {
       el.style.backgroundImage = `url(${profile.foto_url})`
@@ -56,27 +54,13 @@ export async function renderDashboard() {
     }
   })
 
-  // Build menu items sesuai role
-  const isStaff = user.role === 'staff'
-  const menuItems = isStaff
-    ? [
-        { nav: 'absensi',       icon: 'fa-sign-in-alt',  label: 'Masuk',      color: '#f59e0b', color2: '#fbbf24' },
-        { nav: 'absensi',       icon: 'fa-sign-out-alt', label: 'Keluar',     color: '#3b82f6', color2: '#60a5fa' },
-        { nav: 'pengajuan',     icon: 'fa-file-alt',     label: 'Pengajuan',  color: '#8b5cf6', color2: '#a78bfa' },
-        { nav: 'rekap-inout',   icon: 'fa-history',      label: 'Riwayat',    color: '#ef4444', color2: '#f87171' },
-        { nav: 'daftar-absensi',icon: 'fa-chart-bar',    label: 'Absensi',    color: '#22c55e', color2: '#4ade80' },
-        { nav: 'kalender',      icon: 'fa-calendar-alt', label: 'Kalender',   color: '#06b6d4', color2: '#22d3ee' },
-      ]
-    : [
-        { nav: 'absensi',       icon: 'fa-sign-in-alt',  label: 'Masuk',      color: '#f59e0b', color2: '#fbbf24' },
-        { nav: 'absensi',       icon: 'fa-sign-out-alt', label: 'Keluar',     color: '#3b82f6', color2: '#60a5fa' },
-        { nav: 'pengajuan',     icon: 'fa-inbox',        label: 'Approval',   color: '#8b5cf6', color2: '#a78bfa' },
-        { nav: 'rekap-inout',   icon: 'fa-history',      label: 'Riwayat',    color: '#ef4444', color2: '#f87171' },
-        { nav: 'daftar-absensi',icon: 'fa-chart-bar',    label: 'Absensi',    color: '#22c55e', color2: '#4ade80' },
-        { nav: 'users',         icon: 'fa-users',        label: 'Karyawan',   color: '#f97316', color2: '#fb923c' },
-        { nav: 'kalender',      icon: 'fa-calendar-alt', label: 'Kalender',   color: '#06b6d4', color2: '#22d3ee' },
-        { nav: 'rekap',         icon: 'fa-chart-pie',    label: 'Rekap',      color: '#ec4899', color2: '#f472b6' },
-      ]
+  // FITUR BARU: Dibatasi HANYA 4 tombol utama saja
+  const menuItems = [
+    { nav: 'absensi',       icon: 'fa-sign-in-alt',  label: 'Masuk',            color: '#f59e0b', color2: '#fbbf24' },
+    { nav: 'absensi',       icon: 'fa-sign-out-alt', label: 'Pulang',           color: '#3b82f6', color2: '#60a5fa' },
+    { nav: 'pengajuan',     icon: 'fa-file-alt',     label: 'Pengajuan',        color: '#8b5cf6', color2: '#a78bfa' },
+    { nav: 'perbaikan-absen',icon: 'fa-pencil-alt',    label: 'Perbaikan Absen',  color: '#ef4444', color2: '#f87171' }
+  ]
 
   const menuHtml = menuItems.map(m => `
     <button
@@ -96,24 +80,22 @@ export async function renderDashboard() {
         align-items: center;
         justify-content: center;
         gap: 6px;
-        min-width: 72px;
-        width: 72px;
+        min-width: 85px;
+        width: 85px;
         flex-shrink: 0;
         transition: all 0.2s;
         box-shadow: 0 2px 8px rgba(0,0,0,0.12);
       ">
       <i class="fa ${m.icon}" style="font-size:1.5rem;"></i>
-      <span style="font-size:.65rem; line-height:1.2;">${m.label}</span>
+      <span style="font-size:.7rem; line-height:1.2; white-space: nowrap;">${m.label}</span>
     </button>
   `).join('')
 
   content.innerHTML = `
-    <!-- HEADER -->
     <div class="page-header" style="margin-bottom: 20px;">
       <h2 style="margin: 0;"><i class="fa fa-tachometer-alt"></i> Dashboard</h2>
     </div>
 
-    <!-- USER INFO CARD -->
     <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white; border: none;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
@@ -124,29 +106,29 @@ export async function renderDashboard() {
       </div>
     </div>
 
-    <!-- FAVORITE MENU — kotak-kotak dengan scroll horizontal jika tidak muat -->
-    <div style="margin-bottom: 20px;">
+    <div style="margin-bottom: 25px; display: flex; justify-content: center; width: 100%;">
       <div style="
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         padding-bottom: 6px;
-        /* Sembunyikan scrollbar tapi tetap bisa scroll */
         scrollbar-width: thin;
         scrollbar-color: rgba(0,0,0,0.15) transparent;
+        max-width: 100%;
       ">
         <div style="
           display: flex;
           flex-direction: row;
-          gap: 10px;
+          justify-content: center;
+          gap: 12px;
           width: max-content;
-          padding: 4px 2px;
+          padding: 4px 6px;
+          margin: 0 auto;
         ">
           ${menuHtml}
         </div>
       </div>
     </div>
 
-    <!-- TOTAL JAM KERJA -->
     <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; text-align: center;">
       <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 14px;">Total Jam Kerja</div>
       <div style="position: relative; width: 160px; height: 160px; margin: 0 auto;">
@@ -155,7 +137,6 @@ export async function renderDashboard() {
       </div>
     </div>
 
-    <!-- AKTIVITAS SAYA - SCROLLABLE -->
     <div class="card fade-up" style="padding: 18px; margin-bottom: 20px;">
       <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Aktivitas Saya (Jam Datang & Pulang)</div>
       <div style="font-size: .75rem; color: var(--text-muted); margin-bottom: 12px;">
@@ -168,28 +149,21 @@ export async function renderDashboard() {
       </div>
     </div>
 
-    <!-- DISTRIBUSI ABSENSI - 3 PIE CHARTS -->
     <div style="margin-bottom: 20px;">
       <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Distribusi Absensi</div>
-      
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-        <!-- Kehadiran -->
         <div class="card fade-up" style="padding: 14px;">
           <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Kehadiran</div>
           <div style="position: relative; width: 100%; height: 200px;">
             <canvas id="absensiChartKehadiran"></canvas>
           </div>
         </div>
-
-        <!-- Absen Masuk -->
         <div class="card fade-up" style="padding: 14px;">
           <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Absen Masuk</div>
           <div style="position: relative; width: 100%; height: 200px;">
             <canvas id="absensiChartMasuk"></canvas>
           </div>
         </div>
-
-        <!-- Absen Pulang -->
         <div class="card fade-up" style="padding: 14px;">
           <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Absen Pulang</div>
           <div style="position: relative; width: 100%; height: 200px;">
@@ -199,17 +173,26 @@ export async function renderDashboard() {
       </div>
     </div>
 
+    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px;">
+      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 14px;">
+        <i class="fa fa-calendar-alt" style="color: var(--primary);"></i> Kalender HRD
+      </div>
+      <div style="padding: 10px 0; text-align: center; border: 1.5px dashed var(--border); border-radius: var(--r-md); background: var(--gray-50);">
+        <p style="font-size: .85rem; color: var(--text-muted); margin-bottom: 8px;">Lihat jadwal kerja dan agenda perusahaan bulan ini</p>
+        <button class="btn-primary btn-sm" onclick="window.navigate('kalender')" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+          <i class="fa fa-eye"></i> Buka Kalender HRD
+        </button>
+      </div>
+    </div>
+
     <style>
       .fav-btn:hover {
         transform: translateY(-3px);
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18) !important;
       }
-      
       .fav-btn:active {
         transform: translateY(-1px);
       }
-
-      /* Custom scrollbar untuk area menu */
       .fav-scroll-area::-webkit-scrollbar {
         height: 4px;
       }
@@ -223,7 +206,6 @@ export async function renderDashboard() {
     </style>
   `
 
-  // Load Chart.js if not loaded
   if (typeof Chart === 'undefined') {
     const script = document.createElement('script')
     script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
