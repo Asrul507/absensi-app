@@ -5,7 +5,6 @@ import { renderDashboard } from './dashboard.js'
 import { renderAbsensi } from './ui.js'
 import { renderShiftManagement } from './shift.js'
 import { renderJadwalManagement } from './jadwal.js'
-import { renderRiwayat } from './riwayat.js'
 import { renderRekap } from './rekap.js'
 import { renderRekapInOut } from './rekap-inout.js'
 import { renderDaftarAbsensi } from './daftar-absensi.js'
@@ -148,6 +147,7 @@ function renderMenu(role) {
   const sidebar = document.getElementById('sidebar')
   if (!sidebar) return
 
+  // FIXED: Menu Riwayat sudah dieliminasi total dari navigasi sidebar
   const menu = role === 'staff'
     ? [
         { key:'dashboard', name:'Dashboard',    icon:'fa-house' },
@@ -156,9 +156,8 @@ function renderMenu(role) {
         { key:'rekap-inout', name:'Rekap In/Out', icon:'fa-clock' },
         { key:'perbaikan-absen', name:'Perbaikan Absen', icon:'fa-pencil-alt' },
         { key:'pengajuan', name:'Pengajuan',    icon:'fa-file-alt' },
-        { key:'riwayat',   name:'Riwayat',      icon:'fa-list' },
         { key:'rekap',     name:'Rekap Absensi', icon:'fa-chart-bar' },
-        { key:'kalender',  name:'Kalender',     icon:'fa-calendar-alt' },
+        { key:'kalender',  name:'Kalender',      icon:'fa-calendar-alt' },
         { key:'profile',   name:'Profil Saya',  icon:'fa-user' },
       ]
     : [
@@ -170,10 +169,9 @@ function renderMenu(role) {
         { key:'shift',     name:'Shift',        icon:'fa-calendar' },
         { key:'jadwal',    name:'Jadwal',       icon:'fa-calendar-days' },
         { key:'pengajuan', name:'Approval',     icon:'fa-inbox' },
-        { key:'users',     name:'Karyawan',     icon:'fa-users' },
-        { key:'riwayat',   name:'Riwayat',      icon:'fa-list' },
+        { key:'users',     name:'Karyawan',      icon:'fa-users' },
         { key:'rekap',     name:'Rekap Absensi', icon:'fa-chart-bar' },
-        { key:'kalender',  name:'Kalender',     icon:'fa-calendar' },
+        { key:'kalender',  name:'Kalender',      icon:'fa-calendar' },
       ]
 
   sidebar.innerHTML = `
@@ -229,11 +227,11 @@ window.navigate = async function (page) {
     case 'daftar-absensi': renderDaftarAbsensi(window.currentUser); break
     case 'rekap-inout': renderRekapInOut(window.currentUser); break
     case 'perbaikan-absen': renderPerbaikanAbsen(window.currentUser); break
-    case 'shift':     renderShiftManagement(); break
-    case 'jadwal':    renderJadwalManagement(); break
+    case 'shift':      renderShiftManagement(); break
+    case 'jadwal':     renderJadwalManagement(); break
     case 'pengajuan': renderPengajuan(window.currentUser); break
-    case 'riwayat':   renderRiwayat(window.currentUser); break
-    case 'rekap':     renderRekap(window.currentUser); break
+    // FIXED: Jalur case 'riwayat' sudah dicabut menyeluruh
+    case 'rekap':      renderRekap(window.currentUser); break
     case 'kalender':  renderKalenderHR(); break
     case 'profile':   renderProfile(); break
     case 'users':     await renderUsers(); break
@@ -339,7 +337,7 @@ window.uploadFotoProfil = async function (input) {
   renderProfile()
 }
 
-/* ================= KARYAWAN / USERS PAGE (UTUH DARI FILE 2) ================= */
+/* ================= KARYAWAN / USERS PAGE ================= */
 async function renderUsers() {
   const content  = document.getElementById('content')
   const canAdmin = window.currentUser.role === 'super_admin'
@@ -352,7 +350,6 @@ async function renderUsers() {
       </button>
     </div>
 
-    <!-- TAB -->
     <div style="display:flex;gap:8px;margin-bottom:16px;">
       <button id="tabAktif" class="btn-primary btn-sm" onclick="switchTab('aktif')">
         <i class="fa fa-users"></i> Karyawan Aktif
@@ -362,7 +359,6 @@ async function renderUsers() {
       </button>
     </div>
 
-    <!-- SEARCH -->
     <div class="card fade-up" style="padding:14px 18px;margin-bottom:12px;">
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <div class="search-box" style="flex:2;min-width:180px;margin:0;">
