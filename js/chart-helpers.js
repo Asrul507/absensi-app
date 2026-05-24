@@ -6,14 +6,21 @@ import { supabase } from './supabase.js'
 const activeCharts = {}
 
 function destroyExistingChart(canvasId) {
+  // 1. Hancurkan instansi dari penampung memori internal kita
   if (activeCharts[canvasId]) {
-    activeCharts[canvasId].destroy()
+    try {
+      activeCharts[canvasId].destroy()
+    } catch (e) { console.warn(e) }
     activeCharts[canvasId] = null
   }
-  const nativeChart = Chart.getChart(canvasId)
-  if (nativeChart) {
-    nativeChart.destroy()
-  }
+  
+  // 2. Paksa deteksi dan hancurkan instansi dari Chart.js native tracker global
+  try {
+    const nativeChart = Chart.getChart(canvasId)
+    if (nativeChart) {
+      nativeChart.destroy()
+    }
+  } catch (e) { console.warn(e) }
 }
 
 /* ===============================================================
@@ -33,7 +40,7 @@ export const chartDefaultOptions = {
   maintainAspectRatio: false,
   plugins: {
     legend: {
-      position: 'top', // FIX: Pindahkan ke atas agar tidak terpotong di HP
+      position: 'top',
       labels: {
         font: { family: "'Plus Jakarta Sans', sans-serif", size: 11, weight: '700' },
         color: '#64748b',
@@ -93,17 +100,16 @@ export function createTotalJamKerjaChart(canvasId, totalJam) {
 }
 
 /* ===============================================================
-   DIAGRAM INTERAKTIF BARU: AKTIVITAS SAYA (TOTAL JAM & DATA RIIL)
+   DIAGRAM INTERAKTIF: AKTIVITAS SAYA (TOTAL JAM & DATA RIIL)
 =============================================================== */
 export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
   if (typeof Chart === 'undefined') return
 
+  destroyExistingChart(canvasId) // Reset Canvas
+
   const ctx = document.getElementById(canvasId)?.getContext('2d')
   if (!ctx) return
 
-  destroyExistingChart(canvasId)
-
-  // Ambil data absensi riil
   const { data: absensiData } = await supabase
     .from('absensi')
     .select('*')
@@ -147,12 +153,10 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
       if (a.waktu_pulang) {
         const dPulang = new Date(a.waktu_pulang)
         pulangTxt = dPulang.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-        // Hitung selisih jam kerja riil ke desimal
         jamEfektif = (dPulang - dMasuk) / (1000 * 60 * 60)
       }
     }
 
-    // Format info koordinat radius GPS jika ada datanya di tabel Supabase Anda
     const latM = a.lat_masuk ? Number(a.lat_masuk).toFixed(4) : null
     const lngM = a.lng_masuk ? Number(a.lng_masuk).toFixed(4) : null
     const radiusM = (latM && lngM) ? `Lat: ${latM}, Lng: ${lngM}` : 'Dalam Radius Hotel'
@@ -170,7 +174,6 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
     }
   })
 
-  // Saring hanya tanggal yang memiliki data kerja agar grafik tidak drop ke angka 0 di hari libur/kosong
   const activeDates = dates.filter(d => dateMap[d].jamMasukStr !== '-')
   
   const totalJamData = activeDates.map(d => dateMap[d].totalJam)
@@ -179,10 +182,9 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
   const metaRadMasuk = activeDates.map(d => dateMap[d].radiusMasuk)
   const metaRadPulang = activeDates.map(d => dateMap[d].radiusPulang)
 
-  // Membuat gradasi arsir warna transparan (Gradient Fill Effect)
   const gradient = ctx.createLinearGradient(0, 0, 0, 250)
-  gradient.addColorStop(0, 'rgba(37, 99, 235, 0.45)')   // Biru pekat transparan di atas
-  gradient.addColorStop(1, 'rgba(37, 99, 235, 0.00)')   // Memudar habis di bagian bawah
+  gradient.addColorStop(0, 'rgba(37, 99, 235, 0.45)')   
+  gradient.addColorStop(1, 'rgba(37, 99, 235, 0.00)')   
 
   activeCharts[canvasId] = new Chart(ctx, {
     type: 'line',
@@ -196,60 +198,39 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
           label: 'Total Jam Kerja (Jam)',
           data: totalJamData,
           borderColor: '#2563eb',
-          backgroundColor: gradient, // Gunakan arsiran gradasi
+          backgroundColor: gradient, 
           tension: 0.35,
-          fill: true, // AKTIFKAN ARSIRAN AREA
+          fill: true, 
           borderWidth: 3,
           pointRadius: 5,
           pointBackgroundColor: '#fff',
           pointBorderColor: '#2563eb',
           pointBorderWidth: 2,
-          pointHoverRadius: 7,
-          pointHoverBackgroundColor: '#2563eb',
-          pointHoverBorderColor: '#fff',
         }
       ],
     },
     options: {
       ...chartDefaultOptions,
-      interaction: {
-        mode: 'index',
-        intersect: false,
-      },
+      interaction: { mode: 'index', intersect: false },
       scales: {
         y: {
           beginAtZero: true,
-          title: {
-            display: true,
-            text: 'Durasi Kerja (Jam)',
-            font: { size: 10, weight: 'bold', family: "'Plus Jakarta Sans'" }
-          },
           ticks: {
             color: '#64748b',
-            font: { size: 11 },
             callback: value => value + ' Jam'
           },
           grid: { color: '#f1f5f9' },
         },
-        x: {
-          ticks: { color: '#64748b', font: { size: 11 } },
-          grid: { display: false },
-        },
+        x: { grid: { display: false } },
       },
       plugins: {
         ...chartDefaultOptions.plugins,
-        // INTERAKTIF TOOLTIP: Tampilkan jam masuk, pulang, dan status radius GPS saat di-klik/sentuh
         tooltip: {
           backgroundColor: 'rgba(15, 23, 42, 0.95)',
-          titleFont: { size: 13, weight: '800', family: "'Plus Jakarta Sans'" },
-          bodyFont: { size: 11, family: "'Plus Jakarta Sans'" },
           padding: 12,
           cornerRadius: 10,
-          boxPadding: 6,
           callbacks: {
-            title: function(context) {
-              return `📅 Tanggal: ${context[0].label}`
-            },
+            title: context => `📅 Tanggal: ${context[0].label}`,
             label: function(context) {
               const idx = context.dataIndex
               return [
@@ -325,7 +306,6 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
     })
   }
 
-  // Render 3 Doughnut ringkas di dashboard bawah
   renderDoughnutMini(canvasId1, ['Hadir', 'Terlambat', 'Absen'], [hadir, terlambat, tidakAbsen], [CHART_COLORS.success, CHART_COLORS.warning, CHART_COLORS.danger])
   renderDoughnutMini(canvasId2, ['Masuk', 'Kosong'], [masukOk, totalAbsen - masukOk], [CHART_COLORS.success, CHART_COLORS.danger])
   renderDoughnutMini(canvasId3, ['Pulang', 'Kosong'], [pulangOk, totalAbsen - pulangOk], [CHART_COLORS.info, CHART_COLORS.danger])
