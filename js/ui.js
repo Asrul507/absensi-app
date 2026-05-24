@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js'
 import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
+import { dapatkanLokasiAbsenAktif } from './geolocation.js'
 
 window.activeVideoStream = null
 
