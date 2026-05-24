@@ -3,7 +3,7 @@ import { supabase } from './supabase.js'
 export async function renderJadwalManagement(user) {
   const content = document.getElementById('content')
   
-  // FIX CRASH: Jika user tidak dikirim dari app.js, ambil otomatis dari variabel global session
+  // Ambil otomatis dari variabel global session jika user tidak dikirim dari app.js
   const currentUserObj = user || window.currentUser
   
   if (!currentUserObj) {
@@ -65,7 +65,7 @@ export async function renderJadwalManagement(user) {
       ` : ''}
     </div>
 
-    <div id="jadwalContainer" class="card fade-up-1" style="padding: 16px; overflow-x: auto;">
+    <div id="jadwalContainer" class="card fade-up-1" style="padding: 0; overflow: auto; max-height: 500px; border: 1px solid var(--border);">
       <p style="color: var(--text-muted); font-size: .85rem; text-align: center; padding: 20px 0;">Silakan klik tombol Tampilkan untuk memuat data jadwal.</p>
     </div>
   `
@@ -99,12 +99,38 @@ window.loadDaftarJadwalMaster = async function() {
 
     const shiftLabels = { '2': 'Pagi', '3': 'Sore', '4': 'Malam', '8': 'OFF' }
 
+    // PEMBAHARUAN CSS: Mengunci posisi baris dan kolom secara mutlak (Sticky System)
     let tableHtml = `
-      <table class="table-jadwal" style="width: 100%; border-collapse: collapse; font-size: .75rem; min-width: 900px;">
+      <table class="table-jadwal" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: .75rem; min-width: 1000px;">
         <thead>
-          <tr style="background: var(--gray-100); border-bottom: 2px solid var(--border);">
-            <th style="padding: 10px; text-align: left; position: sticky; left: 0; background: var(--gray-100); z-index: 2; width: 140px;">Nama Karyawan</th>
-            ${Array.from({ length: daysInMonth }, (_, i) => `<th style="padding: 6px; text-align: center; width: 35px;">${i + 1}</th>`).join('')}
+          <tr>
+            <th style="
+              padding: 12px 10px; 
+              text-align: left; 
+              position: sticky; 
+              left: 0; 
+              top: 0; 
+              background: #f1f5f9; 
+              z-index: 10; 
+              width: 150px;
+              border-bottom: 2px solid #cbd5e1;
+              border-right: 2px solid #cbd5e1;
+              box-shadow: 2px 2px 0 rgba(0,0,0,0.05);
+            ">Nama Karyawan</th>
+            
+            ${Array.from({ length: daysInMonth }, (_, i) => `
+              <th style="
+                padding: 10px 6px; 
+                text-align: center; 
+                width: 38px;
+                position: sticky;
+                top: 0;
+                background: #f1f5f9;
+                z-index: 5;
+                border-bottom: 2px solid #cbd5e1;
+                border-right: 1px solid #e2e8f0;
+              ">${i + 1}</th>
+            `).join('')}
           </tr>
         </thead>
         <tbody>
@@ -112,8 +138,19 @@ window.loadDaftarJadwalMaster = async function() {
 
     profiles.forEach(p => {
       tableHtml += `
-        <tr style="border-bottom: 1px solid var(--border);">
-          <td style="padding: 10px; font-weight: 700; position: sticky; left: 0; background: #fff; box-shadow: 2px 0 5px rgba(0,0,0,0.03); z-index: 1;">${p.nama_lengkap}</td>
+        <tr>
+          <td style="
+            padding: 12px 10px; 
+            font-weight: 700; 
+            position: sticky; 
+            left: 0; 
+            background: #ffffff; 
+            z-index: 4; 
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 2px solid #cbd5e1;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.04);
+            white-space: nowrap;
+          ">${p.nama_lengkap}</td>
       `
       for (let d = 1; d <= daysInMonth; d++) {
         const currentTgl = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
@@ -126,7 +163,17 @@ window.loadDaftarJadwalMaster = async function() {
         else if (sCode === '4') { bgCell = '#e0e7ff'; textCell = '#4338ca' } 
         else if (sCode === '8') { bgCell = '#f1f5f9'; textCell = '#64748b' } 
 
-        tableHtml += `<td style="padding: 6px; text-align: center; background: ${bgCell}; color: ${textCell}; font-weight: 700; border: 1px solid var(--border);">${label}</td>`
+        tableHtml += `
+          <td style="
+            padding: 10px 6px; 
+            text-align: center; 
+            background: ${bgCell}; 
+            color: ${textCell}; 
+            font-weight: 700; 
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+          ">${label}</td>
+        `
       }
       tableHtml += '</tr>'
     })
