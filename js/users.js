@@ -108,13 +108,24 @@ export async function renderUsers() {
   }
 
   // ====================================================================
-  // FIX PERBAIKAN UTAMA: MODAL TAMBAH KARYAWAN BERBASIS RADIUS LIVE DATABASE
+  // AUDIT AMAN: MENCEGAH MODAL MACET JIKA QUERY DATABASE ERROR
   // ====================================================================
   window.openFormTambah = async function() {
-    // Ambil opsi daftar lokasi dari database secara live
-    const { data: lokAsiList } = await supabase.from('lokasi_absen').select('nama_titik')
-    const opsiLokasi = (lokAsiList || []).map(l => `<option value="${l.nama_titik}">${l.nama_titik}</option>`).join('')
-    const currentViewerRole = window.currentUser.role
+    let opsiLokasi = ''
+    try {
+      const { data: lokAsiList, error } = await supabase.from('lokasi_absen').select('*')
+      if (!error && lokAsiList) {
+        opsiLokasi = lokAsiList.map(l => {
+          // Fallback cerdas jika nama kolomnya bukan 'nama_titik'
+          const namaTitik = l.nama_titik || l.nama_lokasi || l.nama || '';
+          return `<option value="${namaTitik}">${namaTitik}</option>`
+        }).join('')
+      }
+    } catch (e) {
+      console.error("Gagal memuat list lokasi absen:", e)
+    }
+
+    const currentViewerRole = window.currentUser?.role || 'admin'
 
     window.showUserModal(`
       <div class="modal-header">
@@ -139,7 +150,7 @@ export async function renderUsers() {
         </div>
         <div class="field">
           <label>Jatah Titik Radius</label>
-          <select id="pTitikRadius" style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700;">
+          <select id="pTitikRadius" style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700; background:#fff; color:#000;">
             <option value="">-- Bebas Radius --</option>
             ${opsiLokasi}
           </select>
@@ -168,7 +179,7 @@ export async function renderUsers() {
       created_by:        window.currentUser.id,
     }])
 
-    if (error) { alert('Gagal simpan: ' + error.message); return }
+    if (error) { alert('Gagal simpan ke pending_profiles: ' + error.message); return }
     window.closeUserModal()
     alert(`✅ Data ${nama} disimpan ke daftar tunggu!`)
     await renderUsers()
@@ -245,7 +256,7 @@ window.openDetailKaryawan = function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
 
-  window.showUserModal(`
+  window.showUserModal suicide(`
     <div class="modal-header">
       <h3><i class="fa fa-id-card" style="color:var(--primary);"></i> Detail Informasi Karyawan</h3>
       <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
@@ -279,11 +290,14 @@ window.openEditKaryawan = async function(id) {
   const isMe = me.id === target.id
   const canEditAllFields = (me.role === 'super_admin') || (me.role === 'admin' && target.role === 'staff')
 
-  // Ambil opsi daftar lokasi secara dinamis dari database untuk modal edit
-  const { data: lokasiList } = await supabase.from('lokasi_absen').select('nama_titik')
-  const opsiLokasi = (lokasiList || []).map(l => `
-    <option value="${l.nama_titik}" ${target.titik_radius === l.nama_titik ? 'selected' : ''}>${l.nama_titik}</option>
-  `).join('')
+  let opsiLokasi = ''
+  try {
+    const { data: lokasiList } = await supabase.from('lokasi_absen').select('*')
+    opsiLokasi = (lokasiList || []).map(l => {
+      const nameT = l.nama_titik || l.nama_lokasi || l.nama || '';
+      return `<option value="${nameT}" ${target.titik_radius === nameT ? 'selected' : ''}>${nameT}</option>`
+    }).join('')
+  } catch(e){}
 
   window.showUserModal(`
     <div class="modal-header">
@@ -330,7 +344,7 @@ window.openEditKaryawan = async function(id) {
       </div>
       <div class="field">
         <label>Atur Jatah Titik Radius</label>
-        <select id="editTitikRadius" ${canEditAllFields ? '' : 'disabled'} style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700;">
+        <select id="editTitikRadius" ${canEditAllFields ? '' : 'disabled'} style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700; background:#fff; color:#000;">
           <option value="">-- Bebas Radius (Bypass) --</option>
           ${opsiLokasi}
         </select>
