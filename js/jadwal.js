@@ -75,7 +75,9 @@ export async function renderJadwal(user) {
 
       // Ambil profile staff & jadwal sekaligus
       const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').order('nama_lengkap')
-      const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('end', endStr)
+      
+      // FIX AUDIT: Mengubah .lte('end', endStr) menjadi .lte('tanggal', endStr) agar tidak crash
+      const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
 
       if(!profiles?.length) {
         container.innerHTML = `<p style="text-align:center; font-size:.85rem; color:var(--text-muted);">Tidak ada karyawan terdaftar.</p>`
@@ -112,10 +114,10 @@ export async function renderJadwal(user) {
           const label = shiftLabels[sCode] || sCode
 
           let bgCell = 'transparent', textCell = 'var(--text)'
-          if (sCode === '2') { bgCell = '#e0f2fe'; textCell = '#0369a1' } // Pagi
-          else if (sCode === '3') { bgCell = '#fef3c7'; textCell = '#b45309' } // Sore
-          else if (sCode === '4') { bgCell = '#e0e7ff'; textCell = '#4338ca' } // Malam
-          else if (sCode === '8') { bgCell = '#f1f5f9'; textCell = '#64748b' } // OFF
+          if (sCode === '2') { bgCell = '#e0f2fe'; textCell = '#0369a1' } 
+          else if (sCode === '3') { bgCell = '#fef3c7'; textCell = '#b45309' } 
+          else if (sCode === '4') { bgCell = '#e0e7ff'; textCell = '#4338ca' } 
+          else if (sCode === '8') { bgCell = '#f1f5f9'; textCell = '#64748b' } 
 
           tableHtml += `<td style="padding: 6px; text-align: center; background: ${bgCell}; color: ${textCell}; font-weight: 700; border: 1px solid var(--border);">${label}</td>`
         }
@@ -131,7 +133,7 @@ export async function renderJadwal(user) {
   }
 
   // ===============================================================
-  // FITUR REVOLUSI BARU: BULK UPSERT EXCEL MASSAL (ANTI-HANG & INSTAN)
+  // BULK UPSERT EXCEL MASSAL (ANTI-HANG & INSTAN)
   // ===============================================================
   window.uploadJadwalExcel = async function() {
     if (typeof XLSX === 'undefined') {
@@ -166,14 +168,12 @@ export async function renderJadwal(user) {
         const firstSheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[firstSheetName]
         
-        // Konversi row Excel menjadi array object json
         const jsonData = XLSX.utils.sheet_to_json(worksheet)
 
         if (!jsonData || jsonData.length === 0) {
           throw new Error('File Excel kosong atau format tidak sesuai.')
         }
 
-        // Ambil data profile dari DB untuk mencocokkan Nama -> User ID
         const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap')
         if (errUser) throw errUser
 
@@ -182,10 +182,9 @@ export async function renderJadwal(user) {
           userMap[u.nama_lengkap.trim().toLowerCase()] = u.id
         })
 
-        const bulkPayload = [] // Wadah penampung array massal
+        const bulkPayload = [] 
         const totalDays = new Date(selectedYear, selectedMonth, 0).getDate()
 
-        // Looping data di file Excel
         jsonData.forEach((row, rowIndex) => {
           const excelName = row['nama'] || row['Nama']
           if (!excelName) return
@@ -196,7 +195,6 @@ export async function renderJadwal(user) {
             return
           }
 
-          // Looping tanggal 1 sampai batas akhir bulan
           for (let d = 1; d <= totalDays; d++) {
             const shiftCodeVal = row[String(d)] || row[d]
             if (shiftCodeVal !== undefined && shiftCodeVal !== null) {
@@ -218,7 +216,6 @@ export async function renderJadwal(user) {
 
         statusText.innerHTML = `<i class="fa fa-cloud-upload-alt"></i> Menembak ${bulkPayload.length} data sekaligus ke Supabase...`
 
-        // SEKALI TEMBAK MASSAL (BULK UPSERT) MENGGUNAKAN PRIMARY KEY LOCK (user_id + tanggal)
         const { error: upsertErr } = await supabase
           .from('jadwal')
           .upsert(bulkPayload, { onConflict: 'user_id,tanggal' })
@@ -227,9 +224,8 @@ export async function renderJadwal(user) {
 
         statusText.style.color = 'var(--success)'
         statusText.innerHTML = `✅ Sukses! Berhasil mengunggah ${bulkPayload.length} jadwal harian secara instan.`
-        fileInput.value = '' // Reset input
+        fileInput.value = '' 
 
-        // Refresh tabel visual saat itu juga
         await loadDaftarJadwalMaster()
 
       } catch (err) {
