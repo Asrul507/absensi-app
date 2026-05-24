@@ -123,8 +123,38 @@ function hitungKeterangan(absen, shift) {
   }
 }
 
+
 export async function renderAbsensi(user) {
   const content    = document.getElementById('content')
+  
+  // ====================================================================
+  // MODIFIKASI LEVEL 1: TAMPILKAN LOADING SCANNER SATELIT DI AWAL MASUK MENU
+  // ====================================================================
+  content.innerHTML = `
+    <div class="card fade-up" style="padding:30px; text-align:center; max-width:480px; margin:0 auto;">
+      <i class="fa fa-satellite-dish fa-spin" style="font-size:2.4rem; color:var(--primary); margin-bottom:12px; display:block;"></i>
+      <p style="font-size:.9rem; font-weight:700; color:var(--text-muted);">Menghitung jarak radius koordinat Anda...</p>
+    </div>
+  `
+
+  // Jalankan pelacak radius terdekat
+  const geo = await dapatkanLokasiAbsenAktif()
+  
+  let dropdownOptions = ''
+  let statusBadge = ''
+  let latAbsen = geo.lat || null
+  let lngAbsen = geo.lng || null
+
+  // Tentukan status badge radius (Bypass Testing Mode)
+  if (geo.status === 'success' && geo.areas.length > 0) {
+    statusBadge = `<span class="badge badge-success" style="padding:6px 12px; font-size:.72rem; border-radius:999px; font-weight:800; display:inline-block; margin-top:6px; background:#dcfce7; color:#15803d; border:1px solid #bbf7d0;"><i class="fa fa-location-dot"></i> Berada Di Area Kerja</span>`
+    dropdownOptions = geo.areas.map(a => `<option value="${a.nama_titik}">${a.nama_titik} (${a.jarak_meter}m)</option>`).join('')
+  } else {
+    statusBadge = `<span class="badge badge-danger" style="padding:6px 12px; font-size:.72rem; border-radius:999px; font-weight:800; display:inline-block; margin-top:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;"><i class="fa fa-building-circle-exclamation"></i> Luar Radius (Testing Mode)</span>`
+    dropdownOptions = `<option value="Luar Radius (Testing)">[LUAR RADIUS / TESTING]</option>`
+  }
+
+  // Tarik data absensi dan jadwal seperti biasa
   const absen      = await getTodayAbsen(user.nama_lengkap)
   const todayShift = await getTodayShift(user.id)
 
@@ -159,6 +189,9 @@ export async function renderAbsensi(user) {
       <div class="card fade-up" style="text-align:center;padding:24px 20px 20px;">
         <i class="fa ${statusIcon}" style="font-size:2.4rem;color:${statusColor};margin-bottom:10px;display:block;"></i>
         <div style="font-size:1rem;font-weight:800;color:${statusColor};">${statusLabel}</div>
+        
+        <div style="margin-bottom:4px;">${statusBadge}</div>
+
         <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px;">
           ${new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}
         </div>
@@ -244,7 +277,20 @@ export async function renderAbsensi(user) {
     return
   }
 
+  // ====================================================================
+  // MODIFIKASI LEVEL 2: SUNTIK KOTAK DROPDOWN AREA RADIUS DI ATAS LAYAR KAMERA
+  // ====================================================================
   actionCard.innerHTML = `
+    <input type="hidden" id="geoLatInput" value="${latAbsen}">
+    <input type="hidden" id="geoLngInput" value="${lngAbsen}">
+
+    <div class="field" style="margin-bottom: 12px; padding: 0 4px;">
+      <label style="font-size:.7rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Lokasi Unit Absen Kerja</label>
+      <select id="selectLokasiAbsen" style="width:100%; padding:10px; margin-top:4px; border-radius:var(--r-md); border:1.5px solid var(--border); font-weight:700; font-size:0.82rem; background:#f8fafc; color:var(--text);">
+        ${dropdownOptions}
+      </select>
+    </div>
+
     <div style="position:relative;border-radius:var(--r-md);overflow:hidden;background:#000;margin-bottom:14px;" id="camWrap">
       <video id="video" autoplay playsinline style="width:100%;display:block;max-height:260px;object-fit:cover;"></video>
     </div>
@@ -296,8 +342,12 @@ export async function renderAbsensi(user) {
       btn.disabled = true
       btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
 
-      let loc = { lat: null, lng: null }
-      try { loc = await getLocation() } catch {}
+      // ====================================================================
+      // MODIFIKASI LEVEL 3: SINKRONKAN VARIABLE SUBMIT ABSEN DENGAN COORDS ASLI & DROPDOWN LOKASI
+      // ====================================================================
+      const fixedLat = document.getElementById('geoLatInput').value
+      const fixedLng = document.getElementById('geoLngInput').value
+      const namaTitikTerpilih = document.getElementById('selectLokasiAbsen').value
 
       let status_absensi = 'open'
 
@@ -320,16 +370,17 @@ export async function renderAbsensi(user) {
       const hasilCheck = checkStatus(todayShift.jam_masuk)
 
       await submitAbsen({
-        nama:           user.nama_lengkap,
+        nama:             user.nama_lengkap,
         tanggal:        new Date().toISOString().split('T')[0],
         waktu_masuk:    new Date().toISOString(),
-        lat_masuk:      loc.lat,
-        lng_masuk:      loc.lng,
-        foto_masuk:     window.photo || null,
-        status_masuk:   hasilCheck.status,
+        lat_masuk:      fixedLat !== "null" ? Number(fixedLat) : null, // Masukkan data lat asli
+        lng_masuk:      fixedLng !== "null" ? Number(fixedLng) : null, // Masukkan data lng asli
+        foto_masuk:      window.photo || null,
+        status_masuk:    hasilCheck.status,
         menit_terlambat: hasilCheck.status === 'Terlambat' ? hasilCheck.minutesLate : 0,
         jam_jadwal_masuk: todayShift.jam_masuk,
-        status_absensi
+        status_absensi:  status_absensi,
+        lokasi_masuk:    namaTitikTerpilih // Menyimpan nama titik (Kantor HK/Hotel A/Luar Radius) ke kolom database Anda
       })
 
       stopCamera(video)
@@ -357,20 +408,25 @@ export async function renderAbsensi(user) {
       btn.disabled = true
       btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
 
-      let loc = { lat: null, lng: null }
-      try { loc = await getLocation() } catch {}
+      // ====================================================================
+      // MODIFIKASI LEVEL 4: SINKRONKAN VARIABLE UPDATE ABSEN PULANG DENGAN COORDS ASLI & DROPDOWN LOKASI
+      // ====================================================================
+      const fixedLat = document.getElementById('geoLatInput').value
+      const fixedLng = document.getElementById('geoLngInput').value
+      const namaTitikTerpilih = document.getElementById('selectLokasiAbsen').value
 
       const status_absensi = absen.status_absensi === 'open' ? 'complete' : absen.status_absensi
       const hasilPulang = checkStatusPulang(todayShift.jam_pulang)
 
       await supabase.from('absensi').update({
         waktu_pulang:   new Date().toISOString(),
-        lat_pulang:     loc.lat,
-        lng_pulang:     loc.lng,
+        lat_pulang:      fixedLat !== "null" ? Number(fixedLat) : null, // Masukkan data lat asli
+        lng_pulang:      fixedLng !== "null" ? Number(fixedLng) : null, // Masukkan data lng asli
         foto_pulang:    window.photo || null,
         status_absensi,
         status_pulang:  hasilPulang.status,
-        menit_pulang_cepat: hasilPulang.minutesEarly
+        menit_pulang_cepat: hasilPulang.minutesEarly,
+        lokasi_pulang:   namaTitikTerpilih // Menyimpan nama titik pulang ke kolom database Anda
       }).eq('id', absen.id)
 
       stopCamera(video)
