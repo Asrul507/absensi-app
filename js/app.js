@@ -727,7 +727,7 @@ window.openDetailKaryawan = function(id) {
   `)
 }
 
-/* ================= POPUP MODAL: EDIT KARYAWAN (FIXED) ================= */
+/* ================= POPUP MODAL: EDIT KARYAWAN (FIXED & SYNCHRONIZED) ================= */
 window.openEditKaryawan = async function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
@@ -738,7 +738,7 @@ window.openEditKaryawan = async function(id) {
 
   let opsiLokasi = ''
   try {
-    // Menarik daftar lokasi absen aktif dari database
+    // Ambil daftar lokasi secara dinamis dari database untuk modal edit
     const { data: lokasiList } = await supabase.from('lokasi_absen').select('*')
     opsiLokasi = (lokasiList || []).map(l => {
       const nameT = l.nama_titik || '';
@@ -815,17 +815,17 @@ window.openEditKaryawan = async function(id) {
   `)
 }
 
-/* ================= SIMPAN EDIT DATA KARYAWAN (FIXED) ================= */
+/* ================= SIMPAN EDIT DATA KARYAWAN (FIXED & SYNCHRONIZED) ================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
   const newPassword = document.getElementById('editPassword').value.trim()
   
-  // Membaca nilai dari dropdown editTitikRadius secara aman
+  // Tangkap nilai pilihan dari dropdown editTitikRadius
   const selectElement = document.getElementById('editTitikRadius')
   const titikRadiusBaru = selectElement ? selectElement.value : null
 
   try {
     if (canEditAll) {
-      // Menyimpan data terupdate ke profiles database Supabase termasuk kolom titik_radius
+      // 1. Kirim pembaruan data ke tabel profiles di database Supabase termasuk kolom titik_radius [cite: 234]
       const { error: profileErr } = await supabase
         .from('profiles')
         .update({
@@ -834,7 +834,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
           departemen:   document.getElementById('editDept').value.trim(),
           no_hp:        document.getElementById('editHp').value.trim(),
           tanggal_lahir: document.getElementById('editLahir').value || null,
-          titik_radius:  titikRadiusBaru // Kolom ini sekarang resmi ikut ter-update
+          titik_radius:  titikRadiusBaru // Kolom database di-update di sini [cite: 235]
         })
         .eq('id', id)
 
@@ -854,7 +854,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       }
     }
 
-    // Sinkronisasi data ke memori aplikasi lokal agar detail pop-up langsung berubah live
+    // 2. SINKRONKAN DATA KELOKAL MEMORI APLIKASI: Agar detail pop-up langsung membaca data baru secara live [cite: 232, 233]
     const userIndex = (window._allUsers || []).findIndex(u => u.id === id)
     if (userIndex !== -1) {
       window._allUsers[userIndex].nama_lengkap  = document.getElementById('editNama').value.trim()
@@ -862,7 +862,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       window._allUsers[userIndex].departemen    = document.getElementById('editDept').value.trim()
       window._allUsers[userIndex].no_hp         = document.getElementById('editHp').value.trim()
       window._allUsers[userIndex].tanggal_lahir = document.getElementById('editLahir').value || null
-      window._allUsers[userIndex].titik_radius  = titikRadiusBaru
+      window._allUsers[userIndex].titik_radius  = titikRadiusBaru // sinkron ke objek cache lokal
     }
 
     if (isMe && window.currentUser) {
@@ -871,12 +871,21 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
 
     window.closeUserModal()
     alert('✅ Seluruh perubahan data karyawan berhasil disimpan!')
-    await renderUsers()
+    
+    // Render kembali agar data diperbarui langsung di layar [cite: 237]
+    if (typeof renderUsers === 'function') {
+      await renderUsers()
+    } else {
+      location.reload()
+    }
 
   } catch (err) {
     alert('Gagal memperbarui data: ' + err.message)
   }
 }
+
+
+
 /* ================= UPLOAD FOTO DI MODAL EDIT ================= */
 window.uploadFotoEditModal = async function(input, targetUserId) {
   const file    = input.files[0]
