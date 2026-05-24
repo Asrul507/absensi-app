@@ -693,7 +693,7 @@ function renderUserList(users) {
   }).join('')
 }
 
-/* ================= POPUP MODAL: DETAIL KARYAWAN (FIXED) ================= */
+/* ================= POPUP MODAL: DETAIL KARYAWAN (AUDIT UPDATE) ================= */
 window.openDetailKaryawan = function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
@@ -727,7 +727,7 @@ window.openDetailKaryawan = function(id) {
   `)
 }
 
-/* ================= POPUP MODAL: EDIT KARYAWAN (FIXED & SYNCHRONIZED) ================= */
+/* ================= POPUP MODAL: EDIT KARYAWAN (AUDIT UPDATE) ================= */
 window.openEditKaryawan = async function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
@@ -738,7 +738,7 @@ window.openEditKaryawan = async function(id) {
 
   let opsiLokasi = ''
   try {
-    // Ambil daftar lokasi secara dinamis dari database untuk modal edit
+    // Tarik daftar titik dari tabel lokasi_absen secara live
     const { data: lokasiList } = await supabase.from('lokasi_absen').select('*')
     opsiLokasi = (lokasiList || []).map(l => {
       const nameT = l.nama_titik || '';
@@ -746,7 +746,7 @@ window.openEditKaryawan = async function(id) {
       return `<option value="${nameT}" ${isSelected}>${nameT}</option>`
     }).join('')
   } catch(e) {
-    console.error("Gagal memuat list lokasi untuk edit:", e)
+    console.error("Gagal memuat list lokasi untuk form edit:", e)
   }
 
   window.showUserModal(`
@@ -815,7 +815,7 @@ window.openEditKaryawan = async function(id) {
   `)
 }
 
-/* ================= SIMPAN EDIT DATA KARYAWAN (FIXED & SYNCHRONIZED) ================= */
+/* ================= SIMPAN EDIT DATA KARYAWAN (AUDIT UPDATE) ================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
   const newPassword = document.getElementById('editPassword').value.trim()
   
@@ -825,7 +825,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
 
   try {
     if (canEditAll) {
-      // 1. Kirim pembaruan data ke tabel profiles di database Supabase termasuk kolom titik_radius [cite: 234]
+      // PROSES UTAMA: Simpan kolom titik_radius ke database profiles Supabase
       const { error: profileErr } = await supabase
         .from('profiles')
         .update({
@@ -834,7 +834,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
           departemen:   document.getElementById('editDept').value.trim(),
           no_hp:        document.getElementById('editHp').value.trim(),
           tanggal_lahir: document.getElementById('editLahir').value || null,
-          titik_radius:  titikRadiusBaru // Kolom database di-update di sini [cite: 235]
+          titik_radius:  titikRadiusBaru // Data resmi disimpan di sini!
         })
         .eq('id', id)
 
@@ -854,7 +854,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       }
     }
 
-    // 2. SINKRONKAN DATA KELOKAL MEMORI APLIKASI: Agar detail pop-up langsung membaca data baru secara live [cite: 232, 233]
+    // SINKRONISASI CACHE MEMORI LOKAL APLIKASI
     const userIndex = (window._allUsers || []).findIndex(u => u.id === id)
     if (userIndex !== -1) {
       window._allUsers[userIndex].nama_lengkap  = document.getElementById('editNama').value.trim()
@@ -862,7 +862,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       window._allUsers[userIndex].departemen    = document.getElementById('editDept').value.trim()
       window._allUsers[userIndex].no_hp         = document.getElementById('editHp').value.trim()
       window._allUsers[userIndex].tanggal_lahir = document.getElementById('editLahir').value || null
-      window._allUsers[userIndex].titik_radius  = titikRadiusBaru // sinkron ke objek cache lokal
+      window._allUsers[userIndex].titik_radius  = titikRadiusBaru // sinkronisasi instan
     }
 
     if (isMe && window.currentUser) {
@@ -872,7 +872,6 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
     window.closeUserModal()
     alert('✅ Seluruh perubahan data karyawan berhasil disimpan!')
     
-    // Render kembali agar data diperbarui langsung di layar [cite: 237]
     if (typeof renderUsers === 'function') {
       await renderUsers()
     } else {
@@ -883,9 +882,6 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
     alert('Gagal memperbarui data: ' + err.message)
   }
 }
-
-
-
 /* ================= UPLOAD FOTO DI MODAL EDIT ================= */
 window.uploadFotoEditModal = async function(input, targetUserId) {
   const file    = input.files[0]
