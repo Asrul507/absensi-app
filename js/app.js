@@ -337,12 +337,14 @@ window.uploadFotoProfil = async function (input) {
   renderProfile()
 }
 
-/* ================= KARYAWAN / USERS PAGE (MODERASI HAK AKSES) ================= */
-import { updateUserPassword } from './auth.js' // Pastikan fungsi baru terhubung
+/* =============================================================================
+   MANAJEMEN KARYAWAN / USERS MODUL (INTEGRASI DETAIL & EDIT BERBASIS PRIVILEGE)
+============================================================================= */
+import { updateUserPassword } from './auth.js' // Mengimpor fungsi pembantu ganti password
 
 async function renderUsers() {
   const content  = document.getElementById('content')
-  const viewerRole = window.currentUser.role // Role user yang sedang membuka menu ini ('super_admin', 'admin', 'staff')
+  const viewerRole = window.currentUser.role // Mendeteksi role user yang sedang login aktif ('super_admin', 'admin', 'staff')
 
   content.innerHTML = `
     <div class="page-header">
@@ -389,7 +391,7 @@ async function renderUsers() {
     </div>
   `
 
-  // Load data dari Supabase
+  // Mengambil data terupdate dari database Supabase
   const { data: users } = await supabase.from('profiles').select('*').order('nama_lengkap')
   const { data: pending } = await supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap')
 
@@ -404,10 +406,9 @@ async function renderUsers() {
   window._pendingList = pending  || []
   window._currentTab  = 'aktif'
 
-  // Filter data awal: Jika staff, dia hanya bisa melihat daftar namun tidak bisa merubah apapun
   renderUserList(window._allUsers)
 
-  // Tab switcher
+  // Tab Switcher Handler
   window.switchTab = function(tab) {
     window._currentTab = tab
     document.getElementById('tabAktif').className   = tab==='aktif'   ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
@@ -418,7 +419,7 @@ async function renderUsers() {
     else renderPendingList(window._pendingList)
   }
 
-  // Filter Search
+  // Live Filter Input Pencarian
   window.filterUsers = function() {
     const q  = document.getElementById('searchUser').value.toLowerCase()
     const st = document.getElementById('filterStatusUser').value
@@ -434,12 +435,12 @@ async function renderUsers() {
     }
   }
 
-  // Form tambah (Hanya Admin & Super Admin)
+  // Buka Form Input Tambah Karyawan Baru (Pending Row Flow)
   window.openFormTambah = function() {
-    showUserModal(`
+    window.showUserModal(`
       <div class="modal-header">
         <h3><i class="fa fa-user-plus" style="color:var(--primary);"></i> Tambah Data Karyawan</h3>
-        <button class="modal-close" onclick="closeUserModal()"><i class="fa fa-times"></i></button>
+        <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:10px;">
         <div class="field full" style="grid-column:1/-1;">
@@ -459,7 +460,7 @@ async function renderUsers() {
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" onclick="closeUserModal()">Batal</button>
+        <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
         <button class="btn-primary" onclick="savePendingKaryawan()"><i class="fa fa-save"></i> Simpan Data</button>
       </div>
     `)
@@ -481,7 +482,7 @@ async function renderUsers() {
     }])
 
     if (error) { alert('Gagal simpan: ' + error.message); return }
-    closeUserModal()
+    window.closeUserModal()
     alert(`✅ Data ${nama} disimpan ke daftar tunggu!`)
     await renderUsers()
   }
@@ -505,14 +506,14 @@ function renderUserList(users) {
     const sisa      = jatah - terpakai
     const isAktif   = u.status_akun !== 'Non-Aktif'
 
-    // Cek Hak Akses Edit Data Berdasarkan Aturan Soal
+    // Aturan filter hak edit (Diri sendiri, Admin -> Staff, Super Admin -> Semua)
     let bisaEdit = false
     if (me.role === 'super_admin') {
-      bisaEdit = true // Super Admin bebas edit siapa saja
+      bisaEdit = true
     } else if (me.role === 'admin') {
-      if (u.role === 'staff' || u.id === me.id) bisaEdit = true // Admin bisa edit staff dan dirinya sendiri
+      if (u.role === 'staff' || u.id === me.id) bisaEdit = true
     } else if (me.role === 'staff') {
-      if (u.id === me.id) bisaEdit = true // Staff hanya bisa edit dirinya sendiri (ganti password)
+      if (u.id === me.id) bisaEdit = true
     }
 
     const avatarHtml = u.foto_url
@@ -521,7 +522,7 @@ function renderUserList(users) {
 
     return `
       <div class="user-item" style="cursor: pointer;">
-        <div style="display: flex; gap: 12px; flex: 1;" onclick="openDetailKaryawan('${u.id}')">
+        <div style="display: flex; gap: 12px; flex: 1;" onclick="window.openDetailKaryawan('${u.id}')">
           ${avatarHtml}
           <div class="ui-info">
             <div class="ui-name" style="color: var(--primary); font-weight:700;">${u.nama_lengkap || '-'}</div>
@@ -541,14 +542,14 @@ function renderUserList(users) {
           </span>
           
           ${bisaEdit ? `
-            <button class="action-btn" title="Edit Data" onclick="openEditKaryawan('${u.id}')" style="background: var(--gray-100); color: var(--text);">
+            <button class="action-btn" title="Edit Data" onclick="window.openEditKaryawan('${u.id}'); event.stopPropagation();" style="background: var(--gray-100); color: var(--text);">
               <i class="fa fa-edit"></i>
             </button>
           ` : ''}
 
           ${(me.role === 'super_admin' || (me.role === 'admin' && u.role === 'staff')) ? `
             <button class="action-btn ${isAktif?'delete':''}" title="${isAktif?'Non-aktifkan':'Aktifkan'}"
-              onclick="toggleStatusUser('${u.id}','${u.status_akun||'Aktif'}')">
+              onclick="toggleStatusUser('${u.id}','${u.status_akun||'Aktif'}'); event.stopPropagation();">
               <i class="fa fa-${isAktif?'ban':'check'}"></i>
             </button>
           ` : ''}
@@ -557,15 +558,15 @@ function renderUserList(users) {
   }).join('')
 }
 
-/* ================= POPUP MODAL: DETAIL KARYAWAN ================= */
+/* ================= POPUP MODAL: DETAIL KARYAWAN (FIXED GLOBAL) ================= */
 window.openDetailKaryawan = function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
 
-  showUserModal(`
+  window.showUserModal(`
     <div class="modal-header">
       <h3><i class="fa fa-id-card" style="color:var(--primary);"></i> Detail Informasi Karyawan</h3>
-      <button class="modal-close" onclick="closeUserModal()"><i class="fa fa-times"></i></button>
+      <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
     </div>
     <div style="padding: 10px 0; text-align:center; border-bottom: 1px solid var(--border); margin-bottom: 14px;">
        ${target.foto_url ? `<img src="${target.foto_url}" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">` : `<div class="profile-avatar" style="margin:0 auto 10px;">${target.nama_lengkap[0].toUpperCase()}</div>`}
@@ -583,29 +584,26 @@ window.openDetailKaryawan = function(id) {
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Sisa Jatah Cuti:</span><strong>🌴 ${target.sisa_cuti || 0} Hari</strong></div>
     </div>
     <div class="modal-actions" style="margin-top:20px;">
-      <button class="btn-secondary" style="width:100%;" onclick="closeUserModal()">Tutup Detail</button>
+      <button class="btn-secondary" style="width:100%;" onclick="window.closeUserModal()">Tutup Detail</button>
     </div>
   `)
 }
 
-/* ================= POPUP MODAL: EDIT KARYAWAN ================= */
+/* ================= POPUP MODAL: EDIT KARYAWAN (FIXED GLOBAL) ================= */
 window.openEditKaryawan = function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
 
   const me = window.currentUser
-  
-  // Deteksi kunci akses kolom input
   const isMe = me.id === target.id
   const canEditAllFields = (me.role === 'super_admin') || (me.role === 'admin' && target.role === 'staff')
 
-  showUserModal(`
+  window.showUserModal(`
     <div class="modal-header">
       <h3><i class="fa fa-user-edit" style="color:var(--warning);"></i> Edit Data: ${target.nama_lengkap}</h3>
-      <button class="modal-close" onclick="closeUserModal()"><i class="fa fa-times"></i></button>
+      <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
     </div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; padding-top:10px;">
-      
       <div class="field full" style="grid-column:1/-1;">
         <label>Nama Lengkap</label>
         <input id="editNama" value="${target.nama_lengkap}" ${canEditAllFields ? '' : 'disabled'}>
@@ -626,7 +624,6 @@ window.openEditKaryawan = function(id) {
         <label>Tanggal Lahir</label>
         <input type="date" id="editLahir" value="${target.tanggal_lahir || ''}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
-      
       <div class="field full" style="grid-column:1/-1; border-top:1px solid var(--border); padding-top:10px; margin-top:5px;">
         <label style="color:var(--primary); font-weight:800;"><i class="fa fa-key"></i> ${isMe ? 'Ganti Password Anda' : 'Reset Password Karyawan'}</label>
         <input type="password" id="editPassword" placeholder="Masukkan password baru jika ingin diubah">
@@ -635,18 +632,17 @@ window.openEditKaryawan = function(id) {
     </div>
 
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeUserModal()">Batal</button>
-      <button class="btn-primary" onclick="saveEditKaryawan('${target.id}', ${canEditAllFields}, ${isMe})"><i class="fa fa-save"></i> Perbarui Data</button>
+      <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
+      <button class="btn-primary" onclick="window.saveEditKaryawan('${target.id}', ${canEditAllFields}, ${isMe})"><i class="fa fa-save"></i> Perbarui Data</button>
     </div>
   `)
 }
 
-/* ================= SIMPAN PROSES EDIT DATA ================= */
+/* ================= SIMPAN PROSES EDIT DATA (FIXED GLOBAL) ================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
   const newPassword = document.getElementById('editPassword').value.trim()
 
   try {
-    // 1. Eksekusi Perubahan Profil Kolom ke Supabase jika memiliki hak akses penuh
     if (canEditAll) {
       const { error: profileErr } = await supabase
         .from('profiles')
@@ -662,20 +658,16 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       if (profileErr) throw profileErr
     }
 
-    // 2. Eksekusi Perubahan/Reset Password
     if (newPassword) {
       if (isMe) {
-        // Jika mengganti password dirinya sendiri, gunakan fungsi auth update resmi
         const passOk = await updateUserPassword(newPassword)
         if (!passOk) return
       } else {
-        // Jika Admin/Super Admin mereset password staff lain, panggil RPC / Auth Admin API Supabase (Fallback Alert info)
-        // Catatan: Karena batasan client-side, cara terbaik mereset akun orang lain secara live adalah memicu perubahan via editan service.
         alert('ℹ️ Permintaan Reset Password dikirim. Pastikan Supabase Admin Trigger aktif untuk User ID ini.');
       }
     }
 
-    closeUserModal()
+    window.closeUserModal()
     alert('✅ Seluruh perubahan data berhasil disimpan!')
     await renderUsers()
 
@@ -683,8 +675,65 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
     alert('Gagal memperbarui data: ' + err.message)
   }
 }
-/* ================= FIXED: MODAL GLOBAL HELPER ================= */
-// Kita daftarkan ke "window" agar terdefinisi di scope global dan tidak memicu ReferenceError
+
+/* ---- Render Pending List ---- */
+function renderPendingList(list) {
+  const el = document.getElementById('userListContainer')
+  if (!el) return
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state"><i class="fa fa-hourglass-half"></i><p>Tidak ada karyawan dalam daftar tunggu</p></div>`
+    return
+  }
+  el.innerHTML = `
+    <div class="alert info" style="margin-bottom:12px;">
+      <i class="fa fa-info-circle"></i>
+      <span>Karyawan berikut belum mendaftar. Minta mereka buka <strong>register.html</strong></span>
+    </div>
+    ${list.map(p => `
+      <div class="user-item">
+        <div class="user-avatar" style="background:linear-gradient(135deg,#64748b,#475569);">
+          ${(p.nama_lengkap||'?')[0].toUpperCase()}
+        </div>
+        <div class="ui-info">
+          <div class="ui-name">${p.nama_lengkap}</div>
+          <div class="ui-email">${p.jabatan||'-'} ${p.departemen?'· '+p.departemen:''}</div>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;">
+            📅 ${p.tanggal_bergabung||'-'} · Role: ${p.role}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+          <span class="badge badge-yellow"><i class="fa fa-hourglass-half"></i> Menunggu</span>
+          <button class="action-btn delete" title="Hapus" onclick="deletePending('${p.id}','${p.nama_lengkap}')">
+            <i class="fa fa-trash"></i>
+          </button>
+        </div>
+      </div>`).join('')}
+  `
+}
+
+/* ---- Delete Pending Row ---- */
+window.deletePending = async function(id, nama) {
+  if (!confirm(`Hapus data karyawan "${nama}" dari daftar tunggu?`)) return
+  await supabase.from('pending_profiles').delete().eq('id', id)
+  window._pendingList = window._pendingList.filter(p => p.id !== id)
+  renderPendingList(window._pendingList)
+}
+
+/* ---- Toggle Status Aktif/Banned ---- */
+window.toggleStatusUser = async function(userId, statusSekarang) {
+  const statusBaru = statusSekarang === 'Aktif' ? 'Non-Aktif' : 'Aktif'
+  if (!confirm(`${statusBaru==='Non-Aktif'?'Non-aktifkan':'Aktifkan kembali'} karyawan ini?`)) return
+  await supabase.from('profiles').update({ status_akun: statusBaru }).eq('id', userId)
+  if (statusBaru === 'Non-Aktif') {
+    await resetCutiKaryawan(userId)
+    alert('Karyawan di-non-aktifkan dan sisa cuti direset.')
+  } else {
+    alert('Karyawan berhasil diaktifkan.')
+  }
+  await renderUsers()
+}
+
+/* ================= UTILLITY: CORE GLOBAL MODAL HELPER (FIXED) ================= */
 window.showUserModal = function(html) {
   let el = document.getElementById('userModal')
   if (el) el.remove()
@@ -694,7 +743,6 @@ window.showUserModal = function(html) {
   bg.className = 'modal-bg open'
   bg.innerHTML = `<div class="modal-box">${html}</div>`
   
-  // Klik area luar modal untuk menutup
   bg.addEventListener('click', e => { 
     if(e.target === bg) window.closeUserModal() 
   })
@@ -706,6 +754,8 @@ window.closeUserModal = function() {
   const modal = document.getElementById('userModal')
   if (modal) modal.remove() 
 }
+
+
 /* ================= SIDEBAR ================= */
 window.toggleSidebar = () => {
   document.getElementById('sidebar')?.classList.toggle('open')
