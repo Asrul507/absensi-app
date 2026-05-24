@@ -10,7 +10,32 @@ export async function renderDashboard() {
     return
   }
 
-  // Get profile
+  // ===== FITUR AUTOMATION: DETEKSI LUPA ABSEN PULANG HARI KEMARIN =====
+  try {
+    const kemarin = new Date()
+    kemarin.setDate(kemarin.getDate() - 1)
+    const tanggalKemarinStr = kemarin.toISOString().split('T')[0]
+
+    // Cari tahu apakah ada rekam absen hari kemarin milik user ini
+    const { data: absenKemarin, error: errKemarin } = await supabase
+      .from('absensi')
+      .select('*')
+      .eq('nama', user.nama_lengkap || user.email)
+      .eq('tanggal', tanggalKemarinStr)
+      .maybeSingle()
+
+    // Jika kemarin masuk tapi tidak pernah absen pulang, dan statusnya masih 'open'
+    if (!errKemarin && absenKemarin && absenKemarin.waktu_masuk && !absenKemarin.waktu_pulang && absenKemarin.status_absensi === 'open') {
+      await supabase
+        .from('absensi')
+        .update({ status_absensi: 'lupa absen pulang' })
+        .eq('id', absenKemarin.id)
+    }
+  } catch (e) {
+    console.error("Gagal menjalankan otomatisasi lupa absen:", e)
+  }
+
+  // Get profile terbaru
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
@@ -54,7 +79,7 @@ export async function renderDashboard() {
     }
   })
 
-  // FITUR BARU: Dibatasi HANYA 4 tombol utama saja
+  // Batasi menu utama hanya 4 tombol
   const menuItems = [
     { nav: 'absensi',       icon: 'fa-sign-in-alt',  label: 'Masuk',            color: '#f59e0b', color2: '#fbbf24' },
     { nav: 'absensi',       icon: 'fa-sign-out-alt', label: 'Pulang',           color: '#3b82f6', color2: '#60a5fa' },
@@ -91,6 +116,65 @@ export async function renderDashboard() {
     </button>
   `).join('')
 
+  // ===== FITUR BARU: MENGHITUNG STATISTIK KEHADIRAN REAL-TIME HARI INI (UNTUK ADMIN) =====
+  let adminWidgetHtml = ''
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  
+  if (isAdmin) {
+    try {
+      const hariIniStr = new Date().toISOString().split('T')[0]
+      
+      // Ambil seluruh rekap absensi & jadwal hari berjalan
+      const { data: absenHariIni } = await supabase.from('absensi').select('*').eq('tanggal', hariIniStr)
+      const { data: jadwalHariIni } = await supabase.from('jadwal').select('*').eq('tanggal', hariIniStr)
+      
+      let tepatWaktu = 0, terlambat = 0, sedangKerja = 0, liburAtauCuti = 0
+      
+      absenHariIni?.forEach(a => {
+        if (a.waktu_masuk && a.waktu_pulang) {
+          if (a.status_masuk === 'Terlambat') terlambat++
+          else tepatWaktu++
+        } else if (a.waktu_masuk && !a.waktu_pulang) {
+          sedangKerja++
+        }
+      })
+      
+      jadwalHariIni?.forEach(j => {
+        if (['OFF', 'cuti', 'sakit', 'izin'].includes(j.status_override) || j.shift_code === '8') {
+          liburAtauCuti++
+        }
+      })
+      
+      adminWidgetHtml = `
+        <div class="card fade-up" style="padding: 16px; margin-bottom: 20px;">
+          <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">
+            <i class="fa fa-chart-line" style="color: var(--primary);"></i> Live Monitoring Monitor Kehadiran Hari Ini
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center;">
+            <div style="background: #dcfce7; padding: 10px 4px; border-radius: 10px;">
+              <div style="font-size: 1.2rem; font-weight: 900; color: #166534;">${tepatWaktu}</div>
+              <div style="font-size: .6rem; color: #166534; font-weight: 700;">Tepat Waktu</div>
+            </div>
+            <div style="background: #fffbeb; padding: 10px 4px; border-radius: 10px;">
+              <div style="font-size: 1.2rem; font-weight: 900; color: #b45309;">${sedangKerja}</div>
+              <div style="font-size: .6rem; color: #b45309; font-weight: 700;">On Duty</div>
+            </div>
+            <div style="background: #fee2e2; padding: 10px 4px; border-radius: 10px;">
+              <div style="font-size: 1.2rem; font-weight: 900; color: #991b1b;">${terlambat}</div>
+              <div style="font-size: .6rem; color: #991b1b; font-weight: 700;">Terlambat</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 10px 4px; border-radius: 10px;">
+              <div style="font-size: 1.2rem; font-weight: 900; color: #475569;">${liburAtauCuti}</div>
+              <div style="font-size: .6rem; color: #475569; font-weight: 700;">Off / Cuti</div>
+            </div>
+          </div>
+        </div>
+      `
+    } catch (err) {
+      console.error("Gagal memuat widget live monitoring hrd:", err)
+    }
+  }
+
   content.innerHTML = `
     <div class="page-header" style="margin-bottom: 20px;">
       <h2 style="margin: 0;"><i class="fa fa-tachometer-alt"></i> Dashboard</h2>
@@ -105,6 +189,8 @@ export async function renderDashboard() {
         <div style="text-align: right; font-size: 2.2rem; opacity: 0.2;"><i class="fa fa-id-badge"></i></div>
       </div>
     </div>
+
+    ${adminWidgetHtml}
 
     <div style="margin-bottom: 25px; display: flex; justify-content: center; width: 100%;">
       <div style="
