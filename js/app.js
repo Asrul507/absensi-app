@@ -11,7 +11,7 @@ import { renderDaftarAbsensi } from './daftar-absensi.js'
 import { renderPerbaikanAbsen } from './perbaikan-absen.js'
 import { renderPengajuan } from './pengajuan.js'
 import { renderKalenderHR } from './kalender.js'
-import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
+import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungCuti, resetCutiKaryawan } from './cuti.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
 
@@ -577,7 +577,7 @@ window.openFormTambah = async function() {
       </div>
       
       <div class="field">
-        <label>Jatah Titik Radius</label>
+        <label>Titik Radius</label>
         <select id="pTitikRadius" style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700; background:#fff; color:#000;">
           <option value="">-- Bebas Radius (Bypass) --</option>
           ${opsiLokasi}
