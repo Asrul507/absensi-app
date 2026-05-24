@@ -1,7 +1,6 @@
 import { supabase } from './supabase.js'
 import { isEligibleCuti, getSisaCuti, hitungMasaKerja, syncSisaCutiProfile } from './cuti.js'
 
-/* ================= HITUNG TANGGAL SELESAI ================= */
 function hitungTanggalSelesai(startDate, hari) {
   if (!startDate || !hari) return null
   const date = new Date(startDate)
@@ -9,12 +8,10 @@ function hitungTanggalSelesai(startDate, hari) {
   return date.toISOString().split('T')[0]
 }
 
-/* ================= RENDER ================= */
 export async function renderPengajuan(user) {
   const content = document.getElementById('content')
   const isAdmin = user.role === 'admin' || user.role === 'super_admin'
 
-  // Load pengajuan list
   let query = supabase.from('pengajuan').select('*').order('created_at', { ascending: false })
   const { data: list, error } = await query
   if (error) {
@@ -24,7 +21,6 @@ export async function renderPengajuan(user) {
 
   const myList = isAdmin ? list : list.filter(i => i.user_id === user.id)
 
-  // Info cuti user
   const masaKerja = hitungMasaKerja(user.tanggal_bergabung)
   const eligible = isEligibleCuti(user.tanggal_bergabung)
   const { jatah, terpakai, sisa } = await getSisaCuti(user.id, user.tanggal_bergabung)
@@ -34,7 +30,6 @@ export async function renderPengajuan(user) {
       <h2><i class="fa fa-file-alt"></i> Pengajuan</h2>
     </div>
 
-    <!-- INFO CUTI CARD (staff only) -->
     ${!isAdmin ? `
     <div class="card fade-up" style="background:linear-gradient(135deg,#1e3a8a,#0891b2);color:#fff;margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
@@ -63,11 +58,9 @@ export async function renderPengajuan(user) {
     </div>
     ` : ''}
 
-    <!-- FORM PENGAJUAN -->
     <div class="card fade-up-1">
       <h3 style="font-size:.9rem;font-weight:800;margin-bottom:16px;">
-        <i class="fa fa-plus-circle" style="color:var(--primary);"></i>
-        Buat Pengajuan Baru
+        <i class="fa fa-plus-circle" style="color:var(--primary);"></i> Buat Pengajuan Baru
       </h3>
 
       <div class="field">
@@ -115,15 +108,13 @@ export async function renderPengajuan(user) {
       </button>
     </div>
 
-    <!-- RIWAYAT PENGAJUAN -->
     <div class="card fade-up-2">
       <h3 style="font-size:.9rem;font-weight:800;margin-bottom:16px;">
         <i class="fa fa-history" style="color:var(--primary);"></i>
         ${isAdmin ? 'Semua Pengajuan' : 'Riwayat Pengajuan Saya'}
       </h3>
 
-      ${myList.length === 0
-        ? `<div class="empty-state"><i class="fa fa-inbox"></i><p>Belum ada pengajuan</p></div>`
+      ${myList.length === 0 ? `<div class="empty-state"><i class="fa fa-inbox"></i><p>Belum ada pengajuan</p></div>`
         : myList.map(i => `
           <div class="pengajuan-card ${i.status === 'approved' ? 'approved' : i.status === 'rejected' ? 'rejected' : 'pending'}">
             <div class="pq-header">
@@ -162,7 +153,6 @@ export async function renderPengajuan(user) {
     </div>
   `
 
-  // ===== EVENT: JENIS CHANGE =====
   window.onJenisChange = function() {
     const jenis = document.getElementById('jenis').value
     const infoEl = document.getElementById('infoEligible')
@@ -189,9 +179,8 @@ export async function renderPengajuan(user) {
     }
   }
 
-  window.onJenisChange() // trigger saat load
+  window.onJenisChange()
 
-  // ===== EVENT: UPDATE TANGGAL SELESAI =====
   window.updateTanggalSelesai = function() {
     const mulai = document.getElementById('tanggalMulai').value
     const jumlah = document.getElementById('jumlahHari').value
@@ -201,7 +190,6 @@ export async function renderPengajuan(user) {
 
   document.getElementById('tanggalMulai').addEventListener('change', window.updateTanggalSelesai)
 
-  // ===== SUBMIT =====
   document.getElementById('btnSubmit').onclick = async () => {
     const jenis = document.getElementById('jenis').value
     const alasan = document.getElementById('alasan').value.trim()
@@ -213,12 +201,9 @@ export async function renderPengajuan(user) {
     if (!tanggalMulai) { alert('Tanggal mulai wajib diisi'); return }
     if (!jumlahHari || jumlahHari < 1) { alert('Jumlah hari tidak valid'); return }
 
-    // Validasi cuti
-    if (jenis === 'cuti') {
-      if (!eligible) {
-        alert(`Anda belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`)
-        return
-      }
+    if (jenis === 'cuti' && !eligible) {
+      alert(`Anda belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`)
+      return
     }
 
     const btn = document.getElementById('btnSubmit')
@@ -269,24 +254,17 @@ function labelJenis(jenis) {
   return jenis || '-'
 }
 
-/* ================= SHOW APPROVAL MODAL ================= */
 window.showApprovalModal = function(id, type) {
   const modal = document.createElement('div')
   modal.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0, 0, 0, 0.5);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 9999;
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
   `
 
   const box = document.createElement('div')
   box.style.cssText = `
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 450px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    background: white; border-radius: 16px; padding: 24px; max-width: 450px; width: 90%; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   `
 
   const title = type === 'approve' ? 'Setujui Pengajuan' : 'Tolak Pengajuan'
@@ -302,9 +280,7 @@ window.showApprovalModal = function(id, type) {
       style="width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
         font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
     <div style="display: flex; gap: 10px;">
-      <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-secondary" style="flex: 1;">
-        Batal
-      </button>
+      <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-secondary" style="flex: 1;">Batal</button>
       <button onclick="submitApprovalWithComment('${id}', '${type}', document.getElementById('catatanApproval').value); this.parentElement.parentElement.parentElement.remove();" class="${btnColor}" style="flex: 1;">
         ${btnText}
       </button>
@@ -318,8 +294,8 @@ window.showApprovalModal = function(id, type) {
   document.body.appendChild(modal)
 }
 
+// FITUR UPGRADE AUTOMATION SISA CUTI: MEMOTONG SALDO JATAH CUTI KARYAWAN SECARA REAL-TIME SAAT DISUTUJUI ADMIN
 window.submitApprovalWithComment = async function(id, type, catatan) {
-  // Validation
   if (type === 'reject' && !catatan.trim()) {
     alert('⚠ Alasan penolakan wajib diisi')
     return
@@ -327,20 +303,18 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
 
   try {
     if (type === 'approve') {
-      // Get pengajuan data
       const { data: pengajuan } = await supabase.from('pengajuan').select('*').eq('id', id).single()
       if (!pengajuan) return
 
       const { user_id, jenis, tanggal_mulai, jumlah_hari } = pengajuan
 
-      // Update with approval
       await supabase.from('pengajuan').update({
         status: 'approved',
         catatan_approval: catatan || null,
         approved_at: new Date().toISOString()
       }).eq('id', id)
 
-      // Update jadwal per hari
+      // Distribusikan override ke jadwal harian staff
       for (let i = 0; i < (jumlah_hari || 1); i++) {
         const date = new Date(tanggal_mulai)
         date.setDate(date.getDate() + i)
@@ -355,23 +329,24 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
         }
       }
 
-      // Sync cuti if applicable
+      // AKSI AUTOMATION UTAMA: Jika jenisnya cuti resmi, panggil fungsi sinkronisasi sisa cuti untuk memotong profile
       if (jenis === 'cuti') {
         const { data: prof } = await supabase.from('profiles').select('tanggal_bergabung').eq('id', user_id).single()
-        if (prof) await syncSisaCutiProfile(user_id, prof.tanggal_bergabung)
+        if (prof) {
+          await syncSisaCutiProfile(user_id, prof.tanggal_bergabung) // Otomatis hitung ulang sisa kuota & simpan ke DB
+        }
       }
 
-      alert('✅ Pengajuan disetujui!')
+      alert('✅ Pengajuan berhasil disetujui, jadwal harian & kuota jatah cuti karyawan diperbarui otomatis!')
 
     } else {
-      // Reject
       await supabase.from('pengajuan').update({
         status: 'rejected',
         catatan_approval: catatan,
         approved_at: new Date().toISOString()
       }).eq('id', id)
 
-      alert('❌ Pengajuan ditolak')
+      alert('❌ Pengajuan resmi ditolak')
     }
 
     renderPengajuan(window.currentUser)
@@ -381,7 +356,6 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
   }
 }
 
-/* ================= OLD FUNCTIONS (DEPRECATED) ================= */
 window.approvePengajuan = function(id) {
   showApprovalModal(id, 'approve')
 }
