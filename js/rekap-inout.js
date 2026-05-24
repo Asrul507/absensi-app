@@ -13,7 +13,6 @@ export async function renderRekapInOut(user) {
     </div>
 
     <div id="rekapInOutView">
-      <!-- INITIAL: List Nama (Admin only) -->
       <div id="namaListRekap" style="display: ${isAdmin ? 'block' : 'none'};" class="fade-up">
         <div class="card" style="padding: 16px; margin-bottom: 12px;">
           <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">
@@ -27,11 +26,9 @@ export async function renderRekapInOut(user) {
         </div>
       </div>
 
-      <!-- DETAIL: Filter & Table -->
       <div id="detailViewRekap" style="display: ${isAdmin ? 'none' : 'block'};">
         ${isAdmin ? `<button onclick="backToNamaListRekap()" class="btn-secondary btn-sm" style="margin-bottom: 12px;"><i class="fa fa-arrow-left"></i> Kembali</button>` : ''}
 
-        <!-- FILTER -->
         <div class="card fade-up" style="padding: 14px 18px; margin-bottom: 16px;">
           <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
             <div style="flex: 1; min-width: 130px;">
@@ -52,7 +49,6 @@ export async function renderRekapInOut(user) {
           </div>
         </div>
 
-        <!-- SUMMARY CARDS -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px;">
           <div class="card fade-up" style="padding: 14px; text-align: center;">
             <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Total Records</div>
@@ -68,7 +64,6 @@ export async function renderRekapInOut(user) {
           </div>
         </div>
 
-        <!-- DETAIL TABLE -->
         <div id="rekapInOutDetail" class="fade-up">
           <div class="card" style="text-align: center; padding: 28px;">
             <i class="fa fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--primary);"></i>
@@ -82,13 +77,13 @@ export async function renderRekapInOut(user) {
   window._isAdminRekapInOut = isAdmin
   window._selectedRekapKaryawan = null
 
+  const now = new Date()
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+
   if (isAdmin) {
     await loadNamaListRekap()
   } else {
-    // Staff: langsung load data diri sendiri
-    const now = new Date()
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
     document.getElementById('filterDariRekap').value = firstDay.toISOString().split('T')[0]
     document.getElementById('filterSampaiRekap').value = lastDay.toISOString().split('T')[0]
     window._selectedRekapKaryawan = user.nama_lengkap
@@ -98,6 +93,7 @@ export async function renderRekapInOut(user) {
 
 async function loadNamaListRekap() {
   const container = document.getElementById('namaListRekapContainer')
+  if (!container) return
 
   try {
     const { data: profiles, error } = await supabase
@@ -109,7 +105,7 @@ async function loadNamaListRekap() {
     if (error) throw error
 
     if (!profiles?.length) {
-      container.innerHTML = `<div class="empty-state" style="padding: 28px;"><i class="fa fa-inbox"></i><p>Tidak ada karyawan</p></div>`
+      container.innerHTML = `<div class="empty-state" style="padding: 28px;"><i class="fa fa-inbox"></i><p>Tidak ada karyawan aktif</p></div>`
       return
     }
 
@@ -119,7 +115,7 @@ async function loadNamaListRekap() {
         <button onclick="selectKaryawanRekap('${p.nama_lengkap}')" 
           style="padding: 12px 16px; background: #fff; border: 1.5px solid var(--border); border-radius: var(--r-md);
             text-align: left; font-weight: 600; color: var(--text); cursor: pointer; transition: all 0.2s;
-            display: flex; justify-content: space-between; align-items: center;">
+            display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <span>${p.nama_lengkap}</span>
           <i class="fa fa-chevron-right" style="color: var(--text-muted); font-size: .85rem;"></i>
         </button>
@@ -154,72 +150,6 @@ window.backToNamaListRekap = function () {
   window._selectedRekapKaryawan = null
 }
 
-    <!-- FILTER -->
-    <div class="card fade-up" style="padding: 14px 18px; margin-bottom: 16px;">
-      <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
-        ${isAdmin ? `
-          <div style="flex: 2; min-width: 150px;">
-            <label style="font-size: .7rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 5px;">Nama Karyawan</label>
-            <input id="filterNama" placeholder="Semua karyawan"
-              style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
-                font-size: .85rem; outline: none; font-family: inherit;">
-          </div>
-        ` : ''}
-        <div style="flex: 1; min-width: 130px;">
-          <label style="font-size: .7rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 5px;">Dari Tanggal</label>
-          <input type="date" id="filterDari"
-            style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
-              font-size: .85rem; outline: none; font-family: inherit; color: var(--text);">
-        </div>
-        <div style="flex: 1; min-width: 130px;">
-          <label style="font-size: .7rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 5px;">Sampai Tanggal</label>
-          <input type="date" id="filterSampai"
-            style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
-              font-size: .85rem; outline: none; font-family: inherit; color: var(--text);">
-        </div>
-        <button class="btn-primary btn-sm" onclick="applyRekapInOutFilter(window.currentUser)" style="align-self: flex-end; white-space: nowrap;">
-          <i class="fa fa-search"></i> Cari
-        </button>
-      </div>
-    </div>
-
-    <!-- SUMMARY CARDS -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px;">
-      <div class="card fade-up" style="padding: 14px; text-align: center;">
-        <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Total Records</div>
-        <div style="font-size: 1.6rem; font-weight: 900; color: var(--primary);" id="totalRecords">-</div>
-      </div>
-      <div class="card fade-up" style="padding: 14px; text-align: center;">
-        <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Masuk</div>
-        <div style="font-size: 1.6rem; font-weight: 900; color: var(--success);" id="totalMasuk">-</div>
-      </div>
-      <div class="card fade-up" style="padding: 14px; text-align: center;">
-        <div style="font-size: .68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Tidak Masuk</div>
-        <div style="font-size: 1.6rem; font-weight: 900; color: var(--danger);" id="totalTidakMasuk">-</div>
-      </div>
-    </div>
-
-    <!-- DETAIL TABLE -->
-    <div id="rekapInOutDetail" class="fade-up-1">
-      <div class="card" style="text-align: center; padding: 28px;">
-        <i class="fa fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--primary);"></i>
-        <p style="color: var(--text-muted); margin-top: 8px; font-size: .85rem;">Memuat data...</p>
-      </div>
-    </div>
-  `
-
-  // Set default date range (current month)
-  const now = new Date()
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  document.getElementById('filterDari').value = firstDay.toISOString().split('T')[0]
-  document.getElementById('filterSampai').value = lastDay.toISOString().split('T')[0]
-
-  window._isAdminRekapInOut = isAdmin
-
-  await applyRekapInOutFilter(user)
-}
-
 window.applyRekapInOutFilter = async function (user) {
   const isAdmin = window._isAdminRekapInOut
   const dari = document.getElementById('filterDariRekap')?.value
@@ -230,7 +160,6 @@ window.applyRekapInOutFilter = async function (user) {
       .from('absensi')
       .select('*')
       .order('tanggal', { ascending: false })
-      .order('waktu_masuk', { ascending: false })
 
     if (window._selectedRekapKaryawan) {
       query = query.eq('nama', window._selectedRekapKaryawan)
@@ -242,7 +171,6 @@ window.applyRekapInOutFilter = async function (user) {
     if (sampai) query = query.lte('tanggal', sampai)
 
     const { data: absensiData, error } = await query
-
     if (error) throw error
 
     const hasil = calculateRekapInOut(absensiData || [], isAdmin, user.nama_lengkap)
@@ -287,7 +215,15 @@ function calculateRekapInOut(absensiData, isAdmin, currentUserName) {
       totalJam = `${jam}h ${menit}m`
     }
 
-    const status = a.waktu_masuk ? (a.waktu_pulang ? 'Complete' : 'Belum Pulang') : 'Tidak Absen'
+    // Buat keterangan dinamis berdasarkan data menit riil Supabase
+    let keteranganDetail = a.waktu_masuk ? (a.waktu_pulang ? 'Complete' : 'Belum Pulang') : 'Tidak Absen'
+    
+    if (a.status_masuk === 'Terlambat' && a.menit_terlambat > 0) {
+      keteranganDetail += ` (Terlambat ${a.menit_terlambat}m)`
+    }
+    if (a.status_pulang === 'Pulang Cepat' && a.menit_pulang_cepat > 0) {
+      keteranganDetail += ` (Pulang Cepat ${a.menit_pulang_cepat}m)`
+    }
 
     detail.push({
       nama: a.nama,
@@ -295,7 +231,8 @@ function calculateRekapInOut(absensiData, isAdmin, currentUserName) {
       jamMasuk,
       jamPulang,
       totalJam,
-      status
+      status: a.waktu_masuk ? (a.waktu_pulang ? 'Complete' : 'Belum Pulang') : 'Tidak Absen',
+      keteranganText: keteranganDetail
     })
   })
 
@@ -304,8 +241,8 @@ function calculateRekapInOut(absensiData, isAdmin, currentUserName) {
 
 function renderRekapInOutTable(detail, isAdmin) {
   const el = document.getElementById('rekapInOutDetail')
+  if (!el) return
 
-  // Store for download
   window._rekapInOutDetail = detail
 
   if (!detail.length) {
@@ -333,21 +270,12 @@ function renderRekapInOutTable(detail, isAdmin) {
             </tr>
           </thead>
           <tbody>
-            ${detail.map(d => {
-              let keteranganDetail = d.status
-              
-              // Tambah info terlambat jika ada
-              if (d.status === 'Belum Pulang' && d.jamMasuk !== '-') {
-                const lateMin = Math.abs(new Date(d.jamMasuk).getHours() * 60 + new Date(d.jamMasuk).getMinutes() - (7 * 60))
-                if (lateMin > 5) keteranganDetail += ` (Terlambat ${lateMin}m)`
-              }
-              
-              return `
+            ${detail.map(d => `
               <tr>
                 ${isAdmin ? `<td style="font-weight: 600;">${d.nama}</td>` : ''}
                 <td>${d.tanggal}</td>
-                <td style="font-weight: 700;">${d.jamMasuk}</td>
-                <td style="font-weight: 700;">${d.jamPulang}</td>
+                <td style="font-weight: 700; color: var(--success);">${d.jamMasuk}</td>
+                <td style="font-weight: 700; color: var(--primary);">${d.jamPulang}</td>
                 <td>${d.totalJam}</td>
                 <td>
                   <span style="
@@ -359,11 +287,11 @@ function renderRekapInOutTable(detail, isAdmin) {
                     ${d.status === 'Belum Pulang' ? 'background: #fef3c7; color: #92400e;' : ''}
                     ${d.status === 'Tidak Absen' ? 'background: #fee2e2; color: #991b1b;' : ''}
                   ">
-                    ${keteranganDetail}
+                    ${d.keteranganText}
                   </span>
                 </td>
               </tr>
-            `}).join('')}
+            `).join('')}
           </tbody>
         </table>
       </div>
@@ -390,7 +318,7 @@ window.downloadExcelRekapInOut = function () {
     'Jam Masuk': d.jamMasuk,
     'Jam Pulang': d.jamPulang,
     'Total Jam': d.totalJam,
-    'Status': d.status
+    'Keterangan': d.keteranganText
   }))
 
   const ws = XLSX.utils.json_to_sheet(rows)
@@ -402,9 +330,9 @@ window.downloadExcelRekapInOut = function () {
     { wch: 12 },
     { wch: 12 },
     { wch: 14 },
-    { wch: 18 }
+    { wch: 28 }
   ]
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Rekap In/Out')
+  XLSX.utils.book_append_sheet(wb, ws, 'Rekap In Out')
   XLSX.writeFile(wb, `rekap-inout-${window._selectedRekapKaryawan || 'all'}-${new Date().toISOString().split('T')[0]}.xlsx`)
 }
