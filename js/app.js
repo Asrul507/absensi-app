@@ -721,7 +721,10 @@ window.openDetailKaryawan = function(id) {
 }
 
 /* ================= POPUP MODAL: EDIT KARYAWAN ================= */
-window.openEditKaryawan = function(id) {
+// ====================================================================
+// SOLUSI TOTAL: FORM EDIT KARYAWAN AKTIF LIVE DI js/app.js
+// ====================================================================
+window.openEditKaryawan = async function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
 
@@ -729,13 +732,25 @@ window.openEditKaryawan = function(id) {
   const isMe = me.id === target.id
   const canEditAllFields = (me.role === 'super_admin') || (me.role === 'admin' && target.role === 'staff')
 
+  let opsiLokasi = ''
+  try {
+    // Ambil opsi daftar lokasi secara dinamis dari database untuk modal edit
+    const { data: lokasiList } = await supabase.from('lokasi_absen').select('*')
+    opsiLokasi = (lokasiList || []).map(l => {
+      const nameT = l.nama_titik || l.nama_lokasi || l.nama || '';
+      // Jika lokasi ini adalah jatah radius si karyawan saat ini, otomatis jadikan "selected"
+      return `<option value="${nameT}" ${target.titik_radius === nameT ? 'selected' : ''}>${nameT}</option>`
+    }).join('')
+  } catch(e) {
+    console.error("Gagal memuat list lokasi untuk edit:", e)
+  }
+
   window.showUserModal(`
     <div class="modal-header">
       <h3><i class="fa fa-user-edit" style="color:var(--warning);"></i> Edit Data: ${target.nama_lengkap}</h3>
       <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
     </div>
 
-    <!-- FOTO PROFIL EDIT -->
     <div style="text-align:center;padding:14px 0 10px;border-bottom:1px solid var(--border);margin-bottom:14px;">
       <div style="position:relative;display:inline-block;">
         ${target.foto_url
@@ -743,15 +758,10 @@ window.openEditKaryawan = function(id) {
           : `<div class="profile-avatar" id="editAvatarPreview" style="width:64px;height:64px;font-size:1.4rem;display:flex;align-items:center;justify-content:center;">${target.nama_lengkap[0].toUpperCase()}</div>`
         }
         ${isMe || canEditAllFields ? `
-          <label for="editFotoInput" title="Ganti foto"
-            style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;
-              border-radius:50%;background:var(--primary);color:#fff;cursor:pointer;
-              display:flex;align-items:center;justify-content:center;font-size:.6rem;
-              box-shadow:0 2px 6px rgba(0,0,0,.25);border:2px solid #fff;">
+          <label for="editFotoInput" title="Ganti foto" style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.6rem;box-shadow:0 2px 6px rgba(0,0,0,.25);border:2px solid #fff;">
             <i class="fa fa-camera"></i>
           </label>
-          <input type="file" id="editFotoInput" accept="image/*" style="display:none;"
-            onchange="uploadFotoEditModal(this,'${target.id}')">
+          <input type="file" id="editFotoInput" accept="image/*" style="display:none;" onchange="uploadFotoEditModal(this,'${target.id}')">
         ` : ''}
       </div>
       <div id="editFotoStatus" style="font-size:.72rem;color:var(--text-muted);margin-top:6px;min-height:16px;"></div>
@@ -778,8 +788,15 @@ window.openEditKaryawan = function(id) {
         <label>Tanggal Lahir</label>
         <input type="date" id="editLahir" value="${target.tanggal_lahir || ''}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
+      
+      <div class="field">
+        <label>Atur Titik Radius</label>
+        <select id="editTitikRadius" ${canEditAllFields ? '' : 'disabled'} style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700; background:#fff; color:#000;">
+          <option value="">-- Bebas Radius (Bypass) --</option>
+          ${opsiLokasi}
+        </select>
+      </div>
 
-      <!-- PASSWORD -->
       <div class="field full" style="grid-column:1/-1; border-top:1px solid var(--border); padding-top:10px; margin-top:5px;">
         <label style="color:var(--primary); font-weight:800;"><i class="fa fa-key"></i> ${isMe ? 'Ganti Password Anda' : 'Reset Password Karyawan'}</label>
         <input type="password" id="editPassword" placeholder="Masukkan password baru jika ingin diubah">
@@ -792,6 +809,54 @@ window.openEditKaryawan = function(id) {
       <button class="btn-primary" onclick="window.saveEditKaryawan('${target.id}', ${canEditAllFields}, ${isMe})"><i class="fa fa-save"></i> Perbarui Data</button>
     </div>
   `)
+}
+
+window.saveEditKaryawan = async function(id, canEditAll, isMe) {
+  const newPassword = document.getElementById('editPassword').value.trim()
+
+  try {
+    if (canEditAll) {
+      // Perbarui data profil ke tabel 'profiles' di Supabase termasuk kolom titik_radius baru
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update({
+          nama_lengkap: document.getElementById('editNama').value.trim(),
+          jabatan:      document.getElementById('editJabatan').value.trim(),
+          departemen:   document.getElementById('editDept').value.trim(),
+          no_hp:        document.getElementById('editHp').value.trim(),
+          tanggal_lahir: document.getElementById('editLahir').value || null,
+          titik_radius:  document.getElementById('editTitikRadius').value || null // Menyimpan jatah radius terupdate
+        })
+        .eq('id', id)
+
+      if (profileErr) throw profileErr
+    }
+
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        alert('⚠ Password minimal 6 karakter!')
+        return
+      }
+      if (isMe) {
+        const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
+        if (passErr) throw passErr
+      } else {
+        alert('ℹ️ Reset password karyawan lain memerlukan Supabase Admin Function. Hubungi super admin untuk fitur ini.')
+      }
+    }
+
+    window.closeUserModal()
+    alert('✅ Seluruh perubahan data karyawan berhasil disimpan!')
+    
+    if (typeof renderUsers === 'function') {
+      await renderUsers()
+    } else {
+      location.reload()
+    }
+
+  } catch (err) {
+    alert('Gagal memperbarui data: ' + err.message)
+  }
 }
 
 /* ================= UPLOAD FOTO DI MODAL EDIT ================= */
