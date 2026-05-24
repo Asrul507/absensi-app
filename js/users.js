@@ -108,7 +108,7 @@ export async function renderUsers() {
   }
 
   window.openFormTambah = async function() {
-    // Ambil opsi daftar lokasi dari database secara live
+    // 1. Ambil opsi daftar lokasi dari database secara live agar otomatis muncul
     const { data: lokAsiList } = await supabase.from('lokasi_absen').select('nama_titik')
     const opsiLokasi = (lokAsiList || []).map(l => `<option value="${l.nama_titik}">${l.nama_titik}</option>`).join('')
 
@@ -133,8 +133,9 @@ export async function renderUsers() {
             ${viewerRole === 'super_admin' ? `<option value="admin">Admin</option><option value="super_admin">Super Admin</option>` : ''}
           </select>
         </div>
+        
         <div class="field"><label>Jatah Titik Radius</label>
-          <select id="pTitikRadius">
+          <select id="pTitikRadius" style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700;">
             <option value="">-- Bebas Radius --</option>
             ${opsiLokasi}
           </select>
