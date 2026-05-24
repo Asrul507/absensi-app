@@ -9,28 +9,36 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="style.css"/>
   <style>
-    /* Avatar topbar */
+    /* Avatar topbar style */
     #topbarAvatar {
-      width: 32px; height: 32px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       background: rgba(255,255,255,.22);
       border: 1.5px solid rgba(255,255,255,.35);
       color: #fff;
       font-size: .78rem;
       font-weight: 900;
-      display: flex; align-items: center; justify-content: center;
+      display: flex; align-items: center;
+      justify-content: center;
       flex-shrink: 0;
       cursor: pointer;
       overflow: hidden;
     }
     #topbarAvatar:hover { opacity: .85; }
+    
+    /* Override onClick behavior untuk gambar preview */
+    .clickable-preview {
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .clickable-preview:hover {
+      transform: scale(1.03);
+    }
   </style>
 </head>
 <body>
 
-<!-- ======================================================
-     LOGIN PAGE
-====================================================== -->
 <div id="loginPage">
   <div class="login-box">
 
@@ -52,15 +60,12 @@
         onkeydown="if(event.key==='Enter') login()"/>
     </div>
 
-    <p id="loginError" style="display:none;color:var(--danger);font-size:.82rem;margin-top:8px;
-      padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid);
-      border-radius:var(--r-md);line-height:1.5;"></p>
+    <p id="loginError" style="display:none;color:var(--danger);font-size:.82rem;margin-top:8px; padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid); border-radius:var(--r-md);line-height:1.5;"></p>
 
     <button class="btn-login" id="btnLogin" onclick="login()">
       <i class="fa fa-sign-in-alt"></i> Masuk
     </button>
 
-    <!-- Link ke registrasi karyawan baru -->
     <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200);">
       <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:8px;">Karyawan baru? Belum punya akun?</p>
       <a href="register.html"
@@ -73,12 +78,8 @@
   </div>
 </div>
 
-<!-- ======================================================
-     APP PAGE
-====================================================== -->
 <div id="appPage" style="display:none;">
 
-  <!-- TOPBAR -->
   <div class="topbar">
     <div class="topbar-left">
       <button class="btn-menu" onclick="toggleSidebar()" aria-label="Menu">
@@ -87,10 +88,10 @@
       <div class="topbar-title">GENIUS HR</div>
     </div>
     <div class="topbar-right">
-      <!-- Avatar klik → ke profile -->
-      <div id="topbarAvatar" onclick="navigate('profile')" title="Profil Saya">?</div>
-      <span id="userName" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-        font-size:.82rem;font-weight:700;color:rgba(255,255,255,.95);"></span>
+      <div id="topbarAvatar" onclick="if(window.currentUser?.foto_url) { window.previewImageFullScreen(window.currentUser.foto_url); } else { navigate('profile'); }" title="Klik untuk lihat foto / Masuk ke profil">?</div>
+      
+      <span id="userName" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; font-size:.82rem;font-weight:700;color:rgba(255,255,255,.95);" onclick="navigate('profile')" style="cursor:pointer;"></span>
+      
       <button class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Ganti tema"
         style="margin-top:0!important;min-height:unset!important;width:38px!important;padding:0!important;">
         <i class="fa fa-moon" id="themeIcon"></i>
@@ -101,13 +102,10 @@
     </div>
   </div>
 
-  <!-- OVERLAY -->
   <div id="overlay" onclick="closeSidebar()"></div>
 
-  <!-- SIDEBAR -->
   <div id="sidebar"></div>
 
-  <!-- CONTENT -->
   <div id="content">
     <div style="display:flex;align-items:center;justify-content:center;height:60vh;">
       <div style="text-align:center;">
@@ -117,24 +115,31 @@
     </div>
   </div>
 
-  <!-- BOTTOM NAV -->
   <div id="bottomNav"></div>
 
 </div>
 
-<!-- LOADING OVERLAY -->
 <div id="loading-overlay">
   <div class="loading-spinner"></div>
   <div class="loading-text">Memproses...</div>
 </div>
 
-<!-- TOAST -->
 <div id="toast-container"></div>
 
-<!-- SCRIPTS -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script type="module" src="js/app.js"></script>
+
+<script>
+  document.addEventListener('click', function(e) {
+    // Jika user meng-klik elemen gambar profil utama di dalam menu / halaman edit profil
+    if (e.target && e.target.tagName === 'IMG' && (e.target.src.includes('supabase.co/storage/v1/object/public/avatars/') || e.target.id === 'editAvatarPreview')) {
+      if (window.previewImageFullScreen) {
+        window.previewImageFullScreen(e.target.src);
+      }
+    }
+  });
+</script>
 
 </body>
 </html>
