@@ -683,6 +683,29 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
     alert('Gagal memperbarui data: ' + err.message)
   }
 }
+/* ================= FIXED: MODAL GLOBAL HELPER ================= */
+// Kita daftarkan ke "window" agar terdefinisi di scope global dan tidak memicu ReferenceError
+window.showUserModal = function(html) {
+  let el = document.getElementById('userModal')
+  if (el) el.remove()
+  
+  const bg = document.createElement('div')
+  bg.id = 'userModal'
+  bg.className = 'modal-bg open'
+  bg.innerHTML = `<div class="modal-box">${html}</div>`
+  
+  // Klik area luar modal untuk menutup
+  bg.addEventListener('click', e => { 
+    if(e.target === bg) window.closeUserModal() 
+  })
+  
+  document.body.appendChild(bg)
+}
+
+window.closeUserModal = function() { 
+  const modal = document.getElementById('userModal')
+  if (modal) modal.remove() 
+}
 /* ================= SIDEBAR ================= */
 window.toggleSidebar = () => {
   document.getElementById('sidebar')?.classList.toggle('open')
