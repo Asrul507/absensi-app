@@ -143,9 +143,6 @@ export async function registerKaryawan(
           foto_url: '',
           sisa_cuti: 0,
           jatah_cuti: 0,
-          // -------------------------------------------------------------
-          // TEMPAT TEMPEL 1: Menangkap plot radius dari antrean daftar tunggu
-          // -------------------------------------------------------------
           titik_radius: pending.titik_radius || null 
         }])
 
@@ -170,7 +167,7 @@ export async function registerKaryawan(
       err.message || 'Terjadi kesalahan saat registrasi'
     )
     return false
-  } finaly {
+  } finally {
     // ================= RESET BUTTON =================
     if (btn) {
       btn.disabled = false
@@ -206,9 +203,6 @@ export async function signup(email, password, role = 'staff', extraData = {}) {
       foto_url: '',
       sisa_cuti: 0,
       jatah_cuti: 0,
-      // -------------------------------------------------------------
-      // TEMPAT TEMPEL 2: Mengamankan ekstra data radius dari input langsung HRD
-      // -------------------------------------------------------------
       titik_radius: extraData.titik_radius || null
     }])
     if (profileError) { alert(profileError.message); return false }
