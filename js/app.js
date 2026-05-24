@@ -13,6 +13,7 @@ import { renderPengajuan } from './pengajuan.js'
 import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
 import './chart-helpers.js'
+import { renderPengaturanLokasi } from './admin_lokasi.js'
 
 /* ================= GLOBAL ================= */
 window.currentUser  = null
@@ -246,6 +247,8 @@ window.navigate = async function (page) {
     case 'kalender':  renderKalenderHR(); break
     case 'profile':   renderProfile(); break
     case 'users':     await renderUsers(); break
+    case 'admin-lokasi':renderPengaturanLokasi();break;
+      
     default:
       document.getElementById('content').innerHTML = `<div class="card"><h2>${page}</h2></div>`
   }
