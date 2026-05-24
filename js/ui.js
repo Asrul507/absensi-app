@@ -349,11 +349,17 @@ export async function renderAbsensi(user) {
       const fixedLng = document.getElementById('geoLngInput').value
       const namaTitikTerpilih = document.getElementById('selectLokasiAbsen').value
 
-      let status_absensi = 'open'
+      // TEMPELKAN KODE BARU INI (Pengunci Jatah Lokasi Masuk):
+let status_absensi = 'open'
 
-      if (['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(todayShift.nama_shift)) {
-        status_absensi = 'salah absen'
-      }
+// VALIDASI BARU: Jika titik yang dipilih di dropdown tidak sama dengan jatah di profilnya, kunci ke 'salah absen'
+if (user.titik_radius && namaTitikTerpilih !== user.titik_radius) {
+  status_absensi = 'salah absen' 
+}
+
+if (['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(todayShift.nama_shift)) {
+  status_absensi = 'salah absen'
+}
 
       if (status_absensi === 'open') {
         const yDate = new Date()
@@ -415,8 +421,17 @@ export async function renderAbsensi(user) {
       const fixedLng = document.getElementById('geoLngInput').value
       const namaTitikTerpilih = document.getElementById('selectLokasiAbsen').value
 
-      const status_absensi = absen.status_absensi === 'open' ? 'complete' : absen.status_absensi
-      const hasilPulang = checkStatusPulang(todayShift.jam_pulang)
+      // TEMPELKAN KODE BARU INI (Pengunci Jatah Lokasi Pulang):
+let status_absensi = absen.status_absensi
+
+// VALIDASI BARU: Jika saat pulang dia ganti titik yang bukan jatahnya, tandai sebagai salah lokasi
+if (user.titik_radius && namaTitikTerpilih !== user.titik_radius) {
+  status_absensi = 'salah absen'
+} else if (status_absensi === 'open') {
+  status_absensi = 'complete'
+}
+
+const hasilPulang = checkStatusPulang(todayShift.jam_pulang)
 
       await supabase.from('absensi').update({
         waktu_pulang:   new Date().toISOString(),
