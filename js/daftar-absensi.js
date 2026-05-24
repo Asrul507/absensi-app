@@ -1,385 +1,172 @@
 import { supabase } from './supabase.js'
 
-function calculateLateDuration(waktu_masuk, jam_masuk_seharusnya) {
-  if (!waktu_masuk || !jam_masuk_seharusnya) return 0
-  const masuk = new Date(waktu_masuk)
-  const jamMasuk = jam_masuk_seharusnya.split(':')
-  const jamMasukDate = new Date(masuk.getFullYear(), masuk.getMonth(), masuk.getDate(), jamMasuk[0], jamMasuk[1])
-  const diffMs = masuk - jamMasukDate
-  return Math.max(0, Math.floor(diffMs / 60000))
-}
-
-function calculateEarlyDuration(waktu_pulang, jam_pulang_seharusnya) {
-  if (!waktu_pulang || !jam_pulang_seharusnya) return 0
-  const pulang = new Date(waktu_pulang)
-  const jamPulang = jam_pulang_seharusnya.split(':')
-  const jamPulangDate = new Date(pulang.getFullYear(), pulang.getMonth(), pulang.getDate(), jamPulang[0], jamPulang[1])
-  const diffMs = jamPulangDate - pulang
-  return Math.max(0, Math.floor(diffMs / 60000))
-}
-
 export async function renderDaftarAbsensi(user) {
   const content = document.getElementById('content')
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  if (!content) return
 
+  // 1. TENTUKAN DEFAULT RENTANG TANGGAL (7 Hari Terakhir s/id Hari Ini)
+  const hariIni = new Date()
+  const tujuhHariLalu = new Date()
+  tujuhHariLalu.setDate(hariIni.getDate() - 7)
+
+  const defaultFilterMulai = tujuhHariLalu.toISOString().split('T')[0]
+  const defaultFilterSelesai = hariIni.toISOString().split('T')[0]
+
+  // 2. RENDER STRUKTUR DASHBOARD & FILTER ATAS
   content.innerHTML = `
-    <div class="page-header">
-      <h2><i class="fa fa-list-check"></i> Daftar Absensi</h2>
-    </div>
+    <div style="max-width:480px; margin:0 auto; padding: 0 8px;">
+      
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+        <button onclick="navigate('dashboard')" style="background:none; border:none; font-size:1.2rem; color:var(--text); cursor:pointer;">
+          <i class="fa fa-chevron-left"></i>
+        </button>
+        <h2 style="font-size:1.25rem; font-weight:800; margin:0;">Data Absensi</h2>
+      </div>
 
-    <div id="daftarAbsensiView">
-      <!-- INITIAL: List Nama Karyawan -->
-      <div id="namaList" class="fade-up">
-        <div class="card" style="padding: 16px; margin-bottom: 12px;">
-          <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">
-            Pilih Karyawan
+      <div class="card" style="padding:12px; margin-bottom:16px; border-radius:12px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div>
+            <label style="font-size:.65rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Dari Tanggal</label>
+            <input type="date" id="filterMulai" value="${defaultFilterMulai}" style="width:100%; padding:8px; border:1px solid #e2e8f0; border-radius:6px; font-size:.85rem; font-weight:600; margin-top:4px;">
           </div>
-          <div id="namaListContainer" style="display: flex; flex-direction: column; gap: 8px;">
-            <div class="card" style="text-align: center; padding: 28px;">
-              <i class="fa fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--primary);"></i>
-              <p style="color: var(--text-muted); margin-top: 8px; font-size: .85rem;">Memuat data...</p>
-            </div>
+          <div>
+            <label style="font-size:.65rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Sampai Tanggal</label>
+            <input type="date" id="filterSelesai" value="${defaultFilterSelesai}" style="width:100%; padding:8px; border:1px solid #e2e8f0; border-radius:6px; font-size:.85rem; font-weight:600; margin-top:4px;">
           </div>
         </div>
       </div>
 
-      <!-- DETAIL: Filter & Cards -->
-      <div id="detailView" style="display: none;">
-        <div style="margin-bottom: 12px;">
-          <button onclick="backToDaftarList()" class="btn-secondary btn-sm" style="margin-bottom: 12px;">
-            <i class="fa fa-arrow-left"></i> Kembali
-          </button>
+      <div id="listKartuAbsensi">
+        <div style="text-align:center; padding:40px 0;">
+          <i class="fa fa-spinner fa-spin" style="font-size:1.5rem; color:var(--primary);"></i>
+          <p style="font-size:.8rem; color:var(--text-muted); margin-top:8px;">Memuat data...</p>
         </div>
-
-        <div class="card fade-up" style="padding: 14px 18px; margin-bottom: 16px;">
-          <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
-            <div style="flex: 1; min-width: 130px;">
-              <label style="font-size: .7rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 5px;">Dari Tanggal</label>
-              <input type="date" id="filterDari"
-                style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
-                  font-size: .85rem; outline: none; font-family: inherit; color: var(--text);">
-            </div>
-            <div style="flex: 1; min-width: 130px;">
-              <label style="font-size: .7rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 5px;">Sampai Tanggal</label>
-              <input type="date" id="filterSampai"
-                style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
-                  font-size: .85rem; outline: none; font-family: inherit; color: var(--text);">
-            </div>
-            <div style="flex: 1; min-width: 130px;">
-              <label style="font-size: .7rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 5px;">Status</label>
-              <select id="filterStatus"
-                style="width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
-                  font-size: .85rem; outline: none; font-family: inherit;">
-                <option value="">Semua</option>
-                <option value="complete">Complete</option>
-                <option value="tepat_waktu">Tepat Waktu</option>
-                <option value="terlambat">Terlambat</option>
-                <option value="belum_pulang">Belum Pulang</option>
-                <option value="tidak_absen">Tidak Absen</option>
-              </select>
-            </div>
-            <button class="btn-primary btn-sm" onclick="applyDaftarAbsensiFilter(window.currentUser)" style="align-self: flex-end; white-space: nowrap;">
-              <i class="fa fa-search"></i> Cari
-            </button>
-            <button class="btn-primary btn-sm" onclick="downloadExcelDaftarAbsensi()" style="align-self: flex-end; white-space: nowrap;">
-              <i class="fa fa-download"></i> Excel
-            </button>
-          </div>
-        </div>
-
-        <div id="daftarAbsensiCards" style="display: flex; flex-direction: column; gap: 12px;"></div>
       </div>
+
     </div>
   `
 
-  // Set default date range (current month)
-  const now = new Date()
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  // Hubungkan event trigger filter tanggal
+  document.getElementById('filterMulai').onchange = () => muatLogAbsensi(user)
+  document.getElementById('filterSelesai').onchange = () => muatLogAbsensi(user)
 
-  window._isAdminDaftarAbsensi = isAdmin
-  window._currentDaftarUser = user
-  window._daftarAbsensiAllData = []
-  window._selectedKaryawan = null
-
-  // Load nama list
-  await loadNamaList(isAdmin, user)
+  // Jalankan fungsi penarik data
+  await muatLogAbsensi(user)
 }
 
-async function loadNamaList(isAdmin, user) {
-  const container = document.getElementById('namaListContainer')
+// ====================================================================
+// FUNGSI UTAMA AMBIL DATA & KONTROL LAYOUT KARTU ESTETIK
+// ====================================================================
+async function muatLogAbsensi(user) {
+  const listContainer = document.getElementById('listKartuAbsensi')
+  if (!listContainer) return
+
+  const tglMulai = document.getElementById('filterMulai').value
+  const tglSelesai = document.getElementById('filterSelesai').value
 
   try {
-    let query = supabase.from('profiles').select('id, nama_lengkap').eq('status_akun', 'Aktif')
-
-    if (!isAdmin) {
-      query = query.eq('id', user.id)
-    }
-
-    const { data: profiles, error } = await query.order('nama_lengkap', { ascending: true })
+    // AMBIL DATA DARI SUPABASE BERDASARKAN RENTANG TANGGAL USER
+    const { data: listAbsen, error } = await supabase
+      .from('absensi')
+      .select('*')
+      .eq('nama', user.nama_lengkap)
+      .gte('tanggal', tglMulai)
+      .lte('tanggal', tglSelesai)
+      .order('tanggal', { ascending: false })
 
     if (error) throw error
 
-    if (!profiles?.length) {
-      container.innerHTML = `
-        <div class="empty-state" style="padding: 28px;">
-          <i class="fa fa-inbox"></i>
-          <p>Tidak ada karyawan</p>
+    if (!listAbsen || listAbsen.length === 0) {
+      listContainer.innerHTML = `
+        <div style="text-align:center; padding:40px 20px; background:#fff; border-radius:12px; border:1px dashed #e2e8f0;">
+          <i class="fa fa-calendar-xmark" style="font-size:2rem; color:#cbd5e1; margin-bottom:8px; display:block;"></i>
+          <p style="font-size:.85rem; color:var(--text-muted); font-weight:600; margin:0;">Tidak ada riwayat absensi pada rentang tanggal ini.</p>
         </div>
       `
       return
     }
 
-    let html = ''
-    profiles.forEach(p => {
-      html += `
-        <button onclick="selectKaryawan('${p.nama_lengkap}')" class="btn-list" 
-          style="padding: 12px 16px; background: #fff; border: 1.5px solid var(--border); border-radius: var(--r-md);
-            text-align: left; font-weight: 600; color: var(--text); cursor: pointer; transition: all 0.2s;
-            display: flex; justify-content: space-between; align-items: center;">
-          <span>${p.nama_lengkap}</span>
-          <i class="fa fa-chevron-right" style="color: var(--text-muted); font-size: .85rem;"></i>
-        </button>
-      `
-    })
+    // RENDER ARRAY DATA MENJADI GRID KARTU KREATIF
+    listContainer.innerHTML = listAbsen.map(absen => {
+      // 1. FORMAT TANGGAL KE INDONESIA (Contoh: Minggu, 24 Mei 2026)
+      const opt = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+      const formatHari = new Date(absen.tanggal).toLocaleDateString('id-ID', opt)
 
-    container.innerHTML = html
-
-    // Add hover effect
-    document.querySelectorAll('.btn-list').forEach(btn => {
-      btn.addEventListener('hover', function() {
-        this.style.background = '#f8fafc'
-        this.style.borderColor = 'var(--primary)'
-      })
-    })
-
-  } catch (err) {
-    container.innerHTML = `<div class="card"><p style="color: var(--danger);">Error: ${err.message}</p></div>`
-  }
-}
-
-window.selectKaryawan = async function (namaKaryawan) {
-  window._selectedKaryawan = namaKaryawan
-
-  // Hide list, show detail
-  document.getElementById('namaList').style.display = 'none'
-  document.getElementById('detailView').style.display = 'block'
-
-  // Set date range
-  const now = new Date()
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  document.getElementById('filterDari').value = firstDay.toISOString().split('T')[0]
-  document.getElementById('filterSampai').value = lastDay.toISOString().split('T')[0]
-
-  // Load data
-  await applyDaftarAbsensiFilter(window.currentUser)
-}
-
-window.backToDaftarList = function () {
-  document.getElementById('namaList').style.display = 'block'
-  document.getElementById('detailView').style.display = 'none'
-  window._selectedKaryawan = null
-}
-
-window.applyDaftarAbsensiFilter = async function (user) {
-  const dari = document.getElementById('filterDari')?.value
-  const sampai = document.getElementById('filterSampai')?.value
-  const statusFilter = document.getElementById('filterStatus')?.value || ''
-
-  try {
-    let query = supabase
-      .from('absensi')
-      .select('*')
-      .eq('nama', window._selectedKaryawan)
-      .order('tanggal', { ascending: false })
-
-    if (dari) query = query.gte('tanggal', dari)
-    if (sampai) query = query.lte('tanggal', sampai)
-
-    const { data: absensiData, error } = await query
-
-    if (error) throw error
-
-    window._daftarAbsensiAllData = absensiData || []
-
-    let filtered = window._daftarAbsensiAllData
-    if (statusFilter) {
-      filtered = filtered.filter(a => {
-        if (statusFilter === 'complete') return a.status_absensi === 'complete'
-        if (statusFilter === 'tepat_waktu') return a.status_masuk === 'Tepat Waktu' && a.waktu_masuk
-        if (statusFilter === 'terlambat') return a.status_masuk === 'Terlambat'
-        if (statusFilter === 'belum_pulang') return a.waktu_masuk && !a.waktu_pulang
-        if (statusFilter === 'tidak_absen') return !a.waktu_masuk
-        return true
-      })
-    }
-
-    await renderDaftarAbsensiCards(filtered, user)
-
-  } catch (err) {
-    console.error('Error:', err)
-    document.getElementById('daftarAbsensiCards').innerHTML = `
-      <div class="card"><p style="color: var(--danger);">Error: ${err.message}</p></div>
-    `
-  }
-}
-
-async function renderDaftarAbsensiCards(absensiData, user) {
-  const el = document.getElementById('daftarAbsensiCards')
-
-  if (!absensiData.length) {
-    el.innerHTML = `
-      <div class="empty-state" style="padding: 52px 24px;">
-        <i class="fa fa-inbox"></i>
-        <p>Tidak ada data untuk filter yang dipilih</p>
-      </div>
-    `
-    return
-  }
-
-  let html = ''
-
-  for (const absen of absensiData) {
-    // Get shift info
-    const { data: jadwal } = await supabase
-      .from('jadwal')
-      .select('shift_id')
-      .eq('tanggal', absen.tanggal)
-      .maybeSingle()
-
-    const { data: shiftData } = jadwal?.shift_id
-      ? await supabase.from('shift').select('nama_shift, jam_masuk, jam_pulang').eq('id', jadwal.shift_id).maybeSingle()
-      : { data: null }
-
-    const shiftName = shiftData?.nama_shift || 'Regular'
-    const jamMasukSeharusnya = shiftData?.jam_masuk || '07:00'
-    const jamPulangSeharusnya = shiftData?.jam_pulang || '15:00'
-
-    const jamMasuk = absen.waktu_masuk ? new Date(absen.waktu_masuk).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
-    const jamPulang = absen.waktu_pulang ? new Date(absen.waktu_pulang).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
-
-    let statusColor = '#f3f4f6'
-    let statusTextColor = '#6b7280'
-    let statusText = 'Open'
-
-    if (!absen.waktu_masuk) {
-      statusColor = '#fee2e2'
-      statusTextColor = '#991b1b'
-      statusText = 'Tidak Masuk'
-    } else if (absen.status_masuk === 'Terlambat') {
-      statusColor = '#fef3c7'
-      statusTextColor = '#92400e'
-      statusText = 'Terlambat'
-    } else if (absen.status_masuk === 'Tepat Waktu') {
-      statusColor = '#dcfce7'
-      statusTextColor = '#166534'
-      statusText = 'Tepat Waktu'
-    }
-
-    if (!absen.waktu_pulang && absen.waktu_masuk) {
-      statusColor = '#dbeafe'
-      statusTextColor = '#0284c7'
-      statusText = 'Belum Pulang'
-    }
-
-    let detailInfo = ''
-    if (absen.status_masuk === 'Terlambat' && absen.waktu_masuk) {
-      const lateMinutes = calculateLateDuration(absen.waktu_masuk, jamMasukSeharusnya)
-      if (lateMinutes > 0) {
-        detailInfo += `<div style="font-size: .75rem; color: #dc2626; margin-top: 6px;"><strong><i class="fa fa-clock"></i> Terlambat ${lateMinutes} menit</strong></div>`
+      // 2. HITUNG TOTAL JAM KERJA DESIMAL (Jika masuk & pulang lengkap)
+      let teksJamKerja = ''
+      if (absen.waktu_masuk && absen.waktu_pulang) {
+        const selisihMs = new Date(absen.waktu_pulang) - new Date(absen.waktu_masuk)
+        const totalJam = selisihMs / (1000 * 60 * 60)
+        teksJamKerja = `<span style="font-size:.78rem; color:var(--text-muted); font-weight:600;">${totalJam.toFixed(2)} Jam Kerja <i class="fa fa-chevron-right" style="font-size:.65rem; margin-left:2px;"></i></span>`
       }
-    }
 
-    if (absen.waktu_pulang && absen.waktu_masuk) {
-      const earlyMinutes = calculateEarlyDuration(absen.waktu_pulang, jamPulangSeharusnya)
-      if (earlyMinutes > 0) {
-        detailInfo += `<div style="font-size: .75rem; color: #f59e0b; margin-top: 4px;"><strong><i class="fa fa-hourglass-end"></i> Pulang ${earlyMinutes} menit lebih awal</strong></div>`
+      // 3. LOGIKA DETEKSI BADGE RADIUS MASUK
+      let badgeMasuk = ''
+      if (absen.waktu_masuk) {
+        const isOutMasuk = (absen.lokasi_masuk || '').includes('Luar Radius') || (absen.lokasi_masuk || '').includes('Testing')
+        if (isOutMasuk) {
+          badgeMasuk = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;">Out Radius</span>`
+        } else {
+          badgeMasuk = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;">Hadir (In Radius)</span>`
+        }
       }
-    }
 
-    html += `
-      <div class="card fade-up" style="padding: 14px; display: flex; gap: 12px;">
-        <div style="flex-shrink: 0;">
-          <img src="${absen.foto_masuk || 'https://via.placeholder.com/40?text=No+Image'}" 
-            style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; border: 1.5px solid var(--border);">
-        </div>
-        <div style="flex: 1;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+      // 4. LOGIKA DETEKSI BADGE RADIUS PULANG
+      let badgePulang = ''
+      if (absen.waktu_pulang) {
+        const isOutPulang = (absen.lokasi_pulang || '').includes('Luar Radius') || (absen.lokasi_pulang || '').includes('Testing')
+        if (isOutPulang) {
+          badgePulang = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;">Out Radius</span>`
+        } else {
+          badgePulang = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;">Out (In Radius)</span>`
+        }
+      }
+
+      // 5. FORMAT JAM RIIL (HH:MM:SS)
+      const jamMasuk = absen.waktu_masuk ? new Date(absen.waktu_masuk).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'
+      const jamPulang = absen.waktu_pulang ? new Date(absen.waktu_pulang).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'
+
+      // COMPILING TEMPLATE KARTU PER HARI
+      return `
+        <div style="margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid #f1f5f9;">
+          
+          <div style="display:flex; justify-content:between; align-items:flex-start; justify-content:space-between; margin-bottom:10px;">
             <div>
-              <div style="font-weight: 700; font-size: .9rem;">${absen.tanggal}</div>
-              <div style="font-size: .7rem; color: var(--text-muted); margin-top: 2px;">${shiftName}</div>
+              <div style="font-weight:800; font-size:.9rem; color:var(--text);">${formatHari}</div>
+              <div style="font-size:.72rem; color:var(--text-muted); font-weight:600; margin-top:2px;">
+                Shift: ${absen.jam_jadwal_masuk || '--:--'} - ${absen.jam_jadwal_pulang || '--:--'}
+              </div>
             </div>
-            <span style="padding: 2px 8px; border-radius: 12px; font-size: .65rem; font-weight: 700; background: ${statusColor}; color: ${statusTextColor};">
-              ${statusText}
-            </span>
+            <div>${teksJamKerja}</div>
           </div>
-          <div style="display: flex; gap: 12px; font-size: .8rem; color: var(--text-muted); margin: 6px 0;">
-            <div><strong>Masuk:</strong> <span style="color: var(--text); font-weight: 600;">${jamMasuk}</span></div>
-            <div><strong>Pulang:</strong> <span style="color: var(--text); font-weight: 600;">${jamPulang}</span></div>
-          </div>
-          ${detailInfo}
-        </div>
-      </div>
-    `
-  }
 
-  el.innerHTML = html
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:${absen.waktu_masuk ? '#f8fafc' : '#f1f5f9'}; border-radius:10px; margin-bottom:8px; opacity:${absen.waktu_masuk ? '1' : '0.65'}">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <i class="fa fa-arrow-right-to-bracket" style="color:#16a34a; font-size:.95rem;"></i>
+              <span style="font-family:monospace; font-weight:700; font-size:.9rem; color:${absen.waktu_masuk ? 'var(--text)' : 'var(--text-muted)'}">${jamMasuk}</span>
+            </div>
+            <div>${badgeMasuk}</div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:${absen.waktu_pulang ? '#f8fafc' : '#f1f5f9'}; border-radius:10px; opacity:${absen.waktu_pulang ? '1' : '0.65'}">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <i class="fa fa-arrow-right-from-bracket" style="color:#ea580c; font-size:.95rem;"></i>
+              <span style="font-family:monospace; font-weight:700; font-size:.9rem; color:${absen.waktu_pulang ? 'var(--text)' : 'var(--text-muted)'}">${jamJamPulang(absen, jamPulang)}</span>
+            </div>
+            <div>${badgePulang}</div>
+          </div>
+
+        </div>
+      `
+    }).join('')
+
+  } catch (err) {
+    listContainer.innerHTML = `<p style="color:var(--danger); text-align:center; font-size:.82rem;">Gagal memuat log riwayat: ${err.message}</p>`
+  }
 }
 
-window.downloadExcelDaftarAbsensi = function () {
-  const data = window._daftarAbsensiAllData || []
-  if (!data.length) {
-    alert('Tidak ada data untuk didownload')
-    return
-  }
-
-  if (typeof XLSX === 'undefined') {
-    alert('Library XLSX belum dimuat')
-    return
-  }
-
-  const rows = data.map(a => {
-    let status = a.status_absensi || 'open'
-    let terlambat = ''
-    let pulangCepat = ''
-
-    if (a.status_masuk === 'Terlambat') {
-      const lateMin = calculateLateDuration(a.waktu_masuk, '07:00')
-      terlambat = lateMin > 0 ? `${lateMin} menit` : ''
-    }
-
-    if (a.waktu_pulang && a.waktu_masuk) {
-      const earlyMin = calculateEarlyDuration(a.waktu_pulang, '15:00')
-      pulangCepat = earlyMin > 0 ? `${earlyMin} menit` : ''
-    }
-
-    return {
-      'Tanggal': a.tanggal,
-      'Nama': a.nama,
-      'Jam Masuk': a.waktu_masuk ? new Date(a.waktu_masuk).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-      'Jam Pulang': a.waktu_pulang ? new Date(a.waktu_pulang).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-      'Status Masuk': a.status_masuk || '-',
-      'Terlambat': terlambat,
-      'Pulang Cepat': pulangCepat,
-      'Keterangan': status
-    }
-  })
-
-  const ws = XLSX.utils.json_to_sheet(rows)
-  const wb = XLSX.utils.book_new()
-
-  ws['!cols'] = [
-    { wch: 12 },
-    { wch: 20 },
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 18 }
-  ]
-
-  XLSX.utils.book_append_sheet(wb, ws, 'Daftar Absensi')
-  XLSX.writeFile(wb, `daftar-absensi-${window._selectedKaryawan}-${new Date().toISOString().split('T')[0]}.xlsx`)
+// Fungsi pembantu validasi teks jam pulang kosong
+function jamJamPulang(absen, jamPulang) {
+  if (absen.status_absensi === 'lupa absen pulang') return 'Lupa Absen Pulang'
+  return jamPulang
 }
