@@ -148,7 +148,7 @@ export async function renderUsers() {
     `)
   }
 
-  window.savePendingKaryawan = async function() {
+ window.savePendingKaryawan = async function() {
     const nama = document.getElementById('pNama').value.trim()
     if (!nama) { alert('Nama wajib diisi'); return }
 
@@ -160,6 +160,8 @@ export async function renderUsers() {
       tanggal_bergabung: document.getElementById('pTgl').value || null,
       tanggal_lahir:     document.getElementById('pLahir').value || null,
       role:              document.getElementById('pRole').value,
+      
+      // KIRIM DATA DROP-DOWN RADIUS KE DATABASE PENDING
       titik_radius:      document.getElementById('pTitikRadius').value || null,
       created_by:        window.currentUser.id,
     }])
