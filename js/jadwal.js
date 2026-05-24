@@ -1,6 +1,6 @@
 import { supabase } from './supabase.js'
 
-export async function renderJadwal(user) {
+export async function renderJadwalManagement(user) {
   const content = document.getElementById('content')
   const isAdmin = user.role === 'admin' || user.role === 'super_admin'
 
