@@ -25,6 +25,66 @@ export async function renderJadwalManagement(user) {
                      <option value="${currentYear+1}">${currentYear+1}</option>`
 
   content.innerHTML = `
+    <style>
+      .freeze-container {
+        width: 100% !important;
+        max-height: 450px !important;
+        overflow: auto !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        position: relative !important;
+        background: #ffffff !important;
+      }
+      .freeze-table {
+        width: 100% !important;
+        border-collapse: separate !important;
+        border-spacing: 0 !important;
+        font-size: 0.75rem !important;
+      }
+      /* Kunci Baris Tanggal ke Atas */
+      .freeze-table th {
+        position: sticky !important;
+        top: 0 !important;
+        background: #f8fafc !important;
+        z-index: 10 !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+        border-right: 1px solid #e2e8f0 !important;
+        padding: 12px 6px !important;
+        font-weight: 800 !important;
+        color: #475569 !important;
+      }
+      /* Kunci Kolom Nama ke Kiri */
+      .freeze-table td.sticky-col {
+        position: sticky !important;
+        left: 0 !important;
+        background: #ffffff !important;
+        z-index: 20 !important;
+        font-weight: 700 !important;
+        border-right: 2px solid #cbd5e1 !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        padding: 12px 10px !important;
+        white-space: nowrap !important;
+        box-shadow: 3px 0 5px rgba(0,0,0,0.05) !important;
+      }
+      /* Kunci Persimpangan Pojok Kiri Atas (Nama Karyawan) agar tidak goyang */
+      .freeze-table th.sticky-corner {
+        position: sticky !important;
+        left: 0 !important;
+        top: 0 !important;
+        background: #f1f5f9 !important;
+        z-index: 30 !important;
+        border-right: 2px solid #cbd5e1 !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+        box-shadow: 3px 3px 0 rgba(0,0,0,0.05) !important;
+      }
+      .freeze-table td {
+        padding: 12px 6px !important;
+        text-align: center !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        border-right: 1px solid #e2e8f0 !important;
+      }
+    </style>
+
     <div class="page-header">
       <h2><i class="fa fa-calendar-alt"></i> Pengaturan Jadwal Kerja</h2>
     </div>
@@ -83,222 +143,7 @@ window.loadDaftarJadwalMaster = async function() {
   try {
     const daysInMonth = new Date(y, m, 0).getDate()
     const startStr = `${y}-${String(m).padStart(2,'0')}-01`
-    const endStr = `${y}-${String(m).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`
+    const
 
-    const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').order('nama_lengkap')
-    const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
 
-    if(!profiles?.length) {
-      container.innerHTML = `<div class="card" style="padding:20px; text-align:center; font-size:.85rem; color:var(--text-muted);">Tidak ada karyawan terdaftar.</div>`
-      return
-    }
-
-    const jadwalMap = {}
-    jadwalData?.forEach(j => {
-      if (!jadwalMap[j.user_id]) jadwalMap[j.user_id] = {}
-      jadwalMap[j.user_id][j.tanggal] = j.shift_code
-    })
-
-    const shiftLabels = { '2': 'Pagi', '3': 'Sore', '4': 'Malam', '8': 'OFF' }
-
-    // SOLUSI ABSOLUT: Membuka pembungkus (wrapper) mandiri yang memotong batasan CSS luar
-    let tableHtml = `
-      <div class="card table-freeze-box" style="
-        padding: 0 !important; 
-        overflow: auto !important; 
-        max-height: 480px !important; 
-        max-width: 100% !important;
-        border: 1px solid #e2e8f0;
-        position: relative;
-      ">
-        <table style="
-          width: 100%; 
-          border-collapse: separate !important; 
-          border-spacing: 0 !important; 
-          font-size: .75rem; 
-          min-width: 1100px;
-        ">
-          <thead>
-            <tr>
-              <th style="
-                padding: 12px 10px; 
-                text-align: left; 
-                position: sticky !important; 
-                left: 0 !important; 
-                top: 0 !important; 
-                background: #f1f5f9 !important; 
-                z-index: 99 !important; 
-                width: 150px;
-                min-width: 150px;
-                border-bottom: 2px solid #cbd5e1;
-                border-right: 2px solid #cbd5e1;
-              ">Nama Karyawan</th>
-              
-              ${Array.from({ length: daysInMonth }, (_, i) => `
-                <th style="
-                  padding: 12px 6px; 
-                  text-align: center; 
-                  width: 40px;
-                  min-width: 40px;
-                  position: sticky !important;
-                  top: 0 !important;
-                  background: #f1f5f9 !important;
-                  z-index: 90 !important;
-                  border-bottom: 2px solid #cbd5e1;
-                  border-right: 1px solid #e2e8f0;
-                  color: #475569;
-                  font-weight: 800;
-                ">${i + 1}</th>
-              `).join('')}
-            </tr>
-          </thead>
-          <tbody>
-      `
-
-    profiles.forEach(p => {
-      tableHtml += `
-        <tr>
-          <td style="
-            padding: 12px 10px; 
-            font-weight: 700; 
-            position: sticky !important; 
-            left: 0 !important; 
-            background: #ffffff !important; 
-            z-index: 80 !important; 
-            border-bottom: 1px solid #e2e8f0;
-            border-right: 2px solid #cbd5e1;
-            white-space: nowrap;
-            color: #1e293b;
-          ">${p.nama_lengkap}</td>
-      `
-      for (let d = 1; d <= daysInMonth; d++) {
-        const currentTgl = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-        const sCode = jadwalMap[p.id]?.[currentTgl] || '-'
-        const label = shiftLabels[sCode] || sCode
-
-        let bgCell = 'transparent', textCell = 'var(--text)'
-        if (sCode === '2') { bgCell = '#e0f2fe'; textCell = '#0369a1' } 
-        else if (sCode === '3') { bgCell = '#fef3c7'; textCell = '#b45309' } 
-        else if (sCode === '4') { bgCell = '#e0e7ff'; textCell = '#4338ca' } 
-        else if (sCode === '8') { bgCell = '#f1f5f9'; textCell = '#64748b' } 
-
-        tableHtml += `
-          <td style="
-            padding: 12px 6px; 
-            text-align: center; 
-            background: ${bgCell}; 
-            color: ${textCell}; 
-            font-weight: 700; 
-            border-bottom: 1px solid #e2e8f0;
-            border-right: 1px solid #e2e8f0;
-          ">${label}</td>
-        `
-      }
-      tableHtml += '</tr>'
-    })
-
-    tableHtml += '</tbody></table></div>'
-    container.innerHTML = tableHtml
-
-  } catch (err) {
-    container.innerHTML = `<div class="card" style="color:var(--danger); font-size:.85rem; text-align:center; padding:20px;">Gagal memuat tabel: ${err.message}</div>`
-  }
-}
-
-window.uploadJadwalExcel = async function() {
-  if (typeof XLSX === 'undefined') {
-    alert('Library XLSX belum siap dimuat. Mohon tunggu sebentar.')
-    return
-  }
-
-  const fileInput = document.getElementById('excelFile')
-  const statusText = document.getElementById('uploadStatusText')
-  const btn = document.getElementById('btnUploadExcel')
-  
-  const selectedMonth = document.getElementById('selMonth').value
-  const selectedYear = document.getElementById('selYear').value
-
-  if (!fileInput.files.length) {
-    statusText.style.color = 'var(--danger)'
-    statusText.textContent = '⚠ Mohon pilih file Excel terlebih dahulu.'
-    return
-  }
-
-  statusText.style.color = 'var(--primary)'
-  statusText.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Membaca file...'
-  btn.disabled = true
-
-  const file = fileInput.files[0]
-  const reader = new FileReader()
-
-  reader.onload = async function(e) {
-    try {
-      const data = new Uint8Array(e.target.result)
-      const workbook = XLSX.read(data, { type: 'array' })
-      const firstSheetName = workbook.SheetNames[0]
-      const worksheet = workbook.Sheets[firstSheetName]
-      
-      const jsonData = XLSX.utils.sheet_to_json(worksheet)
-
-      if (!jsonData || jsonData.length === 0) {
-        throw new Error('File Excel kosong atau format tidak sesuai.')
-      }
-
-      const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap')
-      if (errUser) throw errUser
-
-      const userMap = {}
-      users.forEach(u => {
-        userMap[u.nama_lengkap.trim().toLowerCase()] = u.id
-      })
-
-      const bulkPayload = [] 
-      const totalDays = new Date(selectedYear, selectedMonth, 0).getDate()
-
-      jsonData.forEach((row, rowIndex) => {
-        const excelName = row['nama'] || row['Nama']
-        if (!excelName) return
-
-        const matchedUserId = userMap[excelName.trim().toLowerCase()]
-        if (!matchedUserId) return
-
-        for (let d = 1; d <= totalDays; d++) {
-          const shiftCodeVal = row[String(d)] || row[d]
-          if (shiftCodeVal !== undefined && shiftCodeVal !== null) {
-            const currentTanggalStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-            bulkPayload.push({
-              user_id: matchedUserId,
-              tanggal: currentTanggalStr,
-              shift_code: String(shiftCodeVal).trim()
-            })
-          }
-        }
-      })
-
-      if (bulkPayload.length === 0) {
-        throw new Error('Tidak ada baris data kecocokan karyawan yang valid.')
-      }
-
-      statusText.innerHTML = `<i class="fa fa-cloud-upload-alt"></i> Menunggah massal data ke Supabase...`
-
-      const { error: upsertErr } = await supabase
-        .from('jadwal')
-        .upsert(bulkPayload, { onConflict: 'user_id,tanggal' })
-
-      if (upsertErr) throw upsertErr
-
-      statusText.style.color = 'var(--success)'
-      statusText.innerHTML = `✅ Sukses mengunggah ${bulkPayload.length} jadwal secara instan.`
-      fileInput.value = '' 
-
-      await loadDaftarJadwalMaster()
-
-    } catch (err) {
-      statusText.style.color = 'var(--danger)'
-      statusText.textContent = `❌ Gagal Import: ${err.message}`
-    } finally {
-      btn.disabled = false
-    }
-  }
-  reader.readAsArrayBuffer(file)
-}
+    
