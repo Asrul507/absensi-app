@@ -271,7 +271,6 @@ function renderProfile() {
   content.innerHTML = `
     <div style="max-width:520px;margin:0 auto;">
 
-      <!-- PROFILE HERO CARD -->
       <div class="profile-card fade-up">
         <div style="position:relative;display:inline-block;margin-bottom:14px;">
           ${avatarHtml}
@@ -290,30 +289,25 @@ function renderProfile() {
         <div class="profile-role">${(u.role||'').replace('_',' ')}</div>
       </div>
 
-      <!-- INFORMASI PRIBADI -->
       <div class="card fade-up-1">
         <div class="card-title"><i class="fa fa-id-card"></i> Informasi Pribadi</div>
         ${infoRow('Email', u.email || '-')}
         ${infoRow('Jabatan', u.jabatan || '-')}
         ${infoRow('Departemen', u.departemen || '-')}
         ${infoRow('No. HP', u.no_hp || '-')}
+        ${infoRow('Plot Radius Absen', `<strong style="color:var(--primary); font-weight:800;">📍 ${u.titik_radius || 'Bebas Area (Bypass)'}</strong>`)}
         ${infoRow('Status', `<span class="badge ${u.status_akun==='Aktif'?'badge-green':'badge-yellow'}">${u.status_akun||'Aktif'}</span>`)}
       </div>
 
-      <!-- INFO KERJA -->
       <div class="card fade-up-2">
         <div class="card-title"><i class="fa fa-briefcase"></i> Info Kerja</div>
         ${infoRow('Bergabung', u.tanggal_bergabung || '-')}
         ${infoRow('Masa Kerja', formatMasaKerja(masaKerja))}
       </div>
 
-      <!-- EDIT PROFIL — fitur baru: ganti password & foto permanen -->
       <div class="card fade-up-3">
         <div class="card-title"><i class="fa fa-user-edit"></i> Edit Profil</div>
-
         <div style="display:flex;flex-direction:column;gap:12px;">
-
-          <!-- Ganti Foto via Kamera Icon sudah ada di atas, info helper saja -->
           <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--gray-50,#f8fafc);border-radius:var(--r-md);border:1px solid var(--border);">
             <i class="fa fa-camera" style="color:var(--primary);font-size:1rem;"></i>
             <div>
@@ -322,7 +316,6 @@ function renderProfile() {
             </div>
           </div>
 
-          <!-- Ganti Password -->
           <div style="border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;">
             <div style="padding:12px 14px;background:var(--gray-50,#f8fafc);border-bottom:1px solid var(--border);">
               <div style="font-size:.8rem;font-weight:700;"><i class="fa fa-lock" style="color:var(--primary);"></i> Ganti Password</div>
@@ -330,31 +323,23 @@ function renderProfile() {
             <div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
               <div>
                 <label style="font-size:.78rem;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px;">Password Baru</label>
-                <input type="password" id="profileNewPassword"
-                  placeholder="Minimal 6 karakter"
-                  style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);
-                    font-size:.85rem;outline:none;font-family:inherit;background:var(--white);color:var(--text);box-sizing:border-box;">
+                <input type="password" id="profileNewPassword" placeholder="Minimal 6 karakter"
+                  style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:.85rem;outline:none;font-family:inherit;background:var(--white);color:var(--text);box-sizing:border-box;">
               </div>
               <div>
                 <label style="font-size:.78rem;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px;">Konfirmasi Password</label>
-                <input type="password" id="profileConfirmPassword"
-                  placeholder="Ulangi password baru"
-                  style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);
-                    font-size:.85rem;outline:none;font-family:inherit;background:var(--white);color:var(--text);box-sizing:border-box;">
+                <input type="password" id="profileConfirmPassword" placeholder="Ulangi password baru"
+                  style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:.85rem;outline:none;font-family:inherit;background:var(--white);color:var(--text);box-sizing:border-box;">
               </div>
               <div id="passwordMsg" style="font-size:.75rem;min-height:18px;"></div>
-              <button onclick="saveProfilePassword()"
-                style="padding:10px 16px;background:var(--primary);color:#fff;border:none;border-radius:var(--r-md);
-                  font-size:.85rem;font-weight:700;cursor:pointer;transition:opacity .2s;">
+              <button onclick="saveProfilePassword()" style="padding:10px 16px;background:var(--primary);color:#fff;border:none;border-radius:var(--r-md);font-size:.85rem;font-weight:700;cursor:pointer;transition:opacity .2s;">
                 <i class="fa fa-save"></i> Simpan Password
               </button>
             </div>
           </div>
-
         </div>
       </div>
 
-      <!-- AKUN -->
       <div class="card fade-up-4">
         <div class="card-title"><i class="fa fa-lock"></i> Akun</div>
         <button class="btn-danger" onclick="logout()">
