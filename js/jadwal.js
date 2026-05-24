@@ -1,338 +1,246 @@
 import { supabase } from './supabase.js'
 
-function getShiftInfo(code) {
-  if (code=='2') return { nama:'Shift Pagi',  jam:'07:00 - 15:00', color:'#3b82f6' }
-  if (code=='3') return { nama:'Shift Sore',  jam:'15:00 - 23:00', color:'#f59e0b' }
-  if (code=='4') return { nama:'Shift Malam', jam:'23:00 - 07:00', color:'#6366f1' }
-  if (code=='8') return { nama:'OFF',          jam:'-',             color:'#94a3b8' }
-  return { nama:'-', jam:'-', color:'#e2e8f0' }
-}
-
-function getOverrideInfo(status) {
-  if (status==='cuti')  return { nama:'CUTI',  color:'#22c55e' }
-  if (status==='sakit') return { nama:'SAKIT', color:'#f59e0b' }
-  if (status==='izin')  return { nama:'IZIN',  color:'#3b82f6' }
-  return null
-}
-
-/* ================= RENDER UTAMA ================= */
-export async function renderJadwalManagement() {
+export async function renderJadwal(user) {
   const content = document.getElementById('content')
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
 
-  const { data: users } = await supabase
-    .from('profiles')
-    .select('id, nama_lengkap, jabatan, departemen')
-    .eq('status_akun', 'Aktif')
-    .order('nama_lengkap')
+  // Buat opsi dropdown Bulan & Tahun dinamis
+  const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+  const now = new Date()
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
 
-  const safeUsers = users || []
-
-  // Hitung ringkasan shift bulan ini per user
-  const today = new Date()
-  const bulanStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`
-
-  const { data: jadwalBulanIni } = await supabase
-    .from('jadwal')
-    .select('user_id, shift_code, status_override, tanggal')
-    .gte('tanggal', `${bulanStr}-01`)
-    .lte('tanggal', `${bulanStr}-31`)
-
-  // Mapping: user_id → jumlah shift hari ini
-  const { data: jadwalHariIni } = await supabase
-    .from('jadwal')
-    .select('user_id, shift_code, status_override')
-    .eq('tanggal', today.toISOString().split('T')[0])
-
-  const shiftHariIni = {}
-  ;(jadwalHariIni||[]).forEach(j => { shiftHariIni[j.user_id] = j })
+  let monthOptions = months.map((m, idx) => `<option value="${idx+1}" ${idx === currentMonth ? 'selected' : ''}>${m}</option>`).join('')
+  let yearOptions = `<option value="${currentYear-1}">${currentYear-1}</option>
+                     <option value="${currentYear}" selected>${currentYear}</option>
+                     <option value="${currentYear+1}">${currentYear+1}</option>`
 
   content.innerHTML = `
     <div class="page-header">
-      <h2><i class="fa fa-calendar-days"></i> Jadwal Karyawan</h2>
-      <button class="btn-primary btn-sm" onclick="openFormTambahJadwal()">
-        <i class="fa fa-plus"></i> Tambah Jadwal
-      </button>
+      <h2><i class="fa fa-calendar-alt"></i> Pengaturan Jadwal Kerja</h2>
     </div>
 
-    <!-- Filter bulan -->
-    <div class="card fade-up" style="padding:14px 18px;">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <label style="font-size:.78rem;font-weight:700;color:var(--text-muted);">Bulan</label>
-        <input type="month" id="filterBulan" value="${bulanStr}"
-          style="border:1.5px solid var(--border);border-radius:var(--r-md);padding:8px 12px;font-size:.85rem;outline:none;font-family:inherit;">
-        <button class="btn-secondary btn-sm" onclick="refreshJadwalList()">
-          <i class="fa fa-filter"></i> Tampilkan
-        </button>
-        <button class="btn-secondary btn-sm" onclick="openFormUploadExcel()">
-          <i class="fa fa-upload"></i> Upload Excel
+    <div class="card fade-up" style="padding: 16px; margin-bottom: 16px;">
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        <div class="field" style="margin-bottom:0; flex: 1; min-width: 140px;">
+          <label style="font-size: .75rem; margin-bottom: 4px;">Pilih Bulan</label>
+          <select id="selMonth" style="width:100%; padding:8px 10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem;">
+            ${monthOptions}
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0; flex: 1; min-width: 100px;">
+          <label style="font-size: .75rem; margin-bottom: 4px;">Pilih Tahun</label>
+          <select id="selYear" style="width:100%; padding:8px 10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem;">
+            ${yearOptions}
+          </select>
+        </div>
+        <button class="btn-primary" onclick="loadDaftarJadwalMaster()" style="padding: 9px 16px; font-size:.85rem;">
+          <i class="fa fa-search"></i> Tampilkan
         </button>
       </div>
-    </div>
 
-    <!-- Daftar Karyawan -->
-    <div id="userJadwalList" class="fade-up-1">
-      ${safeUsers.map(u => {
-        const shiftNow = shiftHariIni[u.id]
-        let badgeText = 'Belum dijadwalkan'
-        let badgeColor = '#94a3b8'
-
-        if (shiftNow) {
-          if (shiftNow.status_override) {
-            const info = getOverrideInfo(shiftNow.status_override)
-            badgeText  = info?.nama || shiftNow.status_override
-            badgeColor = info?.color || '#94a3b8'
-          } else {
-            const info = getShiftInfo(shiftNow.shift_code)
-            badgeText  = info.nama
-            badgeColor = info.color
-          }
-        }
-
-        return `
-          <div class="user-item" onclick="openJadwalUser('${u.id}','${u.nama_lengkap}')"
-            style="cursor:pointer;">
-            <div class="user-avatar">${(u.nama_lengkap||'?')[0].toUpperCase()}</div>
-            <div class="ui-info">
-              <div class="ui-name">${u.nama_lengkap}</div>
-              <div class="ui-email">${u.jabatan || '-'} ${u.departemen ? '· '+u.departemen : ''}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;color:#fff;background:${badgeColor};">
-                ${badgeText}
-              </span>
-              <i class="fa fa-chevron-right" style="color:var(--gray-400);font-size:.75rem;"></i>
-            </div>
+      ${isAdmin ? `
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1.5px dashed var(--border);">
+          <label style="display:block; font-size:.8rem; font-weight:800; color:var(--text-muted); margin-bottom:8px;">
+            <i class="fa fa-file-excel" style="color: #16a34a;"></i> UPLOAD JADWAL BULANAN MASSAL (EXCEL)
+          </label>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="file" id="excelFile" accept=".xlsx, .xls" 
+              style="font-size: .8rem; padding: 6px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--gray-50); max-width: 240px;">
+            <button class="btn-success btn-sm" onclick="window.uploadJadwalExcel()" id="btnUploadExcel" style="padding: 8px 14px; cursor:pointer;">
+              <i class="fa fa-upload"></i> Jalankan Bulk Import
+            </button>
           </div>
+          <p id="uploadStatusText" style="font-size: .75rem; margin-top: 6px; font-weight: 700; min-height: 16px;"></p>
+        </div>
+      ` : ''}
+    </div>
+
+    <div id="jadwalContainer" class="card fade-up-1" style="padding: 16px; overflow-x: auto;">
+      <p style="color: var(--text-muted); font-size: .85rem; text-align: center; padding: 20px 0;">Silakan klik tombol Tampilkan untuk memuat data jadwal.</p>
+    </div>
+  `
+
+  window.loadDaftarJadwalMaster = async function() {
+    const m = document.getElementById('selMonth').value
+    const y = document.getElementById('selYear').value
+    const container = document.getElementById('jadwalContainer')
+    
+    container.innerHTML = `<div style="text-align:center; padding:20px 0;"><i class="fa fa-spinner fa-spin" style="color:var(--primary);"></i><p style="font-size:.8rem; color:var(--text-muted); margin-top:6px;">Memuat data jadwal...</p></div>`
+    
+    try {
+      const daysInMonth = new Date(y, m, 0).getDate()
+      const startStr = `${y}-${String(m).padStart(2,'0')}-01`
+      const endStr = `${y}-${String(m).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`
+
+      // Ambil profile staff & jadwal sekaligus
+      const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').order('nama_lengkap')
+      const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
+
+      if(!profiles?.length) {
+        container.innerHTML = `<p style="text-align:center; font-size:.85rem; color:var(--text-muted);">Tidak ada karyawan terdaftar.</p>`
+        return
+      }
+
+      const jadwalMap = {}
+      jadwalData?.forEach(j => {
+        if (!jadwalMap[j.user_id]) jadwalMap[j.user_id] = {}
+        jadwalMap[j.user_id][j.tanggal] = j.shift_code
+      })
+
+      const shiftLabels = { '2': 'Pagi', '3': 'Sore', '4': 'Malam', '8': 'OFF' }
+
+      let tableHtml = `
+        <table class="table-jadwal" style="width: 100%; border-collapse: collapse; font-size: .75rem; min-width: 900px;">
+          <thead>
+            <tr style="background: var(--gray-100); border-bottom: 2px solid var(--border);">
+              <th style="padding: 10px; text-align: left; position: sticky; left: 0; background: var(--gray-100); z-index: 2; width: 140px;">Nama Karyawan</th>
+              ${Array.from({ length: daysInMonth }, (_, i) => `<th style="padding: 6px; text-align: center; width: 35px;">${i + 1}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+      `
+
+      profiles.forEach(p => {
+        tableHtml += `
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 10px; font-weight: 700; position: sticky; left: 0; background: #fff; box-shadow: 2px 0 5px rgba(0,0,0,0.03); z-index: 1;">${p.nama_lengkap}</td>
         `
-      }).join('')}
-      ${safeUsers.length === 0 ? `<div class="empty-state"><i class="fa fa-users"></i><p>Belum ada karyawan aktif</p></div>` : ''}
-    </div>
-  `
+        for (let d = 1; d <= daysInMonth; d++) {
+          const currentTgl = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+          const sCode = jadwalMap[p.id]?.[currentTgl] || '-'
+          const label = shiftLabels[sCode] || sCode
 
-  // Window functions
-  window.refreshJadwalList = renderJadwalManagement
+          let bgCell = 'transparent', textCell = 'var(--text)'
+          if (sCode === '2') { bgCell = '#e0f2fe'; textCell = '#0369a1' } // Pagi
+          else if (sCode === '3') { bgCell = '#fef3c7'; textCell = '#b45309' } // Sore
+          else if (sCode === '4') { bgCell = '#e0e7ff'; textCell = '#4338ca' } // Malam
+          else if (sCode === '8') { bgCell = '#f1f5f9'; textCell = '#64748b' } // OFF
 
-  window.openFormTambahJadwal = function() {
-    showModal(`
-      <div class="modal-header">
-        <h3><i class="fa fa-calendar-plus" style="color:var(--primary);"></i> Tambah Jadwal</h3>
-        <button class="modal-close" onclick="closeModal()"><i class="fa fa-times"></i></button>
-      </div>
-      <div class="field">
-        <label>Karyawan</label>
-        <select id="mUserJadwal">
-          ${safeUsers.map(u => `<option value="${u.id}">${u.nama_lengkap}</option>`).join('')}
-        </select>
-      </div>
-      <div class="field">
-        <label>Tanggal</label>
-        <input type="date" id="mTanggal" value="${today.toISOString().split('T')[0]}">
-      </div>
-      <div class="field">
-        <label>Shift</label>
-        <select id="mShift">
-          <option value="2">Shift Pagi (07:00-15:00)</option>
-          <option value="3">Shift Sore (15:00-23:00)</option>
-          <option value="4">Shift Malam (23:00-07:00)</option>
-          <option value="8">OFF</option>
-        </select>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" onclick="closeModal()">Batal</button>
-        <button class="btn-primary" onclick="simpanJadwal()"><i class="fa fa-save"></i> Simpan</button>
-      </div>
-    `)
-  }
-
-  window.simpanJadwal = async function() {
-    const user_id   = document.getElementById('mUserJadwal').value
-    const tanggal   = document.getElementById('mTanggal').value
-    const shift_code= document.getElementById('mShift').value
-    if (!tanggal || !user_id) { alert('Lengkapi data'); return }
-
-    const { data: existing } = await supabase.from('jadwal').select('id').eq('tanggal',tanggal).eq('user_id',user_id).maybeSingle()
-    if (existing) {
-      await supabase.from('jadwal').update({ shift_code, status_override: null }).eq('id', existing.id)
-    } else {
-      await supabase.from('jadwal').insert([{ tanggal, user_id, shift_code }])
-    }
-    closeModal()
-    alert('✅ Jadwal disimpan')
-    renderJadwalManagement()
-  }
-
-  window.openFormUploadExcel = function() {
-    showModal(`
-      <div class="modal-header">
-        <h3><i class="fa fa-upload" style="color:var(--primary);"></i> Upload Jadwal Excel</h3>
-        <button class="modal-close" onclick="closeModal()"><i class="fa fa-times"></i></button>
-      </div>
-      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:12px;">
-        Format Excel: kolom <b>nama</b>, lalu kolom <b>1-31</b> berisi kode shift (2=Pagi, 3=Sore, 4=Malam, 8=OFF)
-      </p>
-      <div class="field"><label>Bulan</label>
-        <select id="mBulanUpload">
-          ${['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
-            .map((b,i)=>`<option value="${String(i+1).padStart(2,'0')}">${b}</option>`).join('')}
-        </select>
-      </div>
-      <div class="field"><label>Tahun</label>
-        <input type="number" id="mTahunUpload" value="${today.getFullYear()}">
-      </div>
-      <div class="field"><label>File Excel</label>
-        <input type="file" id="mExcelFile" accept=".xlsx,.xls">
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" onclick="closeModal()">Batal</button>
-        <button class="btn-primary" onclick="uploadJadwalExcel()"><i class="fa fa-upload"></i> Upload</button>
-      </div>
-    `)
-  }
-}
-
-/* ================= POPUP JADWAL USER ================= */
-window.openJadwalUser = async function(userId, namaUser) {
-  const bulan = document.getElementById('filterBulan')?.value || new Date().toISOString().slice(0,7)
-
-  showModal(`
-    <div class="modal-header">
-      <h3><i class="fa fa-calendar" style="color:var(--primary);"></i> ${namaUser}</h3>
-      <button class="modal-close" onclick="closeModal()"><i class="fa fa-times"></i></button>
-    </div>
-    <p style="color:var(--text-muted);font-size:.8rem;margin-bottom:12px;">Jadwal bulan ${bulan}</p>
-    <div id="jadwalUserContent"><i class="fa fa-spinner fa-spin"></i> Loading...</div>
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeModal()">Tutup</button>
-    </div>
-  `)
-
-  // Load jadwal user bulan ini
-  const { data: jadwal } = await supabase
-    .from('jadwal')
-    .select('*')
-    .eq('user_id', userId)
-    .gte('tanggal', `${bulan}-01`)
-    .lte('tanggal', `${bulan}-31`)
-    .order('tanggal')
-
-  const map = {}
-  ;(jadwal||[]).forEach(j => { map[j.tanggal] = j })
-
-  // Generate semua hari dalam bulan
-  const [yr, mo] = bulan.split('-').map(Number)
-  const daysInMonth = new Date(yr, mo, 0).getDate()
-
-  let html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:8px;">'
-  const dayNames = ['Min','Sen','Sel','Rab','Kam','Jum','Sab']
-  dayNames.forEach(d => { html += `<div style="font-size:.65rem;text-align:center;font-weight:700;color:var(--text-muted);">${d}</div>` })
-  html += '</div>'
-
-  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">'
-
-  // Offset hari pertama
-  const firstDay = new Date(yr, mo-1, 1).getDay()
-  for (let i=0; i<firstDay; i++) html += '<div></div>'
-
-  for (let d=1; d<=daysInMonth; d++) {
-    const tgl = `${yr}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-    const j   = map[tgl]
-    let bg='var(--gray-100)', label='', textColor='var(--text-muted)'
-
-    if (j) {
-      if (j.status_override) {
-        const info = getOverrideInfo(j.status_override)
-        bg = info?.color+'22' || '#eee'
-        label = info?.nama?.slice(0,3) || j.status_override
-        textColor = info?.color || 'var(--text)'
-      } else if (j.shift_code) {
-        const info = getShiftInfo(j.shift_code)
-        bg = info.color+'22'
-        label = info.nama==='OFF' ? 'OFF' : info.nama.replace('Shift ','').slice(0,4)
-        textColor = info.color
-      }
-    }
-
-    const isToday = tgl === new Date().toISOString().split('T')[0]
-    html += `
-      <div style="
-        background:${bg};border-radius:6px;padding:4px 2px;text-align:center;
-        ${isToday ? 'outline:2px solid var(--primary);' : ''}
-      ">
-        <div style="font-size:.7rem;font-weight:700;color:var(--text-muted);">${d}</div>
-        <div style="font-size:.6rem;font-weight:800;color:${textColor};">${label}</div>
-      </div>
-    `
-  }
-  html += '</div>'
-
-  // Legenda
-  html += `
-    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;font-size:.72rem;">
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3b82f622;border:1px solid #3b82f6;margin-right:3px;"></span>Pagi</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b22;border:1px solid #f59e0b;margin-right:3px;"></span>Sore</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#6366f122;border:1px solid #6366f1;margin-right:3px;"></span>Malam</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#22c55e22;border:1px solid #22c55e;margin-right:3px;"></span>Cuti</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#94a3b822;border:1px solid #94a3b8;margin-right:3px;"></span>OFF</span>
-    </div>
-  `
-
-  const el = document.getElementById('jadwalUserContent')
-  if (el) el.innerHTML = html
-}
-
-/* ================= UPLOAD EXCEL ================= */
-window.uploadJadwalExcel = async function() {
-  const file  = document.getElementById('mExcelFile')?.files[0]
-  const bulan = document.getElementById('mBulanUpload')?.value
-  const tahun = document.getElementById('mTahunUpload')?.value
-  if (!file) { alert('Pilih file Excel'); return }
-
-  const reader = new FileReader()
-  reader.onload = async (e) => {
-    const data = new Uint8Array(e.target.result)
-    const wb   = XLSX.read(data, { type:'array' })
-    const sheet= wb.Sheets[wb.SheetNames[0]]
-    const json = XLSX.utils.sheet_to_json(sheet)
-
-    let berhasil = 0, gagal = 0
-    for (const row of json) {
-      const nama = row.nama
-      if (!nama) continue
-      const { data: user } = await supabase.from('profiles').select('id').eq('nama_lengkap', nama).maybeSingle()
-      if (!user) { gagal++; continue }
-      for (const key in row) {
-        if (key === 'nama') continue
-        const shift_code = String(row[key]||'').trim()
-        if (!shift_code) continue
-        const tanggal = `${tahun}-${bulan}-${String(key).padStart(2,'0')}`
-        const { data: existing } = await supabase.from('jadwal').select('id').eq('tanggal',tanggal).eq('user_id',user.id).maybeSingle()
-        if (existing) {
-          await supabase.from('jadwal').update({ shift_code }).eq('id', existing.id)
-        } else {
-          await supabase.from('jadwal').insert([{ tanggal, user_id:user.id, shift_code }])
+          tableHtml += `<td style="padding: 6px; text-align: center; background: ${bgCell}; color: ${textCell}; font-weight: 700; border: 1px solid var(--border);">${label}</td>`
         }
-        berhasil++
+        tableHtml += '</tr>'
+      })
+
+      tableHtml += '</tbody></table>'
+      container.innerHTML = tableHtml
+
+    } catch (err) {
+      container.innerHTML = `<p style="color:var(--danger); font-size:.82rem; text-align:center;">Gagal memuat tabel: ${err.message}</p>`
+    }
+  }
+
+  // ===============================================================
+  // FITUR REVOLUSI BARU: BULK UPSERT EXCEL MASSAL (ANTI-HANG & INSTAN)
+  // ===============================================================
+  window.uploadJadwalExcel = async function() {
+    if (typeof XLSX === 'undefined') {
+      alert('Library XLSX belum siap dimuat. Mohon tunggu sebentar atau muat ulang halaman.')
+      return
+    }
+
+    const fileInput = document.getElementById('excelFile')
+    const statusText = document.getElementById('uploadStatusText')
+    const btn = document.getElementById('btnUploadExcel')
+    
+    const selectedMonth = document.getElementById('selMonth').value
+    const selectedYear = document.getElementById('selYear').value
+
+    if (!fileInput.files.length) {
+      statusText.style.color = 'var(--danger)'
+      statusText.textContent = '⚠ Mohon pilih file Excel terlebih dahulu.'
+      return
+    }
+
+    statusText.style.color = 'var(--primary)'
+    statusText.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Membaca file dan memetakan data...'
+    btn.disabled = true
+
+    const file = fileInput.files[0]
+    const reader = new FileReader()
+
+    reader.onload = async function(e) {
+      try {
+        const data = new Uint8Array(e.target.result)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const firstSheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[firstSheetName]
+        
+        // Konversi row Excel menjadi array object json
+        const jsonData = XLSX.utils.sheet_to_json(worksheet)
+
+        if (!jsonData || jsonData.length === 0) {
+          throw new Error('File Excel kosong atau format tidak sesuai.')
+        }
+
+        // Ambil data profile dari DB untuk mencocokkan Nama -> User ID
+        const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap')
+        if (errUser) throw errUser
+
+        const userMap = {}
+        users.forEach(u => {
+          userMap[u.nama_lengkap.trim().toLowerCase()] = u.id
+        })
+
+        const bulkPayload = [] // Wadah penampung array massal
+        const totalDays = new Date(selectedYear, selectedMonth, 0).getDate()
+
+        // Looping baris data di file Excel (Per Karyawan)
+        jsonData.forEach((row, rowIndex) => {
+          const excelName = row['nama'] || row['Nama']
+          if (!excelName) return
+
+          const matchedUserId = userMap[excelName.trim().toLowerCase()]
+          if (!matchedUserId) {
+            console.warn(`Nama "${excelName}" di baris ${rowIndex + 2} tidak terdaftar di aplikasi.`);
+            return
+          }
+
+          // Looping tanggal 1 sampai batas akhir bulan
+          for (let d = 1; d <= totalDays; d++) {
+            const shiftCodeVal = row[String(d)] || row[d]
+            if (shiftCodeVal !== undefined && shiftCodeVal !== null) {
+              
+              const currentTanggalStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+              
+              bulkPayload.push({
+                user_id: matchedUserId,
+                tanggal: currentTanggalStr,
+                shift_code: String(shiftCodeVal).trim()
+              })
+            }
+          }
+        })
+
+        if (bulkPayload.length === 0) {
+          throw new Error('Tidak ada baris kecocokan jadwal yang valid untuk di-import.')
+        }
+
+        statusText.innerHTML = `<i class="fa fa-cloud-upload-alt"></i> Menembak ${bulkPayload.length} data sekaligus ke Supabase...`
+
+        // SEKALI TEMBAK MASSAL (BULK UPSERT) MENGGUNAKAN PRIMARY KEY LOCK (user_id + tanggal)
+        const { error: upsertErr } = await supabase
+          .from('jadwal')
+          .upsert(bulkPayload, { onConflict: 'user_id,tanggal' })
+
+        if (upsertErr) throw upsertErr
+
+        statusText.style.color = 'var(--success)'
+        statusText.innerHTML = `✅ Sukses! Berhasil mengunggah ${bulkPayload.length} jadwal harian secara instan.`
+        fileInput.value = '' // Reset input
+
+        // Refresh tabel visual saat itu juga
+        await loadDaftarJadwalMaster()
+
+      } catch (err) {
+        statusText.style.color = 'var(--danger)'
+        statusText.textContent = `❌ Gagal Import: ${err.message}`
+        console.error(err)
+      } finally {
+        btn.disabled = false
       }
     }
-    closeModal()
-    alert(`✅ Upload selesai: ${berhasil} jadwal diproses${gagal ? `, ${gagal} user tidak ditemukan` : ''}`)
-    renderJadwalManagement()
-  }
-  reader.readAsArrayBuffer(file)
-}
 
-/* ================= MODAL HELPER ================= */
-function showModal(html) {
-  let existing = document.getElementById('globalModal')
-  if (existing) existing.remove()
-  const bg = document.createElement('div')
-  bg.id = 'globalModal'
-  bg.className = 'modal-bg open'
-  bg.innerHTML = `<div class="modal-box">${html}</div>`
-  bg.addEventListener('click', e => { if (e.target === bg) closeModal() })
-  document.body.appendChild(bg)
-}
-window.closeModal = function() {
-  const m = document.getElementById('globalModal')
-  if (m) m.remove()
+    reader.readAsArrayBuffer(file)
+  }
 }
