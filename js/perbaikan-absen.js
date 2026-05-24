@@ -9,7 +9,6 @@ export async function renderPerbaikanAbsen(user) {
       <h2><i class="fa fa-pencil-alt"></i> Perbaikan Absen</h2>
     </div>
 
-    <!-- TABS -->
     <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
       <button id="tabBuat" class="btn-primary btn-sm" onclick="switchPerbaikanTab('buat')">
         <i class="fa fa-plus"></i> Buat Request
@@ -24,7 +23,6 @@ export async function renderPerbaikanAbsen(user) {
       ` : ''}
     </div>
 
-    <!-- TAB BUAT REQUEST -->
     <div id="tabBuatContent" class="fade-up">
       <div class="card" style="padding: 20px;">
         <h3 style="font-weight: 800; margin-bottom: 16px;">Buat Request Perbaikan Absen</h3>
@@ -34,6 +32,7 @@ export async function renderPerbaikanAbsen(user) {
           <input type="date" id="inputTanggal" onchange="loadJadwalForDate(window.currentUser)"
             style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
               font-size: .85rem; font-family: inherit; outline: none;">
+          <div id="infoShiftHariIni" style="font-size: .75rem; color: var(--primary); margin-top: 4px; font-weight: 700;"></div>
         </div>
 
         <div class="field">
@@ -48,7 +47,6 @@ export async function renderPerbaikanAbsen(user) {
           </select>
         </div>
 
-        <!-- Kondisional: Lupa Masuk/Pulang -->
         <div id="formJamShouldBe" style="display: none;">
           <div class="field">
             <label>Jam yang Seharusnya (dari jadwal) <span style="color: var(--text-muted);">Auto-filled</span></label>
@@ -87,7 +85,6 @@ export async function renderPerbaikanAbsen(user) {
           </div>
         </div>
 
-        <!-- Kondisional: Perubahan Shift -->
         <div id="formPerubahanShift" style="display: none;">
           <div class="field">
             <label>Shift Baru <span style="color: var(--danger);">*</span></label>
@@ -95,9 +92,10 @@ export async function renderPerbaikanAbsen(user) {
               style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
                 font-size: .85rem; font-family: inherit; outline: none;">
               <option value="">-- Pilih Shift --</option>
-              <option value="pagi">Shift Pagi (07:00 - 15:00)</option>
-              <option value="sore">Shift Sore (15:00 - 23:00)</option>
-              <option value="malam">Shift Malam (23:00 - 07:00)</option>
+              <option value="2" id="optShiftPagi">Shift Pagi (07:00 - 15:00)</option>
+              <option value="3" id="optShiftSore">Shift Sore (15:00 - 23:00)</option>
+              <option value="4" id="optShiftMalam">Shift Malam (23:00 - 07:00)</option>
+              <option value="8" id="optShiftOff">OFF</option>
             </select>
           </div>
         </div>
@@ -116,7 +114,6 @@ export async function renderPerbaikanAbsen(user) {
       </div>
     </div>
 
-    <!-- TAB DAFTAR REQUEST -->
     <div id="tabDaftarContent" style="display: none;" class="fade-up">
       <div id="daftarRequestList" class="card" style="text-align: center; padding: 28px;">
         <i class="fa fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--primary);"></i>
@@ -124,7 +121,6 @@ export async function renderPerbaikanAbsen(user) {
       </div>
     </div>
 
-    <!-- TAB APPROVAL (hanya admin) -->
     ${isAdmin ? `
       <div id="tabApprovalContent" style="display: none;" class="fade-up">
         <div id="approvalRequestList" class="card" style="text-align: center; padding: 28px;">
@@ -137,8 +133,8 @@ export async function renderPerbaikanAbsen(user) {
 
   window._currentPerbaikanUser = user
   window._isAdminPerbaikan = user.role === 'admin' || user.role === 'super_admin'
+  window._currentShiftCodeHariIni = null // Simpan shift master hari pilihan
 
-  // Load daftar request
   await loadDaftarRequest(user)
   if (window._isAdminPerbaikan) {
     await loadApprovalRequest()
@@ -150,11 +146,26 @@ window.updatePerbaikanForm = function () {
   
   document.getElementById('formJamShouldBe').style.display = (jenis === 'lupa_masuk' || jenis === 'lupa_pulang') ? 'block' : 'none'
   document.getElementById('formPerubahanShift').style.display = jenis === 'perubahan_shift' ? 'block' : 'none'
+
+  // FITUR BARU: Dropdown fleksibel otomatis menyembunyikan shift aktif saat ini
+  if (jenis === 'perubahan_shift' && window._currentShiftCodeHariIni) {
+    const code = String(window._currentShiftCodeHariIni);
+    document.getElementById('optShiftPagi').style.display = (code === '2') ? 'none' : 'block';
+    document.getElementById('optShiftSore').style.display = (code === '3') ? 'none' : 'block';
+    document.getElementById('optShiftMalam').style.display = (code === '4') ? 'none' : 'block';
+    document.getElementById('optShiftOff').style.display = (code === '8') ? 'none' : 'block';
+  } else {
+    document.getElementById('optShiftPagi').style.display = 'block';
+    document.getElementById('optShiftSore').style.display = 'block';
+    document.getElementById('optShiftMalam').style.display = 'block';
+    document.getElementById('optShiftOff').style.display = 'block';
+  }
 }
 
 window.loadJadwalForDate = async function (user) {
   const tanggal = document.getElementById('inputTanggal').value
-  if (!tanggal) return
+  const infoEl = document.getElementById('infoShiftHariIni')
+  if (!tanggal || !infoEl) return
 
   try {
     const { data: jadwal } = await supabase
@@ -164,17 +175,30 @@ window.loadJadwalForDate = async function (user) {
       .eq('tanggal', tanggal)
       .maybeSingle()
 
-    // Map shift code to time
+    window._currentShiftCodeHariIni = jadwal?.shift_code || '2'; // default pagi jika data kosong
+
+    const textMap = {
+      '2': 'Shift Pagi (07:00 - 15:00)',
+      '3': 'Shift Sore (15:00 - 23:00)',
+      '4': 'Shift Malam (23:00 - 07:00)',
+      '8': 'OFF / Libur'
+    }
+    infoEl.textContent = `Jadwal Anda saat ini di tanggal tersebut: ${textMap[window._currentShiftCodeHariIni] || 'Regular Pagi'}`;
+
     const shiftMap = {
       '2': { jam_masuk: '07:00', jam_pulang: '15:00' },
       '3': { jam_masuk: '15:00', jam_pulang: '23:00' },
       '4': { jam_masuk: '23:00', jam_pulang: '07:00' },
+      '8': { jam_masuk: '00:00', jam_pulang: '00:00' }
     }
 
-    const shiftData = shiftMap[jadwal?.shift_code] || { jam_masuk: '07:00', jam_pulang: '15:00' }
+    const shiftData = shiftMap[window._currentShiftCodeHariIni] || { jam_masuk: '07:00', jam_pulang: '15:00' }
 
     document.getElementById('inputJamMasukShouldBe').value = shiftData.jam_masuk
     document.getElementById('inputJamPulangShouldBe').value = shiftData.jam_pulang
+
+    // Refresh display dropdown jika opsi jenis perbaikan sudah terlanjur dipilih
+    updatePerbaikanForm();
 
   } catch (err) {
     console.error('Error load jadwal:', err)
@@ -213,7 +237,6 @@ window.submitPerbaikanAbsen = async function (user) {
 
   msgEl.textContent = ''
 
-  // Validasi
   if (!tanggal) {
     msgEl.style.color = '#dc2626'
     msgEl.textContent = '⚠ Tanggal wajib diisi'
@@ -240,12 +263,17 @@ window.submitPerbaikanAbsen = async function (user) {
     created_at: new Date().toISOString()
   }
 
-  // Tambah data sesuai jenis
   if (jenis === 'lupa_masuk' || jenis === 'lupa_pulang') {
     payload.jam_masuk = document.getElementById('inputJamMasukActual').value || null
     payload.jam_pulang = document.getElementById('inputJamPulangActual').value || null
   } else if (jenis === 'perubahan_shift') {
-    payload.shift_baru = document.getElementById('inputShiftBaru').value
+    const shiftVal = document.getElementById('inputShiftBaru').value
+    if (!shiftVal) {
+      msgEl.style.color = '#dc2626'
+      msgEl.textContent = '⚠ Silakan tentukan pilihan shift baru Anda'
+      return
+    }
+    payload.shift_baru = shiftVal
   }
 
   btn.disabled = true
@@ -259,7 +287,6 @@ window.submitPerbaikanAbsen = async function (user) {
     msgEl.style.color = '#16a34a'
     msgEl.textContent = '✅ Request berhasil dikirim'
 
-    // Reset form
     setTimeout(() => {
       document.getElementById('inputTanggal').value = ''
       document.getElementById('inputJenis').value = ''
@@ -267,6 +294,7 @@ window.submitPerbaikanAbsen = async function (user) {
       document.getElementById('inputJamPulangActual').value = ''
       document.getElementById('inputShiftBaru').value = ''
       document.getElementById('inputKeterangan').value = ''
+      if(document.getElementById('infoShiftHariIni')) document.getElementById('infoShiftHariIni').textContent = '';
       updatePerbaikanForm()
     }, 1500)
 
@@ -302,6 +330,8 @@ async function loadDaftarRequest(user) {
     }
 
     let html = ''
+    const shiftLabelMap = { '2': 'Shift Pagi', '3': 'Shift Sore', '4': 'Shift Malam', '8': 'OFF' }
+    
     data.forEach(req => {
       const statusColor = req.status === 'approved' ? '#dcfce7' : req.status === 'rejected' ? '#fee2e2' : '#fef3c7'
       const statusTextColor = req.status === 'approved' ? '#166534' : req.status === 'rejected' ? '#991b1b' : '#92400e'
@@ -316,14 +346,7 @@ async function loadDaftarRequest(user) {
                 ${req.jenis.replace('_', ' ').toUpperCase()}
               </div>
             </div>
-            <span style="
-              padding: 4px 10px;
-              border-radius: 20px;
-              font-size: .7rem;
-              font-weight: 700;
-              background: ${statusColor};
-              color: ${statusTextColor};
-            ">
+            <span style="padding: 4px 10px; border-radius: 20px; font-size: .7rem; font-weight: 700; background: ${statusColor}; color: ${statusTextColor};">
               ${statusText}
             </span>
           </div>
@@ -332,7 +355,7 @@ async function loadDaftarRequest(user) {
           </div>
           ${req.jam_masuk ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Masuk: ${req.jam_masuk}</div>` : ''}
           ${req.jam_pulang ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Pulang: ${req.jam_pulang}</div>` : ''}
-          ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Shift Baru: ${req.shift_baru}</div>` : ''}
+          ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Request Shift Baru: ${shiftLabelMap[req.shift_baru] || req.shift_baru}</div>` : ''}
           ${req.catatan_approval ? `
             <div style="margin-top: 10px; padding: 10px; background: #f3f4f6; border-left: 3px solid var(--primary); border-radius: 4px; font-size: .8rem;">
               <strong style="color: var(--text-muted);"><i class="fa fa-sticky-note" style="margin-right: 6px; color: #f59e0b;"></i>Catatan:</strong>
@@ -373,6 +396,8 @@ async function loadApprovalRequest() {
     }
 
     let html = ''
+    const shiftLabelMap = { '2': 'Shift Pagi', '3': 'Shift Sore', '4': 'Shift Malam', '8': 'OFF' }
+
     data.forEach(req => {
       html += `
         <div class="card" style="padding: 16px; margin-bottom: 12px;">
@@ -383,14 +408,7 @@ async function loadApprovalRequest() {
                 ${req.tanggal} • ${req.jenis.replace('_', ' ').toUpperCase()}
               </div>
             </div>
-            <span style="
-              padding: 4px 10px;
-              border-radius: 20px;
-              font-size: .7rem;
-              font-weight: 700;
-              background: #fef3c7;
-              color: #92400e;
-            ">
+            <span style="padding: 4px 10px; border-radius: 20px; font-size: .7rem; font-weight: 700; background: #fef3c7; color: #92400e;">
               Menunggu
             </span>
           </div>
@@ -399,7 +417,7 @@ async function loadApprovalRequest() {
           </div>
           ${req.jam_masuk ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Masuk: ${req.jam_masuk}</div>` : ''}
           ${req.jam_pulang ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Pulang: ${req.jam_pulang}</div>` : ''}
-          ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Shift Baru: ${req.shift_baru}</div>` : ''}
+          ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Request Shift Baru: ${shiftLabelMap[req.shift_baru] || req.shift_baru}</div>` : ''}
           
           <div style="display: flex; gap: 10px; margin-top: 12px;">
             <button onclick="showApprovePerbaikanModal('${req.id}', 'approve')" class="btn-success btn-sm" style="flex: 1;">
@@ -420,40 +438,17 @@ async function loadApprovalRequest() {
   }
 }
 
-window.approvePerbaikanRequest = async function (id, approve) {
-  try {
-    const { error } = await supabase
-      .from('perbaikan_absen')
-      .update({ status: approve ? 'approved' : 'rejected' })
-      .eq('id', id)
-
-    if (error) throw error
-
-    alert(approve ? '✅ Request disetujui' : '❌ Request ditolak')
-    await loadApprovalRequest()
-
-  } catch (err) {
-    alert('Error: ' + err.message)
-  }
-}
-
 window.showApprovePerbaikanModal = function (id) {
   const modal = document.createElement('div')
   modal.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0, 0, 0, 0.5);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 9999;
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
   `
 
   const box = document.createElement('div')
   box.style.cssText = `
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 450px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    background: white; border-radius: 16px; padding: 24px; max-width: 450px; width: 90%; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   `
 
   box.innerHTML = `
@@ -476,9 +471,20 @@ window.showApprovePerbaikanModal = function (id) {
   document.body.appendChild(modal)
 }
 
+// FITUR BARU UTAMA: INTEGRASI AUTOMATIC UPDATE KE TABEL JADWAL KARYAWAN SAAT DISETUJUI
 window.confirmApprovePerbaikan = async function (id, catatan) {
   try {
-    const { error } = await supabase
+    // 1. Ambil detail data request perbaikan yang bersangkutan
+    const { data: requestData, error: fetchErr } = await supabase
+      .from('perbaikan_absen')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (fetchErr || !requestData) throw new Error('Data request perbaikan tidak ditemukan.')
+
+    // 2. Update status request perbaikan menjadi 'approved'
+    const { error: updateErr } = await supabase
       .from('perbaikan_absen')
       .update({
         status: 'approved',
@@ -487,13 +493,43 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
       })
       .eq('id', id)
 
-    if (error) throw error
+    if (updateErr) throw updateErr
 
-    alert('✅ Request disetujui')
+    // 3. JIKA JENISNYA ADALAH PERUBAHAN SHIFT, LANGSUNG UPDATE JADWAL KERJA REAL-TIME
+    if (requestData.jenis === 'perubahan_shift' && requestData.shift_baru) {
+      const { data: existingJadwal } = await supabase
+        .from('jadwal')
+        .select('id')
+        .eq('user_id', requestData.user_id)
+        .eq('tanggal', requestData.tanggal)
+        .maybeSingle()
+
+      if (existingJadwal) {
+        // Jika baris tanggal tersebut sudah terjadwal, lakukan update shift_code
+        await supabase
+          .from('jadwal')
+          .update({ 
+            shift_code: requestData.shift_baru,
+            status_override: null // Bersihkan override status libur/cuti jika ada
+          })
+          .eq('id', existingJadwal.id)
+      } else {
+        // Jika belum tercatat, buat baris jadwal baru otomatis di database
+        await supabase
+          .from('jadwal')
+          .insert([{
+            user_id: requestData.user_id,
+            tanggal: requestData.tanggal,
+            shift_code: requestData.shift_baru
+          }])
+      }
+    }
+
+    alert('✅ Request berhasil disetujui dan jadwal otomatis diperbarui!')
     await loadApprovalRequest()
 
   } catch (err) {
-    alert('Error: ' + err.message)
+    alert('Error saat memproses approval: ' + err.message)
   }
 }
 
@@ -502,18 +538,12 @@ window.showRejectModal = function (id) {
   modal.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0, 0, 0, 0.5);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 9999;
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
   `
 
   const box = document.createElement('div')
   box.style.cssText = `
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 450px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    background: white; border-radius: 16px; padding: 24px; max-width: 450px; width: 90%; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   `
 
   box.innerHTML = `
