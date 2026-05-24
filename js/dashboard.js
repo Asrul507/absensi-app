@@ -10,13 +10,16 @@ export async function renderDashboard() {
     return
   }
 
-  // ===== FITUR AUTOMATION: DETEKSI LUPA ABSEN PULANG HARI KEMARIN =====
+  // ===== LOGIKA BARU: DETEKSI LUPA ABSEN PULANG (AMAN UNTUK SHIFT MALAM) =====
   try {
+    const sekarang = new Date()
+    const jamSekarang = sekarang.getHours()
+
     const kemarin = new Date()
     kemarin.setDate(kemarin.getDate() - 1)
     const tanggalKemarinStr = kemarin.toISOString().split('T')[0]
 
-    // Cari tahu apakah ada rekam absen hari kemarin milik user ini
+    // 1. Ambil data absensi user hari kemarin
     const { data: absenKemarin, error: errKemarin } = await supabase
       .from('absensi')
       .select('*')
@@ -24,12 +27,40 @@ export async function renderDashboard() {
       .eq('tanggal', tanggalKemarinStr)
       .maybeSingle()
 
-    // Jika kemarin masuk tapi tidak pernah absen pulang, dan statusnya masih 'open'
+    // Jika kemarin ada absen masuk, belum absen pulang, dan status masih 'open'
     if (!errKemarin && absenKemarin && absenKemarin.waktu_masuk && !absenKemarin.waktu_pulang && absenKemarin.status_absensi === 'open') {
-      await supabase
-        .from('absensi')
-        .update({ status_absensi: 'lupa absen pulang' })
-        .eq('id', absenKemarin.id)
+      
+      // Ambil jadwal shift karyawan untuk hari kemarin untuk memeriksa jam jadwalnya
+      const { data: jadwalKemarin } = await supabase
+        .from('jadwal')
+        .select('shift_code')
+        .eq('user_id', user.id)
+        .eq('tanggal', tanggalKemarinStr)
+        .maybeSingle()
+
+      // Jika jadwal kemarin adalah Shift Malam (Code '4' atau jam_jadwal_masuk malam hari)
+      const isShiftMalam = jadwalKemarin?.shift_code === '4' || (absenKemarin.jam_jadwal_masuk && absenKemarin.jam_jadwal_masuk.startsWith('23'))
+
+      if (isShiftMalam) {
+        // KHUSUS SHIFT MALAM: Jangan langsung kunci di pagi hari. 
+        // Berikan toleransi hingga melewati jam 09:00 pagi hari ini (hari esoknya).
+        if (jamSekarang >= 9) {
+          await supabase
+            .from('absensi')
+            .update({ status_absensi: 'lupa absen pulang' })
+            .eq('id', absenKemarin.id)
+          console.log("Absensi shift malam kemarin otomatis dikunci karena melewati batas jam 09:00.");
+        } else {
+          console.log("Karyawan dalam shift malam, belum melewati batas toleransi pulang pagi ini.");
+        }
+      } else {
+        // UNTUK SHIFT NON-MALAM (Pagi/Sore): Langsung kunci otomatis tanpa syarat jam
+        await supabase
+          .from('absensi')
+          .update({ status_absensi: 'lupa absen pulang' })
+          .eq('id', absenKemarin.id)
+        console.log("Absensi shift reguler kemarin otomatis dikunci.");
+      }
     }
   } catch (e) {
     console.error("Gagal menjalankan otomatisasi lupa absen:", e)
@@ -116,7 +147,7 @@ export async function renderDashboard() {
     </button>
   `).join('')
 
-  // ===== FITUR BARU: MENGHITUNG STATISTIK KEHADIRAN REAL-TIME HARI INI (UNTUK ADMIN) =====
+  // ===== WIDGET STATISTIK KEHADIRAN REAL-TIME KHUSUS ADMIN =====
   let adminWidgetHtml = ''
   const isAdmin = user.role === 'admin' || user.role === 'super_admin'
   
@@ -124,7 +155,6 @@ export async function renderDashboard() {
     try {
       const hariIniStr = new Date().toISOString().split('T')[0]
       
-      // Ambil seluruh rekap absensi & jadwal hari berjalan
       const { data: absenHariIni } = await supabase.from('absensi').select('*').eq('tanggal', hariIniStr)
       const { data: jadwalHariIni } = await supabase.from('jadwal').select('*').eq('tanggal', hariIniStr)
       
@@ -148,7 +178,7 @@ export async function renderDashboard() {
       adminWidgetHtml = `
         <div class="card fade-up" style="padding: 16px; margin-bottom: 20px;">
           <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">
-            <i class="fa fa-chart-line" style="color: var(--primary);"></i> Live Monitoring Monitor Kehadiran Hari Ini
+            <i class="fa fa-chart-line" style="color: var(--primary);"></i> Live Monitoring Kehadiran Hari Ini
           </div>
           <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center;">
             <div style="background: #dcfce7; padding: 10px 4px; border-radius: 10px;">
@@ -272,32 +302,15 @@ export async function renderDashboard() {
     </div>
 
     <style>
-      .fav-btn:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18) !important;
-      }
-      .fav-btn:active {
-        transform: translateY(-1px);
-      }
-      .fav-scroll-area::-webkit-scrollbar {
-        height: 4px;
-      }
-      .fav-scroll-area::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      .fav-scroll-area::-webkit-scrollbar-thumb {
-        background: rgba(0,0,0,0.15);
-        border-radius: 4px;
-      }
+      .fav-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18) !important; }
+      .fav-btn:active { transform: translateY(-1px); }
     </style>
   `
 
   if (typeof Chart === 'undefined') {
     const script = document.createElement('script')
     script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
-    script.onload = () => {
-      loadCharts(user.id, dateFrom, dateTo, totalJamKerja)
-    }
+    script.onload = () => { loadCharts(user.id, dateFrom, dateTo, totalJamKerja) }
     document.head.appendChild(script)
   } else {
     loadCharts(user.id, dateFrom, dateTo, totalJamKerja)
