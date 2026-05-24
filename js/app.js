@@ -690,6 +690,7 @@ function renderUserList(users) {
 }
 
 /* ================= POPUP MODAL: DETAIL KARYAWAN ================= */
+/* ================= POPUP MODAL: DETAIL KARYAWAN (FIXED) ================= */
 window.openDetailKaryawan = function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
@@ -705,12 +706,15 @@ window.openDetailKaryawan = function(id) {
        <span class="badge badge-gray">${target.role.toUpperCase()}</span>
     </div>
     <div style="display: flex; flex-direction: column; gap: 10px; font-size: .85rem;">
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Email:</span><strong>${target.email}</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Email:</span><strong>${target.email || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Jabatan:</span><strong>${target.jabatan || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Departemen:</span><strong>${target.departemen || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">No. HP:</span><strong>${target.no_hp || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Bergabung:</span><strong>${target.tanggal_bergabung || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${target.tanggal_lahir || '-'}</strong></div>
+      
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Plot Titik Radius:</span><strong style="color:var(--primary); font-weight:800;">📍 ${target.titik_radius || 'Bebas Area (Bypass)'}</strong></div>
+      
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${target.status_akun || 'Aktif'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Sisa Jatah Cuti:</span><strong>🌴 ${target.sisa_cuti || 0} Hari</strong></div>
     </div>
@@ -720,10 +724,7 @@ window.openDetailKaryawan = function(id) {
   `)
 }
 
-/* ================= POPUP MODAL: EDIT KARYAWAN ================= */
-// ====================================================================
-// SOLUSI TOTAL: FORM EDIT KARYAWAN AKTIF LIVE DI js/app.js
-// ====================================================================
+/* ================= POPUP MODAL: EDIT KARYAWAN (FIXED) ================= */
 window.openEditKaryawan = async function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
@@ -738,7 +739,6 @@ window.openEditKaryawan = async function(id) {
     const { data: lokasiList } = await supabase.from('lokasi_absen').select('*')
     opsiLokasi = (lokasiList || []).map(l => {
       const nameT = l.nama_titik || l.nama_lokasi || l.nama || '';
-      // Jika lokasi ini adalah jatah radius si karyawan saat ini, otomatis jadikan "selected"
       return `<option value="${nameT}" ${target.titik_radius === nameT ? 'selected' : ''}>${nameT}</option>`
     }).join('')
   } catch(e) {
@@ -788,9 +788,9 @@ window.openEditKaryawan = async function(id) {
         <label>Tanggal Lahir</label>
         <input type="date" id="editLahir" value="${target.tanggal_lahir || ''}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
-      
+
       <div class="field">
-        <label>Atur Titik Radius</label>
+        <label>Atur Jatah Titik Radius</label>
         <select id="editTitikRadius" ${canEditAllFields ? '' : 'disabled'} style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700; background:#fff; color:#000;">
           <option value="">-- Bebas Radius (Bypass) --</option>
           ${opsiLokasi}
@@ -811,12 +811,13 @@ window.openEditKaryawan = async function(id) {
   `)
 }
 
+/* ================= SIMPAN EDIT DATA KARYAWAN (FIXED) ================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
   const newPassword = document.getElementById('editPassword').value.trim()
 
   try {
     if (canEditAll) {
-      // Perbarui data profil ke tabel 'profiles' di Supabase termasuk kolom titik_radius baru
+      // FIX 3: MEMASUKKAN KOLOM titik_radius AGAR IKUT TER-UPDATE MASUK KE SUPABASE
       const { error: profileErr } = await supabase
         .from('profiles')
         .update({
@@ -825,7 +826,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
           departemen:   document.getElementById('editDept').value.trim(),
           no_hp:        document.getElementById('editHp').value.trim(),
           tanggal_lahir: document.getElementById('editLahir').value || null,
-          titik_radius:  document.getElementById('editTitikRadius').value || null // Menyimpan jatah radius terupdate
+          titik_radius:  document.getElementById('editTitikRadius').value || null // Menyimpan jatah radius terupdate ke DB
         })
         .eq('id', id)
 
@@ -841,18 +842,13 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
         if (passErr) throw passErr
       } else {
-        alert('ℹ️ Reset password karyawan lain memerlukan Supabase Admin Function. Hubungi super admin untuk fitur ini.')
+        alert('ℹ️ Reset password karyawan lain memerlukan Supabase Admin Function. Hubungi super admin atau aktifkan Edge Function untuk fitur ini.')
       }
     }
 
     window.closeUserModal()
-    alert('✅ Seluruh perubahan data karyawan berhasil disimpan!')
-    
-    if (typeof renderUsers === 'function') {
-      await renderUsers()
-    } else {
-      location.reload()
-    }
+    alert('✅ Seluruh perubahan data berhasil disimpan!')
+    await renderUsers()
 
   } catch (err) {
     alert('Gagal memperbarui data: ' + err.message)
