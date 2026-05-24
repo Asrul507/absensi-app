@@ -8,14 +8,13 @@ export async function login(email, password) {
     btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   }
 
- const { data, error } =
-  await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password
   })
 
-console.log('LOGIN RESULT:', data)
-console.log('LOGIN ERROR:', error)
+  console.log('LOGIN RESULT:', data)
+  console.log('LOGIN ERROR:', error)
 
   if (btn) {
     btn.disabled = false
@@ -102,40 +101,25 @@ export async function registerKaryawan(
     }
 
     // ================= SIGNUP =================
-   const {
-  data,
-  error
-} = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: 'https://hrpro01.netlify.app/callback.html',
+        data: {
+          pending_id: pendingId,
+          nama_lengkap: pending.nama_lengkap,
+        }
+      }
+    })
 
-  email,
-  password,
-
-  options: {
-
-    emailRedirectTo:
-      'https://hrpro01.netlify.app/callback.html',
-
-    data: {
-
-      pending_id: pendingId,
-
-      nama_lengkap:
-        pending.nama_lengkap,
-    }
-  }
-})
     // ================= ERROR =================
     if (error) {
-
-      if (
-        error.message.includes('already registered')
-      ) {
-
+      if (error.message.includes('already registered')) {
         throw new Error(
           'Email ini sudah terdaftar. Silakan login atau gunakan email lain.'
         )
       }
-
       throw error
     }
 
@@ -143,53 +127,30 @@ export async function registerKaryawan(
 
     // ================= BUAT PROFILE =================
     if (user) {
-
-      const {
-        error: profileError
-      } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .insert([{
-
           id: user.id,
-
           email,
-
-          nama_lengkap:
-            pending.nama_lengkap,
-
-          role:
-            pending.role || 'staff',
-
-          jabatan:
-            pending.jabatan || '',
-
-          departemen:
-            pending.departemen || '',
-
-          no_hp:
-            pending.no_hp || '',
-
-          tanggal_bergabung:
-            pending.tanggal_bergabung || null,
-
-          tanggal_lahir:
-            pending.tanggal_lahir || null,
-
-          status_akun:
-            'Menunggu Verifikasi',
-
+          nama_lengkap: pending.nama_lengkap,
+          role: pending.role || 'staff',
+          jabatan: pending.jabatan || '',
+          departemen: pending.departemen || '',
+          no_hp: pending.no_hp || '',
+          tanggal_bergabung: pending.tanggal_bergabung || null,
+          tanggal_lahir: pending.tanggal_lahir || null,
+          status_akun: 'Menunggu Verifikasi',
           foto_url: '',
-
           sisa_cuti: 0,
           jatah_cuti: 0,
+          // -------------------------------------------------------------
+          // TEMPAT TEMPEL 1: Menangkap plot radius dari antrean daftar tunggu
+          // -------------------------------------------------------------
+          titik_radius: pending.titik_radius || null 
         }])
 
       if (profileError) {
-
-        console.error(
-          'PROFILE ERROR:',
-          profileError
-        )
+        console.error('PROFILE ERROR:', profileError)
       }
 
       // ================= UPDATE PENDING =================
@@ -204,28 +165,20 @@ export async function registerKaryawan(
     return true
 
   } catch (err) {
-
     console.error(err)
-
     showRegError(
-      err.message ||
-      'Terjadi kesalahan saat registrasi'
+      err.message || 'Terjadi kesalahan saat registrasi'
     )
-
     return false
-
-  } finally {
-
+  } finaly {
     // ================= RESET BUTTON =================
     if (btn) {
-
       btn.disabled = false
-
-      btn.innerHTML =
-        '<i class="fa fa-user-plus"></i> Daftar & Kirim Verifikasi'
+      btn.innerHTML = '<i class="fa fa-user-plus"></i> Daftar & Kirim Verifikasi'
     }
   }
 }
+
 /* ===============================================================
    SIGNUP LANGSUNG (untuk HRD buat akun tanpa pending flow)
    Dipakai saat HRD ingin buat akun sekaligus dengan email
@@ -240,19 +193,23 @@ export async function signup(email, password, role = 'staff', extraData = {}) {
   const user = data.user
   if (user) {
     const { error: profileError } = await supabase.from('profiles').insert([{
-      id:                user.id,
+      id: user.id,
       email,
-      nama_lengkap:      extraData.nama_lengkap || email.split('@')[0],
+      nama_lengkap: extraData.nama_lengkap || email.split('@')[0],
       role,
-      jabatan:           extraData.jabatan      || '',
-      departemen:        extraData.departemen   || '',
-      no_hp:             extraData.no_hp        || '',
+      jabatan: extraData.jabatan || '',
+      departemen: extraData.departemen || '',
+      no_hp: extraData.no_hp || '',
       tanggal_bergabung: extraData.tanggal_bergabung || null,
-      tanggal_lahir:     extraData.tanggal_lahir     || null,
-      status_akun:       'Aktif',
-      foto_url:          '',
-      sisa_cuti:         0,
-      jatah_cuti:        0,
+      tanggal_lahir: extraData.tanggal_lahir || null,
+      status_akun: 'Aktif',
+      foto_url: '',
+      sisa_cuti: 0,
+      jatah_cuti: 0,
+      // -------------------------------------------------------------
+      // TEMPAT TEMPEL 2: Mengamankan ekstra data radius dari input langsung HRD
+      // -------------------------------------------------------------
+      titik_radius: extraData.titik_radius || null
     }])
     if (profileError) { alert(profileError.message); return false }
   }
@@ -272,7 +229,6 @@ function showRegError(msg) {
   else alert(msg)
 }
 
-
 /* ===============================================================
    UPDATE PASSWORD USER (Bisa untuk diri sendiri atau di-reset Admin)
 =============================================================== */
@@ -282,7 +238,6 @@ export async function updateUserPassword(newPassword) {
     return false
   }
 
-  // Supabase otomatis mendeteksi user aktif saat ini untuk diganti password-nya
   const { error } = await supabase.auth.updateUser({
     password: newPassword
   })
@@ -293,4 +248,3 @@ export async function updateUserPassword(newPassword) {
   }
   return true
 }
-
