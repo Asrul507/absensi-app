@@ -256,7 +256,7 @@ window.openDetailKaryawan = function(id) {
   const target = window._allUsers.find(u => u.id === id)
   if(!target) return
 
-  window.showUserModal suicide(`
+  window.showUserModal(`
     <div class="modal-header">
       <h3><i class="fa fa-id-card" style="color:var(--primary);"></i> Detail Informasi Karyawan</h3>
       <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
