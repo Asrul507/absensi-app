@@ -107,10 +107,14 @@ export async function renderUsers() {
     }
   }
 
+  // ====================================================================
+  // FIX PERBAIKAN UTAMA: MODAL TAMBAH KARYAWAN BERBASIS RADIUS LIVE DATABASE
+  // ====================================================================
   window.openFormTambah = async function() {
-    // 1. Ambil opsi daftar lokasi dari database secara live agar otomatis muncul
+    // Ambil opsi daftar lokasi dari database secara live
     const { data: lokAsiList } = await supabase.from('lokasi_absen').select('nama_titik')
     const opsiLokasi = (lokAsiList || []).map(l => `<option value="${l.nama_titik}">${l.nama_titik}</option>`).join('')
+    const currentViewerRole = window.currentUser.role
 
     window.showUserModal(`
       <div class="modal-header">
@@ -130,11 +134,11 @@ export async function renderUsers() {
         <div class="field"><label>Role</label>
           <select id="pRole">
             <option value="staff">Staff</option>
-            ${viewerRole === 'super_admin' ? `<option value="admin">Admin</option><option value="super_admin">Super Admin</option>` : ''}
+            ${currentViewerRole === 'super_admin' ? `<option value="admin">Admin</option><option value="super_admin">Super Admin</option>` : ''}
           </select>
         </div>
-        
-        <div class="field"><label>Jatah Titik Radius</label>
+        <div class="field">
+          <label>Jatah Titik Radius</label>
           <select id="pTitikRadius" style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700;">
             <option value="">-- Bebas Radius --</option>
             ${opsiLokasi}
@@ -148,7 +152,7 @@ export async function renderUsers() {
     `)
   }
 
- window.savePendingKaryawan = async function() {
+  window.savePendingKaryawan = async function() {
     const nama = document.getElementById('pNama').value.trim()
     if (!nama) { alert('Nama wajib diisi'); return }
 
@@ -160,8 +164,6 @@ export async function renderUsers() {
       tanggal_bergabung: document.getElementById('pTgl').value || null,
       tanggal_lahir:     document.getElementById('pLahir').value || null,
       role:              document.getElementById('pRole').value,
-      
-      // KIRIM DATA DROP-DOWN RADIUS KE DATABASE PENDING
       titik_radius:      document.getElementById('pTitikRadius').value || null,
       created_by:        window.currentUser.id,
     }])
@@ -419,7 +421,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
           departemen:   document.getElementById('editDept').value.trim(),
           no_hp:        document.getElementById('editHp').value.trim(),
           tanggal_lahir: document.getElementById('editLahir').value || null,
-          titik_radius:  document.getElementById('editTitikRadius').value || null // Update data radius ke profile database
+          titik_radius:  document.getElementById('editTitikRadius').value || null
         })
         .eq('id', id)
 
