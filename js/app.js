@@ -621,6 +621,7 @@ window.openFormTambah = async function() {
 }
 
 /* ================= RENDER LIST KARYAWAN AKTIF ================= */
+/* ================= RENDER LIST KARYAWAN AKTIF (FIXED ACCURATE) ================= */
 function renderUserList(users) {
   const el = document.getElementById('userListContainer')
   if (!el) return
@@ -663,6 +664,8 @@ function renderUserList(users) {
             <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;">
               <span>⏳ ${formatMasaKerja(masaKerja)}</span>
               ${u.jabatan?`<span>💼 ${u.jabatan}</span>`:''}
+              
+              <span>📍 ${u.titik_radius || 'Bebas Radius'}</span>
             </div>
           </div>
         </div>
@@ -673,7 +676,8 @@ function renderUserList(users) {
           </span>
           
           ${bisaEdit ? `
-            <button class="action-btn" title="Edit Data" onclick="window.openEditKaryawan('${u.id}'); event.stopPropagation();" style="background: var(--gray-100); color: var(--text);">
+            <button class="action-btn" title="Edit Data" onclick="window.openEditKaryawan('${u.id}'); event.stopPropagation();"
+              style="background: var(--gray-100); color: var(--text);">
               <i class="fa fa-edit"></i>
             </button>
           ` : ''}
