@@ -45,21 +45,22 @@ async function buildKalender(isAdmin, user) {
 
     let sub = ''
     if (isAdmin) {
-      if (entries.length > 0) sub = `<div style="font-size:.58rem;color:var(--text-muted);margin-top:1px;">${entries.length} staff</div>`
+      if (entries.length > 0) sub = `<div style="font-size:.55rem; color:var(--text-muted); margin-top:2px; white-space:nowrap;">${entries.length} staff</div>`
     } else if (entries.length > 0) {
       const label = shiftShort(entries[0])
       const color = shiftColor(entries[0])
-      sub = `<div style="font-size:.6rem;font-weight:800;color:${color};margin-top:1px;">${label}</div>`
+      sub = `<div style="font-size:.58rem; font-weight:800; color:${color}; margin-top:2px;">${label}</div>`
     }
 
     cells += `
       <div onclick="openKalDetail('${tgl}')"
-        style="border-radius:8px;padding:5px 3px;text-align:center;cursor:pointer;min-height:42px;
+        style="border-radius:8px; padding:6px 2px; text-align:center; cursor:pointer; min-height:48px;
+               display:flex; flex-direction:column; align-items:center; justify-content:center;
                background:${isToday?'var(--primary)':'var(--gray-50)'};
-               border:1px solid ${isToday?'var(--primary)':'var(--gray-100)'};transition:.15s;"
+               border:1px solid ${isToday?'var(--primary)':'var(--gray-100)'}; transition:.15s;"
         onmouseover="if(!${isToday})this.style.background='var(--gray-100)'"
         onmouseout="if(!${isToday})this.style.background='var(--gray-50)'">
-        <div style="font-size:.75rem;font-weight:${isToday?900:700};color:${isToday?'#fff':isSun?'var(--danger)':'var(--text)'};">${d}</div>
+        <div style="font-size:.75rem; font-weight:${isToday?900:700}; color:${isToday?'#fff':isSun?'var(--danger)':'var(--text)'};">${d}</div>
         ${sub}
       </div>`
   }
@@ -68,26 +69,32 @@ async function buildKalender(isAdmin, user) {
     <div class="page-header">
       <h2><i class="fa fa-calendar-alt"></i> Kalender ${isAdmin?'HR':'Jadwal Saya'}</h2>
     </div>
-    <div class="card fade-up">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <button class="btn-secondary btn-sm" onclick="kalPrev()"><i class="fa fa-chevron-left"></i></button>
-        <span style="font-weight:800;font-size:.95rem;">${monthName}</span>
-        <button class="btn-secondary btn-sm" onclick="kalNext()"><i class="fa fa-chevron-right"></i></button>
+    <div class="card fade-up" style="padding: 16px; box-sizing: border-box; width: 100%;">
+      
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; width: 100%;">
+        <button class="btn-secondary btn-sm" onclick="kalPrev()" style="padding: 8px 14px; cursor:pointer;"><i class="fa fa-chevron-left"></i></button>
+        <span style="font-weight:800; font-size:1rem; color:var(--text); text-align:center; min-width:120px; display:inline-block;">${monthName}</span>
+        <button class="btn-secondary btn-sm" onclick="kalNext()" style="padding: 8px 14px; cursor:pointer;"><i class="fa fa-chevron-right"></i></button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;">
-        ${dayNames.map(d=>`<div style="text-align:center;font-size:.62rem;font-weight:800;color:var(--text-muted);padding:3px 0;">${d}</div>`).join('')}
+      
+      <div style="display:grid; grid-template-columns: repeat(7, 1fr) !important; gap:6px; margin-bottom:8px; text-align:center; width:100%;">
+        ${dayNames.map(d=>`<div style="font-size:.7rem; font-weight:800; color:var(--text-muted); padding:4px 0;">${d}</div>`).join('')}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">${cells}</div>
+      
+      <div style="display:grid; grid-template-columns: repeat(7, 1fr) !important; gap:6px; width:100%; box-sizing: border-box;">
+        ${cells}
+      </div>
+      
       ${!isAdmin ? `
-        <div style="display:flex;gap:12px;margin-top:14px;flex-wrap:wrap;font-size:.72rem;color:var(--text-muted);">
-          <span><span style="color:#3b82f6;">●</span> Pagi</span>
-          <span><span style="color:#f59e0b;">●</span> Sore</span>
-          <span><span style="color:#6366f1;">●</span> Malam</span>
-          <span><span style="color:#22c55e;">●</span> Cuti</span>
-          <span><span style="color:#94a3b8;">●</span> OFF</span>
+        <div style="display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; font-size:.72rem; color:var(--text-muted); justify-content:center;">
+          <span><span style="color:#3b82f6; margin-right:4px;">●</span> Pagi</span>
+          <span><span style="color:#f59e0b; margin-right:4px;">●</span> Sore</span>
+          <span><span style="color:#6366f1; margin-right:4px;">●</span> Malam</span>
+          <span><span style="color:#22c55e; margin-right:4px;">●</span> Cuti</span>
+          <span><span style="color:#94a3b8; margin-right:4px;">●</span> OFF</span>
         </div>` : `
-        <div style="margin-top:10px;font-size:.75rem;color:var(--text-muted);">
-          <i class="fa fa-info-circle"></i> Klik tanggal untuk melihat jadwal semua karyawan
+        <div style="margin-top:16px; font-size:.75rem; color:var(--text-muted); text-align:center;">
+          <i class="fa fa-info-circle"></i> Klik tanggal untuk melihat rincian jadwal seluruh karyawan
         </div>`}
     </div>
   `
@@ -102,24 +109,27 @@ async function buildKalender(isAdmin, user) {
 
     const label = new Date(tanggal+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
 
-    let body = data?.length ? data.map(j => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--gray-100);">
+    let body = data?.length ?
+      data.map(j => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--gray-100);">
         <div>
-          <div style="font-weight:700;font-size:.88rem;">${isAdmin?(j.profiles?.nama_lengkap||'-'):'Jadwal Saya'}</div>
-          <div style="font-size:.75rem;color:var(--text-muted);">${shiftJam(j)}</div>
+          <div style="font-weight:700; font-size:.88rem; color:var(--text);">${isAdmin?(j.profiles?.nama_lengkap||'-'):'Jadwal Saya'}</div>
+          <div style="font-size:.75rem; color:var(--text-muted); margin-top:2px;">${shiftJam(j)}</div>
         </div>
-        <span style="font-size:.78rem;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--primary-light);color:var(--primary-dark);">${shiftFull(j)}</span>
+        <span style="font-size:.75rem; font-weight:700; padding:4px 12px; border-radius:999px; background:var(--primary-light); color:var(--primary-dark);">${shiftFull(j)}</span>
       </div>`).join('')
-      : `<div class="empty-state" style="padding:20px 0;"><i class="fa fa-calendar"></i><p>Tidak ada jadwal</p></div>`
+      : `<div class="empty-state" style="padding:20px 0; text-align:center;"><i class="fa fa-calendar" style="font-size:1.5rem; opacity:0.3;"></i><p style="font-size:.85rem; color:var(--text-muted); margin-top:6px;">Tidak ada jadwal</p></div>`
 
     showModal(`
       <div class="modal-header">
         <h3><i class="fa fa-calendar-day" style="color:var(--primary);"></i> ${label}</h3>
         <button class="modal-close" onclick="closeKalModal()"><i class="fa fa-times"></i></button>
       </div>
-      ${body}
-      <div class="modal-actions">
-        <button class="btn-secondary" onclick="closeKalModal()">Tutup</button>
+      <div style="max-height:300px; overflow-y:auto; padding-right:4px;">
+        ${body}
+      </div>
+      <div class="modal-actions" style="margin-top:16px;">
+        <button class="btn-secondary" style="width:100%;" onclick="closeKalModal()">Tutup</button>
       </div>
     `)
   }
@@ -129,8 +139,9 @@ function showModal(html) {
   let el = document.getElementById('kalModal')
   if (el) el.remove()
   const bg = document.createElement('div')
-  bg.id = 'kalModal'; bg.className = 'modal-bg open'
-  bg.innerHTML = `<div class="modal-box">${html}</div>`
+  bg.id = 'kalModal'
+  bg.className = 'modal-bg open'
+  bg.innerHTML = `<div class="modal-box" style="max-width:400px; width:90%; border-radius:16px; padding:20px;">${html}</div>`
   bg.addEventListener('click', e => { if(e.target===bg) closeKalModal() })
   document.body.appendChild(bg)
 }
