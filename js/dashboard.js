@@ -20,6 +20,18 @@ export async function renderDashboard() {
   const fullName = profile?.nama_lengkap || user.email
   const sisaCuti = profile?.sisa_cuti || 0
 
+  // Sync foto_url dari DB ke currentUser supaya avatar tidak reset saat navigate
+  if (profile?.foto_url && profile.foto_url !== window.currentUser.foto_url) {
+    window.currentUser.foto_url = profile.foto_url
+    // Update topbar avatar
+    const el = document.getElementById('topbarAvatar')
+    if (el) {
+      el.style.backgroundImage = `url(${profile.foto_url})`
+      el.style.backgroundSize  = 'cover'
+      el.textContent = ''
+    }
+  }
+
   // Date range (current month)
   const now = new Date()
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -44,6 +56,57 @@ export async function renderDashboard() {
     }
   })
 
+  // Build menu items sesuai role
+  const isStaff = user.role === 'staff'
+  const menuItems = isStaff
+    ? [
+        { nav: 'absensi',       icon: 'fa-sign-in-alt',  label: 'Masuk',      color: '#f59e0b', color2: '#fbbf24' },
+        { nav: 'absensi',       icon: 'fa-sign-out-alt', label: 'Keluar',     color: '#3b82f6', color2: '#60a5fa' },
+        { nav: 'pengajuan',     icon: 'fa-file-alt',     label: 'Pengajuan',  color: '#8b5cf6', color2: '#a78bfa' },
+        { nav: 'rekap-inout',   icon: 'fa-history',      label: 'Riwayat',    color: '#ef4444', color2: '#f87171' },
+        { nav: 'daftar-absensi',icon: 'fa-chart-bar',    label: 'Absensi',    color: '#22c55e', color2: '#4ade80' },
+        { nav: 'kalender',      icon: 'fa-calendar-alt', label: 'Kalender',   color: '#06b6d4', color2: '#22d3ee' },
+      ]
+    : [
+        { nav: 'absensi',       icon: 'fa-sign-in-alt',  label: 'Masuk',      color: '#f59e0b', color2: '#fbbf24' },
+        { nav: 'absensi',       icon: 'fa-sign-out-alt', label: 'Keluar',     color: '#3b82f6', color2: '#60a5fa' },
+        { nav: 'pengajuan',     icon: 'fa-inbox',        label: 'Approval',   color: '#8b5cf6', color2: '#a78bfa' },
+        { nav: 'rekap-inout',   icon: 'fa-history',      label: 'Riwayat',    color: '#ef4444', color2: '#f87171' },
+        { nav: 'daftar-absensi',icon: 'fa-chart-bar',    label: 'Absensi',    color: '#22c55e', color2: '#4ade80' },
+        { nav: 'users',         icon: 'fa-users',        label: 'Karyawan',   color: '#f97316', color2: '#fb923c' },
+        { nav: 'kalender',      icon: 'fa-calendar-alt', label: 'Kalender',   color: '#06b6d4', color2: '#22d3ee' },
+        { nav: 'rekap',         icon: 'fa-chart-pie',    label: 'Rekap',      color: '#ec4899', color2: '#f472b6' },
+      ]
+
+  const menuHtml = menuItems.map(m => `
+    <button
+      onclick="window.navigate('${m.nav}')"
+      class="fav-btn"
+      style="
+        background: linear-gradient(135deg, ${m.color2} 0%, ${m.color} 100%);
+        border: none;
+        border-radius: 14px;
+        cursor: pointer;
+        text-align: center;
+        color: white;
+        font-weight: 700;
+        padding: 14px 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 72px;
+        width: 72px;
+        flex-shrink: 0;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      ">
+      <i class="fa ${m.icon}" style="font-size:1.5rem;"></i>
+      <span style="font-size:.65rem; line-height:1.2;">${m.label}</span>
+    </button>
+  `).join('')
+
   content.innerHTML = `
     <!-- HEADER -->
     <div class="page-header" style="margin-bottom: 20px;">
@@ -61,29 +124,25 @@ export async function renderDashboard() {
       </div>
     </div>
 
-    <!-- FAVORITE MENU -->
+    <!-- FAVORITE MENU — kotak-kotak dengan scroll horizontal jika tidak muat -->
     <div style="margin-bottom: 20px;">
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 10px;">
-        <button onclick="window.navigate('absensi')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
-          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-sign-in-alt"></i></div>
-          <div style="font-size: .7rem; font-weight: 700;">Masuk</div>
-        </button>
-        <button onclick="window.navigate('absensi')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
-          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-sign-out-alt"></i></div>
-          <div style="font-size: .7rem; font-weight: 700;">Keluar</div>
-        </button>
-        <button onclick="window.navigate('pengajuan')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
-          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-file-alt"></i></div>
-          <div style="font-size: .7rem; font-weight: 700;">Pengajuan</div>
-        </button>
-        <button onclick="window.navigate('rekap-inout')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
-          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-history"></i></div>
-          <div style="font-size: .7rem; font-weight: 700;">Riwayat</div>
-        </button>
-        <button onclick="window.navigate('daftar-absensi')" class="fav-btn" style="padding: 14px; background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); border: none; border-radius: 12px; cursor: pointer; text-align: center; transition: all 0.2s; color: white; font-weight: 700;">
-          <div style="font-size: 1.6rem; margin-bottom: 4px;"><i class="fa fa-chart-bar"></i></div>
-          <div style="font-size: .7rem; font-weight: 700;">Absensi</div>
-        </button>
+      <div style="
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 6px;
+        /* Sembunyikan scrollbar tapi tetap bisa scroll */
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0,0,0,0.15) transparent;
+      ">
+        <div style="
+          display: flex;
+          flex-direction: row;
+          gap: 10px;
+          width: max-content;
+          padding: 4px 2px;
+        ">
+          ${menuHtml}
+        </div>
       </div>
     </div>
 
@@ -143,22 +202,23 @@ export async function renderDashboard() {
     <style>
       .fav-btn:hover {
         transform: translateY(-3px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18) !important;
       }
       
       .fav-btn:active {
         transform: translateY(-1px);
       }
 
-      @media (max-width: 768px) {
-        .fav-btn {
-          padding: 12px !important;
-          font-size: .7rem !important;
-        }
-        
-        .fav-btn div:first-child {
-          font-size: 1.4rem !important;
-        }
+      /* Custom scrollbar untuk area menu */
+      .fav-scroll-area::-webkit-scrollbar {
+        height: 4px;
+      }
+      .fav-scroll-area::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .fav-scroll-area::-webkit-scrollbar-thumb {
+        background: rgba(0,0,0,0.15);
+        border-radius: 4px;
       }
     </style>
   `
