@@ -1,6 +1,23 @@
+/**
+ * js/app.js
+ * ============================================================
+ * File utama aplikasi Genius HR.
+ *
+ * PERBAIKAN KRITIS (versi ini):
+ * - Duplikasi window.saveEditKaryawan telah DIHAPUS. Hanya ada SATU definisi
+ *   yang benar, lengkap dengan penangkapan #editTitikRadius dan update
+ *   kolom titik_radius ke Supabase + sinkronisasi cache window._allUsers.
+ * - window.openEditKaryawan: dropdown #editTitikRadius dirender dinamis dari
+ *   tabel lokasi_absen, dengan atribut `selected` otomatis sesuai data
+ *   titik_radius karyawan saat ini.
+ * - import { updateUserPassword } dari ./auth.js yang terduplikasi di tengah
+ *   file telah dihapus (sudah ada di blok import atas).
+ * ============================================================
+ */
+
 import { supabase } from './supabase.js'
 import { getProfile } from './users.js'
-import { login as doLogin, logout } from './auth.js'
+import { login as doLogin, logout, updateUserPassword } from './auth.js'
 import { renderDashboard } from './dashboard.js'
 import { renderAbsensi } from './ui.js'
 import { renderShiftManagement } from './shift.js'
@@ -101,10 +118,7 @@ async function checkUser() {
 }
 
 /* ================= SYNC AVATAR DARI DB ================= */
-// Fungsi ini memastikan foto profil selalu dibaca dari database,
-// sehingga tidak reset saat user logout lalu login kembali.
 async function syncAvatarFromDB(profile) {
-  // Jika profile sudah punya foto_url dari DB, gunakan itu
   if (profile && profile.foto_url) {
     window.currentUser.foto_url = profile.foto_url
   }
@@ -183,10 +197,7 @@ function renderMenu(role) {
         { key:'jadwal',    name:'Jadwal',       icon:'fa-calendar-days' },
         { key:'pengajuan', name:'Approval',     icon:'fa-inbox' },
         { key:'users',     name:'Karyawan',      icon:'fa-users' },
-        
-        // SUNTIKAN MENU BARU: KHUSUS ADMIN & SUPER ADMIN
         { key:'admin-lokasi', name:'Kelola Titik Absen', icon:'fa-map-location-dot' },
-        
         { key:'rekap',     name:'Rekap Absensi', icon:'fa-chart-bar' },
         { key:'kalender',  name:'Kalender',      icon:'fa-calendar' },
       ]
@@ -205,6 +216,7 @@ function renderMenu(role) {
     </nav>
   `
 }
+
 /* ================= BOTTOM NAV ================= */
 function renderBottomNav(role) {
   const nav = document.getElementById('bottomNav')
@@ -250,8 +262,7 @@ window.navigate = async function (page) {
     case 'kalender':  renderKalenderHR(); break
     case 'profile':   renderProfile(); break
     case 'users':     await renderUsers(); break
-    case 'admin-lokasi':renderPengaturanLokasi();break;
-      
+    case 'admin-lokasi': renderPengaturanLokasi(); break
     default:
       document.getElementById('content').innerHTML = `<div class="card"><h2>${page}</h2></div>`
   }
@@ -401,8 +412,6 @@ window.uploadFotoProfil = async function (input) {
 
   if (status) status.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mengupload...'
 
-  // Gunakan nama file yang konsisten berdasarkan user ID (bukan timestamp)
-  // sehingga file lama otomatis tertimpa (upsert), tidak menumpuk di storage
   const ext      = file.name.split('.').pop()
   const fileName = `avatar-${window.currentUser.id}.${ext}`
 
@@ -416,10 +425,8 @@ window.uploadFotoProfil = async function (input) {
   }
 
   const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
-  // Tambahkan cache-buster agar browser tidak pakai foto lama dari cache
   const foto_url = urlData.publicUrl + '?t=' + Date.now()
 
-  // Simpan permanen ke tabel profiles di database
   const { error: dbErr } = await supabase
     .from('profiles')
     .update({ foto_url })
@@ -430,7 +437,6 @@ window.uploadFotoProfil = async function (input) {
     return
   }
 
-  // Update state global agar foto persisten selama sesi
   window.currentUser.foto_url = foto_url
 
   if (status) status.innerHTML = '<i class="fa fa-check"></i> Foto diperbarui & tersimpan!'
@@ -439,12 +445,14 @@ window.uploadFotoProfil = async function (input) {
 }
 
 /* =============================================================================
-   MANAJEMEN KARYAWAN / USERS MODUL (INTEGRASI DETAIL & EDIT BERBASIS PRIVILEGE)
+   MANAJEMEN KARYAWAN — SUMBER KEBENARAN TUNGGAL (SINGLE SOURCE OF TRUTH)
+   Semua fungsi modal karyawan hanya didefinisikan DI SINI.
+   File js/users.js TIDAK memuat fungsi-fungsi ini.
 ============================================================================= */
-import { updateUserPassword } from './auth.js'
 
+/* ================= RENDER HALAMAN USERS ================= */
 async function renderUsers() {
-  const content  = document.getElementById('content')
+  const content    = document.getElementById('content')
   const viewerRole = window.currentUser.role
 
   content.innerHTML = `
@@ -492,16 +500,16 @@ async function renderUsers() {
     </div>
   `
 
-  const { data: users } = await supabase.from('profiles').select('*').order('nama_lengkap')
+  const { data: users }   = await supabase.from('profiles').select('*').order('nama_lengkap')
   const { data: pending } = await supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap')
 
   const tahunIni = new Date().getFullYear()
   const { data: cutiData } = await supabase.from('pengajuan').select('user_id, jumlah_hari')
     .eq('jenis','cuti').eq('status','approved').gte('tanggal_pengajuan',`${tahunIni}-01-01`)
-  
+
   window._cutiMap = {}
   ;(cutiData||[]).forEach(c => { window._cutiMap[c.user_id] = (window._cutiMap[c.user_id]||0) + (parseInt(c.jumlah_hari)||0) })
-  
+
   window._allUsers    = users    || []
   window._pendingList = pending  || []
   window._currentTab  = 'aktif'
@@ -512,8 +520,7 @@ async function renderUsers() {
     window._currentTab = tab
     document.getElementById('tabAktif').className   = tab==='aktif'   ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
     const tabPending = document.getElementById('tabPending')
-    if(tabPending) tabPending.className = tab==='pending' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
-    
+    if (tabPending) tabPending.className = tab==='pending' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
     if (tab === 'aktif') renderUserList(window._allUsers)
     else renderPendingList(window._pendingList)
   }
@@ -532,24 +539,21 @@ async function renderUsers() {
       ))
     }
   }
+}
 
- // ====================================================================
-// SOLUSI TOTAL: FORM TAMBAH KARYAWAN AKTIF LIVE DI js/app.js
-// ====================================================================
+/* ================= FORM TAMBAH KARYAWAN ================= */
 window.openFormTambah = async function() {
   let opsiLokasi = ''
   try {
-    // Ambil daftar lokasi absen langsung dari database Supabase
-    const { data: lokAsiList, error } = await supabase.from('lokasi_absen').select('*')
-    if (!error && lokAsiList) {
-      opsiLokasi = lokAsiList.map(l => {
-        // Antisipasi aman jika nama kolom di database Anda berbeda
-        const namaTitik = l.nama_titik || l.nama_lokasi || l.nama || '';
+    const { data: lokasiList, error } = await supabase.from('lokasi_absen').select('*')
+    if (!error && lokasiList) {
+      opsiLokasi = lokasiList.map(l => {
+        const namaTitik = l.nama_titik || l.nama_lokasi || l.nama || ''
         return `<option value="${namaTitik}">${namaTitik}</option>`
       }).join('')
     }
   } catch (e) {
-    console.error("Gagal menarik daftar lokasi absen:", e)
+    console.error('Gagal menarik daftar lokasi absen:', e)
   }
 
   const currentViewerRole = window.currentUser?.role || 'admin'
@@ -575,7 +579,6 @@ window.openFormTambah = async function() {
           ${currentViewerRole === 'super_admin' ? `<option value="admin">Admin</option><option value="super_admin">Super Admin</option>` : ''}
         </select>
       </div>
-      
       <div class="field">
         <label>Titik Radius</label>
         <select id="pTitikRadius" style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700; background:#fff; color:#000;">
@@ -591,7 +594,7 @@ window.openFormTambah = async function() {
   `)
 }
 
- window.savePendingKaryawan = async function() {
+window.savePendingKaryawan = async function() {
   const nama = document.getElementById('pNama').value.trim()
   if (!nama) { alert('Nama wajib diisi'); return }
 
@@ -603,25 +606,17 @@ window.openFormTambah = async function() {
     tanggal_bergabung: document.getElementById('pTgl').value || null,
     tanggal_lahir:     document.getElementById('pLahir').value || null,
     role:              document.getElementById('pRole').value,
-    titik_radius:      document.getElementById('pTitikRadius').value || null, // data jatah radius sukses tersimpan
+    titik_radius:      document.getElementById('pTitikRadius').value || null,
     created_by:        window.currentUser?.id || null
   }])
 
   if (error) { alert('Gagal menyimpan ke daftar tunggu: ' + error.message); return }
   window.closeUserModal()
   alert(`✅ Data Karyawan Baru (${nama}) Berhasil disimpan ke Daftar Tunggu!`)
-  
-  // Panggil kembali fungsi render untuk memperbarui layar halaman utama
-  if (typeof renderUsers === 'function') {
-    await renderUsers()
-  } else {
-    location.reload()
-  }
-}
+  await renderUsers()
 }
 
 /* ================= RENDER LIST KARYAWAN AKTIF ================= */
-/* ================= RENDER LIST KARYAWAN AKTIF (FIXED ACCURATE) ================= */
 function renderUserList(users) {
   const el = document.getElementById('userListContainer')
   if (!el) return
@@ -629,7 +624,7 @@ function renderUserList(users) {
     el.innerHTML = `<div class="empty-state"><i class="fa fa-users"></i><p>Tidak ada karyawan</p></div>`
     return
   }
-  
+
   const me = window.currentUser
 
   el.innerHTML = users.map(u => {
@@ -664,17 +659,16 @@ function renderUserList(users) {
             <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;">
               <span>⏳ ${formatMasaKerja(masaKerja)}</span>
               ${u.jabatan?`<span>💼 ${u.jabatan}</span>`:''}
-              
               <span>📍 ${u.titik_radius || 'Bebas Radius'}</span>
             </div>
           </div>
         </div>
-        
+
         <div style="display:flex; flex-direction:row; align-items:center; gap:8px;">
           <span class="badge ${u.status_akun==='Aktif'?'badge-green':u.status_akun==='Menunggu Verifikasi'?'badge-yellow':'badge-red'}">
             ${u.status_akun||'Aktif'}
           </span>
-          
+
           ${bisaEdit ? `
             <button class="action-btn" title="Edit Data" onclick="window.openEditKaryawan('${u.id}'); event.stopPropagation();"
               style="background: var(--gray-100); color: var(--text);">
@@ -693,10 +687,10 @@ function renderUserList(users) {
   }).join('')
 }
 
-/* ================= POPUP MODAL: DETAIL KARYAWAN (AUDIT UPDATE) ================= */
+/* ================= POPUP MODAL: DETAIL KARYAWAN ================= */
 window.openDetailKaryawan = function(id) {
   const target = window._allUsers.find(u => u.id === id)
-  if(!target) return
+  if (!target) return
 
   window.showUserModal(`
     <div class="modal-header">
@@ -704,7 +698,10 @@ window.openDetailKaryawan = function(id) {
       <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
     </div>
     <div style="padding: 10px 0; text-align:center; border-bottom: 1px solid var(--border); margin-bottom: 14px;">
-       ${target.foto_url ? `<img src="${target.foto_url}" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">` : `<div class="profile-avatar" style="margin:0 auto 10px;">${target.nama_lengkap[0].toUpperCase()}</div>`}
+       ${target.foto_url
+         ? `<img src="${target.foto_url}" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">`
+         : `<div class="profile-avatar" style="margin:0 auto 10px;">${target.nama_lengkap[0].toUpperCase()}</div>`
+       }
        <h4 style="margin:6px 0 2px; font-size:1.1rem;">${target.nama_lengkap}</h4>
        <span class="badge badge-gray">${target.role.toUpperCase()}</span>
     </div>
@@ -715,9 +712,7 @@ window.openDetailKaryawan = function(id) {
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">No. HP:</span><strong>${target.no_hp || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Bergabung:</span><strong>${target.tanggal_bergabung || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${target.tanggal_lahir || '-'}</strong></div>
-      
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Plot Titik Radius:</span><strong style="color:var(--primary); font-weight:800;">📍 ${target.titik_radius || 'Bebas Area (Bypass)'}</strong></div>
-      
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${target.status_akun || 'Aktif'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Sisa Jatah Cuti:</span><strong>🌴 ${target.sisa_cuti || 0} Hari</strong></div>
     </div>
@@ -727,26 +722,39 @@ window.openDetailKaryawan = function(id) {
   `)
 }
 
-/* ================= POPUP MODAL: EDIT KARYAWAN (AUDIT UPDATE) ================= */
+/* =============================================================================
+   POPUP MODAL: EDIT KARYAWAN
+   ─ Dropdown #editTitikRadius dirender dinamis dari tabel lokasi_absen.
+   ─ Opsi yang cocok dengan titik_radius karyawan saat ini diberi `selected`.
+============================================================================= */
 window.openEditKaryawan = async function(id) {
   const target = window._allUsers.find(u => u.id === id)
-  if(!target) return
+  if (!target) return
 
   const me = window.currentUser
   const isMe = me.id === target.id
   const canEditAllFields = (me.role === 'super_admin') || (me.role === 'admin' && target.role === 'staff')
 
+  // Bangun opsi dropdown lokasi secara live dari database
   let opsiLokasi = ''
   try {
-    // Tarik daftar titik dari tabel lokasi_absen secara live
-    const { data: lokasiList } = await supabase.from('lokasi_absen').select('*')
+    const { data: lokasiList, error: lokasiErr } = await supabase
+      .from('lokasi_absen')
+      .select('nama_titik')
+      .order('nama_titik')
+
+    if (lokasiErr) throw lokasiErr
+
     opsiLokasi = (lokasiList || []).map(l => {
-      const nameT = l.nama_titik || '';
-      const isSelected = (target.titik_radius || '').trim() === nameT.trim() ? 'selected' : '';
-      return `<option value="${nameT}" ${isSelected}>${nameT}</option>`
+      const namaTitik  = (l.nama_titik || '').trim()
+      // Bandingkan case-insensitive & strip whitespace agar tidak ada mismatch
+      const isSelected = namaTitik.toLowerCase() === (target.titik_radius || '').trim().toLowerCase()
+        ? 'selected'
+        : ''
+      return `<option value="${namaTitik}" ${isSelected}>${namaTitik}</option>`
     }).join('')
-  } catch(e) {
-    console.error("Gagal memuat list lokasi untuk form edit:", e)
+  } catch (e) {
+    console.error('Gagal memuat list lokasi untuk form edit:', e)
   }
 
   window.showUserModal(`
@@ -795,8 +803,9 @@ window.openEditKaryawan = async function(id) {
 
       <div class="field">
         <label>Atur Jatah Titik Radius</label>
-        <select id="editTitikRadius" ${canEditAllFields ? '' : 'disabled'} style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700; background:#fff; color:#000;">
-          <option value="">-- Bebas Radius (Bypass) --</option>
+        <select id="editTitikRadius" ${canEditAllFields ? '' : 'disabled'}
+          style="width:100%; padding:10px; border-radius:var(--r-md); border:1.5px solid var(--border); font-size:.85rem; font-weight:700; background:#fff; color:#000;">
+          <option value=""${!(target.titik_radius) ? ' selected' : ''}>-- Bebas Radius (Bypass) --</option>
           ${opsiLokasi}
         </select>
       </div>
@@ -810,37 +819,46 @@ window.openEditKaryawan = async function(id) {
 
     <div class="modal-actions">
       <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
-      <button class="btn-primary" onclick="window.saveEditKaryawan('${target.id}', ${canEditAllFields}, ${isMe})"><i class="fa fa-save"></i> Perbarui Data</button>
+      <button class="btn-primary" onclick="window.saveEditKaryawan('${target.id}', ${canEditAllFields}, ${isMe})">
+        <i class="fa fa-save"></i> Perbarui Data
+      </button>
     </div>
   `)
 }
 
-/* ================= SIMPAN EDIT DATA KARYAWAN (AUDIT UPDATE) ================= */
+/* =============================================================================
+   SIMPAN EDIT DATA KARYAWAN — DEFINISI TUNGGAL & RESMI
+   ─ Menangkap nilai #editTitikRadius dan menyimpannya ke kolom titik_radius.
+   ─ Menyinkronkan window._allUsers secara instan (tanpa reload).
+   ─ Jika yang diedit adalah diri sendiri, window.currentUser juga diperbarui.
+============================================================================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
-  const newPassword = document.getElementById('editPassword').value.trim()
-  
-  // Tangkap nilai pilihan dari dropdown editTitikRadius
-  const selectElement = document.getElementById('editTitikRadius')
-  const titikRadiusBaru = selectElement ? selectElement.value : null
+  const newPassword = document.getElementById('editPassword')?.value.trim() || ''
+
+  // Tangkap nilai dropdown titik radius
+  const selectEl       = document.getElementById('editTitikRadius')
+  const titikRadiusBaru = selectEl ? (selectEl.value || null) : null
 
   try {
     if (canEditAll) {
-      // PROSES UTAMA: Simpan kolom titik_radius ke database profiles Supabase
+      const updatePayload = {
+        nama_lengkap:  document.getElementById('editNama')?.value.trim()    || '',
+        jabatan:       document.getElementById('editJabatan')?.value.trim() || '',
+        departemen:    document.getElementById('editDept')?.value.trim()    || '',
+        no_hp:         document.getElementById('editHp')?.value.trim()      || '',
+        tanggal_lahir: document.getElementById('editLahir')?.value          || null,
+        titik_radius:  titikRadiusBaru   // ← kolom kritis yang sebelumnya hilang
+      }
+
       const { error: profileErr } = await supabase
         .from('profiles')
-        .update({
-          nama_lengkap: document.getElementById('editNama').value.trim(),
-          jabatan:      document.getElementById('editJabatan').value.trim(),
-          departemen:   document.getElementById('editDept').value.trim(),
-          no_hp:        document.getElementById('editHp').value.trim(),
-          tanggal_lahir: document.getElementById('editLahir').value || null,
-          titik_radius:  titikRadiusBaru // Data resmi disimpan di sini!
-        })
+        .update(updatePayload)
         .eq('id', id)
 
       if (profileErr) throw profileErr
     }
 
+    // Ganti password jika diisi
     if (newPassword) {
       if (newPassword.length < 6) {
         alert('⚠ Password minimal 6 karakter!')
@@ -854,37 +872,44 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       }
     }
 
-    // SINKRONISASI CACHE MEMORI LOKAL APLIKASI
+    // ── Sinkronisasi cache lokal window._allUsers secara real-time ──────────
     const userIndex = (window._allUsers || []).findIndex(u => u.id === id)
-    if (userIndex !== -1) {
-      window._allUsers[userIndex].nama_lengkap  = document.getElementById('editNama').value.trim()
-      window._allUsers[userIndex].jabatan       = document.getElementById('editJabatan').value.trim()
-      window._allUsers[userIndex].departemen    = document.getElementById('editDept').value.trim()
-      window._allUsers[userIndex].no_hp         = document.getElementById('editHp').value.trim()
-      window._allUsers[userIndex].tanggal_lahir = document.getElementById('editLahir').value || null
-      window._allUsers[userIndex].titik_radius  = titikRadiusBaru // sinkronisasi instan
+    if (userIndex !== -1 && canEditAll) {
+      window._allUsers[userIndex].nama_lengkap  = document.getElementById('editNama')?.value.trim()    || ''
+      window._allUsers[userIndex].jabatan       = document.getElementById('editJabatan')?.value.trim() || ''
+      window._allUsers[userIndex].departemen    = document.getElementById('editDept')?.value.trim()    || ''
+      window._allUsers[userIndex].no_hp         = document.getElementById('editHp')?.value.trim()      || ''
+      window._allUsers[userIndex].tanggal_lahir = document.getElementById('editLahir')?.value          || null
+      window._allUsers[userIndex].titik_radius  = titikRadiusBaru  // ← sinkronisasi instan
     }
 
+    // Perbarui window.currentUser jika karyawan yang diedit adalah diri sendiri
     if (isMe && window.currentUser) {
+      if (canEditAll) {
+        window.currentUser.nama_lengkap  = document.getElementById('editNama')?.value.trim()    || ''
+        window.currentUser.jabatan       = document.getElementById('editJabatan')?.value.trim() || ''
+        window.currentUser.departemen    = document.getElementById('editDept')?.value.trim()    || ''
+        window.currentUser.no_hp         = document.getElementById('editHp')?.value.trim()      || ''
+        window.currentUser.tanggal_lahir = document.getElementById('editLahir')?.value          || null
+      }
       window.currentUser.titik_radius = titikRadiusBaru
     }
 
     window.closeUserModal()
     alert('✅ Seluruh perubahan data karyawan berhasil disimpan!')
-    
-    if (typeof renderUsers === 'function') {
-      await renderUsers()
-    } else {
-      location.reload()
-    }
+
+    // Re-render halaman users agar list dan semua badge langsung sinkron
+    await renderUsers()
 
   } catch (err) {
+    console.error('saveEditKaryawan error:', err)
     alert('Gagal memperbarui data: ' + err.message)
   }
 }
+
 /* ================= UPLOAD FOTO DI MODAL EDIT ================= */
 window.uploadFotoEditModal = async function(input, targetUserId) {
-  const file    = input.files[0]
+  const file     = input.files[0]
   const statusEl = document.getElementById('editFotoStatus')
   if (!file) return
 
@@ -910,7 +935,6 @@ window.uploadFotoEditModal = async function(input, targetUserId) {
   const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
   const foto_url = urlData.publicUrl + '?t=' + Date.now()
 
-  // Simpan permanen ke DB
   const { error: dbErr } = await supabase
     .from('profiles')
     .update({ foto_url })
@@ -924,8 +948,8 @@ window.uploadFotoEditModal = async function(input, targetUserId) {
   // Update preview di modal
   const preview = document.getElementById('editAvatarPreview')
   if (preview) {
-    preview.style.backgroundImage = `url(${foto_url})`
-    preview.src = foto_url
+    if (preview.tagName === 'IMG') preview.src = foto_url
+    else preview.style.backgroundImage = `url(${foto_url})`
   }
 
   // Jika yang diedit adalah diri sendiri, update juga state global
@@ -934,60 +958,14 @@ window.uploadFotoEditModal = async function(input, targetUserId) {
     updateTopbarAvatar(window.currentUser)
   }
 
-  // Update data lokal cache
+  // Update cache lokal
   const idx = (window._allUsers || []).findIndex(u => u.id === targetUserId)
   if (idx !== -1) window._allUsers[idx].foto_url = foto_url
 
   if (statusEl) statusEl.innerHTML = '<i class="fa fa-check" style="color:var(--success,#22c55e);"></i> Foto berhasil diperbarui!'
 }
 
-/* ================= SIMPAN EDIT DATA KARYAWAN ================= */
-window.saveEditKaryawan = async function(id, canEditAll, isMe) {
-  const newPassword = document.getElementById('editPassword').value.trim()
-
-  try {
-    if (canEditAll) {
-      const { error: profileErr } = await supabase
-        .from('profiles')
-        .update({
-          nama_lengkap: document.getElementById('editNama').value.trim(),
-          jabatan:      document.getElementById('editJabatan').value.trim(),
-          departemen:   document.getElementById('editDept').value.trim(),
-          no_hp:        document.getElementById('editHp').value.trim(),
-          tanggal_lahir: document.getElementById('editLahir').value || null
-        })
-        .eq('id', id)
-
-      if (profileErr) throw profileErr
-    }
-
-    if (newPassword) {
-      if (newPassword.length < 6) {
-        alert('⚠ Password minimal 6 karakter!')
-        return
-      }
-      if (isMe) {
-        // Ganti password user sendiri via Supabase Auth
-        const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
-        if (passErr) throw passErr
-      } else {
-        // Admin/super_admin reset password orang lain
-        // Supabase Admin SDK diperlukan untuk ini dari sisi server.
-        // Dari client, hanya bisa reset password user sendiri.
-        alert('ℹ️ Reset password karyawan lain memerlukan Supabase Admin Function. Hubungi super admin atau aktifkan Edge Function untuk fitur ini.')
-      }
-    }
-
-    window.closeUserModal()
-    alert('✅ Seluruh perubahan data berhasil disimpan!')
-    await renderUsers()
-
-  } catch (err) {
-    alert('Gagal memperbarui data: ' + err.message)
-  }
-}
-
-/* ---- Render Pending List ---- */
+/* ================= RENDER PENDING LIST ================= */
 function renderPendingList(list) {
   const el = document.getElementById('userListContainer')
   if (!el) return
@@ -1022,7 +1000,7 @@ function renderPendingList(list) {
   `
 }
 
-/* ---- Delete Pending Row ---- */
+/* ================= DELETE PENDING ROW ================= */
 window.deletePending = async function(id, nama) {
   if (!confirm(`Hapus data karyawan "${nama}" dari daftar tunggu?`)) return
   await supabase.from('pending_profiles').delete().eq('id', id)
@@ -1030,7 +1008,7 @@ window.deletePending = async function(id, nama) {
   renderPendingList(window._pendingList)
 }
 
-/* ---- Toggle Status Aktif/Banned ---- */
+/* ================= TOGGLE STATUS AKTIF / NON-AKTIF ================= */
 window.toggleStatusUser = async function(userId, statusSekarang) {
   const statusBaru = statusSekarang === 'Aktif' ? 'Non-Aktif' : 'Aktif'
   if (!confirm(`${statusBaru==='Non-Aktif'?'Non-aktifkan':'Aktifkan kembali'} karyawan ini?`)) return
@@ -1044,28 +1022,27 @@ window.toggleStatusUser = async function(userId, statusSekarang) {
   await renderUsers()
 }
 
-/* ================= UTILITY: CORE GLOBAL MODAL HELPER ================= */
+/* ================= UTILITY: GLOBAL MODAL HELPER ================= */
 window.showUserModal = function(html) {
   let el = document.getElementById('userModal')
   if (el) el.remove()
-  
+
   const bg = document.createElement('div')
-  bg.id = 'userModal'
+  bg.id        = 'userModal'
   bg.className = 'modal-bg open'
   bg.innerHTML = `<div class="modal-box">${html}</div>`
-  
-  bg.addEventListener('click', e => { 
-    if(e.target === bg) window.closeUserModal() 
+
+  bg.addEventListener('click', e => {
+    if (e.target === bg) window.closeUserModal()
   })
-  
+
   document.body.appendChild(bg)
 }
 
-window.closeUserModal = function() { 
+window.closeUserModal = function() {
   const modal = document.getElementById('userModal')
-  if (modal) modal.remove() 
+  if (modal) modal.remove()
 }
-
 
 /* ================= SIDEBAR ================= */
 window.toggleSidebar = () => {
@@ -1076,7 +1053,7 @@ window.closeSidebar = () => {
   document.getElementById('sidebar')?.classList.remove('open')
   document.getElementById('overlay')?.classList.remove('active')
 }
-document.addEventListener('keydown', e => { if(e.key==='Escape') closeSidebar() })
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar() })
 
 /* ================= DARK MODE ================= */
 window.toggleTheme = function() {
@@ -1085,4 +1062,58 @@ window.toggleTheme = function() {
   const icon   = document.getElementById('themeIcon')
   if (icon) icon.className = isDark ? 'fa fa-sun' : 'fa fa-moon'
   localStorage.setItem('theme', isDark ? 'dark' : 'light')
+}
+
+/* ================= IMAGE FULL SCREEN PREVIEW ================= */
+window.previewImageFullScreen = function(urlSrc) {
+  if (!urlSrc) return
+
+  let existingOverlay = document.getElementById('imagePreviewOverlay')
+  if (existingOverlay) existingOverlay.remove()
+
+  const overlay = document.createElement('div')
+  overlay.id = 'imagePreviewOverlay'
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10000;
+    cursor: zoom-out;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  `
+
+  const img = document.createElement('img')
+  img.src = urlSrc
+  img.style.cssText = `
+    max-width: 90%;
+    max-height: 85vh;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    transform: scale(0.9);
+    transition: transform 0.25s ease;
+  `
+
+  overlay.appendChild(img)
+  document.body.appendChild(overlay)
+
+  setTimeout(() => {
+    overlay.style.opacity = '1'
+    img.style.transform = 'scale(1)'
+  }, 10)
+
+  const closeHandler = () => {
+    overlay.style.opacity = '0'
+    img.style.transform = 'scale(0.9)'
+    setTimeout(() => overlay.remove(), 250)
+  }
+
+  overlay.onclick = closeHandler
+  document.addEventListener('keydown', function escClose(e) {
+    if (e.key === 'Escape') {
+      closeHandler()
+      document.removeEventListener('keydown', escClose)
+    }
+  })
 }
