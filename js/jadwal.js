@@ -144,6 +144,4 @@ window.loadDaftarJadwalMaster = async function() {
     const daysInMonth = new Date(y, m, 0).getDate()
     const startStr = `${y}-${String(m).padStart(2,'0')}-01`
     const
-
-
-    
+      }
