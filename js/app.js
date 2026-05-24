@@ -183,6 +183,10 @@ function renderMenu(role) {
         { key:'jadwal',    name:'Jadwal',       icon:'fa-calendar-days' },
         { key:'pengajuan', name:'Approval',     icon:'fa-inbox' },
         { key:'users',     name:'Karyawan',      icon:'fa-users' },
+        
+        // SUNTIKAN MENU BARU: KHUSUS ADMIN & SUPER ADMIN
+        { key:'admin-lokasi', name:'Kelola Titik Absen', icon:'fa-map-location-dot' },
+        
         { key:'rekap',     name:'Rekap Absensi', icon:'fa-chart-bar' },
         { key:'kalender',  name:'Kalender',      icon:'fa-calendar' },
       ]
@@ -201,7 +205,6 @@ function renderMenu(role) {
     </nav>
   `
 }
-
 /* ================= BOTTOM NAV ================= */
 function renderBottomNav(role) {
   const nav = document.getElementById('bottomNav')
