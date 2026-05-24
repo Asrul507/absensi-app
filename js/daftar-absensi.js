@@ -4,7 +4,6 @@ export async function renderDaftarAbsensi(user) {
   const content = document.getElementById('content')
   if (!content) return
 
-  // 1. TENTUKAN DEFAULT RENTANG TANGGAL (7 Hari Terakhir s/id Hari Ini)
   const hariIni = new Date()
   const tujuhHariLalu = new Date()
   tujuhHariLalu.setDate(hariIni.getDate() - 7)
@@ -12,7 +11,6 @@ export async function renderDaftarAbsensi(user) {
   const defaultFilterMulai = tujuhHariLalu.toISOString().split('T')[0]
   const defaultFilterSelesai = hariIni.toISOString().split('T')[0]
 
-  // 2. RENDER STRUKTUR DASHBOARD & FILTER ATAS
   content.innerHTML = `
     <div style="max-width:480px; margin:0 auto; padding: 0 8px;">
       
@@ -46,17 +44,12 @@ export async function renderDaftarAbsensi(user) {
     </div>
   `
 
-  // Hubungkan event trigger filter tanggal
   document.getElementById('filterMulai').onchange = () => muatLogAbsensi(user)
   document.getElementById('filterSelesai').onchange = () => muatLogAbsensi(user)
 
-  // Jalankan fungsi penarik data
   await muatLogAbsensi(user)
 }
 
-// ====================================================================
-// FUNGSI UTAMA AMBIL DATA & KONTROL LAYOUT KARTU ESTETIK
-// ====================================================================
 async function muatLogAbsensi(user) {
   const listContainer = document.getElementById('listKartuAbsensi')
   if (!listContainer) return
@@ -65,7 +58,6 @@ async function muatLogAbsensi(user) {
   const tglSelesai = document.getElementById('filterSelesai').value
 
   try {
-    // AMBIL DATA DARI SUPABASE BERDASARKAN RENTANG TANGGAL USER
     const { data: listAbsen, error } = await supabase
       .from('absensi')
       .select('*')
@@ -86,51 +78,50 @@ async function muatLogAbsensi(user) {
       return
     }
 
-    // RENDER ARRAY DATA MENJADI GRID KARTU KREATIF
     listContainer.innerHTML = listAbsen.map(absen => {
-      // 1. FORMAT TANGGAL KE INDONESIA (Contoh: Minggu, 24 Mei 2026)
       const opt = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
       const formatHari = new Date(absen.tanggal).toLocaleDateString('id-ID', opt)
 
-      // 2. HITUNG TOTAL JAM KERJA DESIMAL (Jika masuk & pulang lengkap)
       let teksJamKerja = ''
-      if (absen.waktu_masuk && absen.waktu_pulang) {
+      if (absen.waktu_masuk && CorelJamLengkap(absen)) {
         const selisihMs = new Date(absen.waktu_pulang) - new Date(absen.waktu_masuk)
         const totalJam = selisihMs / (1000 * 60 * 60)
         teksJamKerja = `<span style="font-size:.78rem; color:var(--text-muted); font-weight:600;">${totalJam.toFixed(2)} Jam Kerja <i class="fa fa-chevron-right" style="font-size:.65rem; margin-left:2px;"></i></span>`
       }
 
-      // 3. LOGIKA DETEKSI BADGE RADIUS MASUK
+      // LOGIKA VALIDASI BADGE RADIUS MASUK (MENGUNCI ATURAN JATAH)
       let badgeMasuk = ''
       if (absen.waktu_masuk) {
-        const isOutMasuk = (absen.lokasi_masuk || '').includes('Luar Radius') || (absen.lokasi_masuk || '').includes('Testing')
-        if (isOutMasuk) {
+        const isLuarRadius = (absen.lokasi_masuk || '').includes('Luar Radius') || (absen.lokasi_masuk || '').includes('Testing')
+        const isSalahTitik = user.titik_radius && absen.lokasi_masuk !== user.titik_radius
+
+        if (isLuarRadius || isSalahTitik || absen.status_absensi === 'salah absen') {
           badgeMasuk = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;">Out Radius</span>`
         } else {
           badgeMasuk = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;">Hadir (In Radius)</span>`
         }
       }
 
-      // 4. LOGIKA DETEKSI BADGE RADIUS PULANG
+      // LOGIKA VALIDASI BADGE RADIUS PULANG (MENGUNCI ATURAN JATAH)
       let badgePulang = ''
       if (absen.waktu_pulang) {
-        const isOutPulang = (absen.lokasi_pulang || '').includes('Luar Radius') || (absen.lokasi_pulang || '').includes('Testing')
-        if (isOutPulang) {
+        const isLuarPulang = (absen.lokasi_pulang || '').includes('Luar Radius') || (absen.lokasi_pulang || '').includes('Testing')
+        const isSalahTitikPulang = user.titik_radius && absen.lokasi_pulang !== user.titik_radius
+
+        if (isLuarPulang || isSalahTitikPulang || absen.status_absensi === 'salah absen') {
           badgePulang = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;">Out Radius</span>`
         } else {
           badgePulang = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;">Out (In Radius)</span>`
         }
       }
 
-      // 5. FORMAT JAM RIIL (HH:MM:SS)
       const jamMasuk = absen.waktu_masuk ? new Date(absen.waktu_masuk).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'
       const jamPulang = absen.waktu_pulang ? new Date(absen.waktu_pulang).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'
 
-      // COMPILING TEMPLATE KARTU PER HARI
       return `
         <div style="margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid #f1f5f9;">
           
-          <div style="display:flex; justify-content:between; align-items:flex-start; justify-content:space-between; margin-bottom:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
             <div>
               <div style="font-weight:800; font-size:.9rem; color:var(--text);">${formatHari}</div>
               <div style="font-size:.72rem; color:var(--text-muted); font-weight:600; margin-top:2px;">
@@ -165,7 +156,10 @@ async function muatLogAbsensi(user) {
   }
 }
 
-// Fungsi pembantu validasi teks jam pulang kosong
+function CorelJamLengkap(absen) {
+  return absen.waktu_pulang && absen.status_absency !== 'lupa absen pulang'
+}
+
 function jamJamPulang(absen, jamPulang) {
   if (absen.status_absensi === 'lupa absen pulang') return 'Lupa Absen Pulang'
   return jamPulang
