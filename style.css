@@ -4402,3 +4402,65 @@ body, body * {
   }
 }
 
+
+/* ============================================================
+   GAYA BARU SIDEBAR CATEGORY (GENIUS HR REFRESH)
+   ============================================================ */
+
+/* Judul Kategori Pembatas Menu di Sidebar */
+.sidebar-section-title {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 18px 16px 6px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  margin-bottom: 4px;
+}
+
+/* Mode Gelap (Dark Mode) Menyesuaikan */
+html.dark .sidebar-section-title {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* Badge Info Pembantu Menu di Samping Kanan Teks */
+.sidebar-badge-info {
+  font-size: 0.58rem;
+  background: rgba(37, 99, 235, 0.25);
+  color: #3b82f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 800;
+  float: right;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+
+/* Transisi Hover Animasi Lembut agar Lebih Interaktif */
+.sidebar-nav a {
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Efek Bergeser Sedikit ke Kanan Saat Mouse Menyorot Menu */
+.sidebar-nav a:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  padding-left: 20px;
+}
+
+/* Menu yang Sedang Aktif Diakses */
+.sidebar-nav a.active {
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+  border-left: 4px solid #ffffff;
+  padding-left: 16px; /* Menjaga teks tidak loncat saat aktif */
+}
