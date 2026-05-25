@@ -1,3 +1,33 @@
+/**
+ * js/ui.js
+ * ============================================================
+ * PATCH KEAMANAN TAHAP 1: ANTI-CHEAT JAM (Server-Side Time)
+ *
+ * PERUBAHAN KRITIS DARI VERSI SEBELUMNYA:
+ *
+ * [ABSEN MASUK]
+ *   Kolom `waktu_masuk` DIHAPUS dari payload client-side yang dikirim ke
+ *   fungsi submitAbsen(). Waktu masuk kini sepenuhnya ditangani oleh
+ *   PostgreSQL melalui DEFAULT value `now()` pada kolom `waktu_masuk`
+ *   di tabel `absensi`. Ini mencegah manipulasi jam dari sisi perangkat.
+ *
+ *   PRASYARAT DATABASE (jalankan sekali di SQL Editor Supabase):
+ *     ALTER TABLE absensi
+ *       ALTER COLUMN waktu_masuk SET DEFAULT now();
+ *
+ * [ABSEN PULANG]
+ *   Kolom `waktu_pulang` masih dikirim dari client (keterbatasan Supabase
+ *   JS Client yang tidak mendukung ekspresi SQL raw pada .update()), NAMUN
+ *   nilai tersebut akan DITIMPA PAKSA oleh PostgreSQL BEFORE UPDATE TRIGGER
+ *   yang harus dipasang di Supabase (lihat file supabase_security.sql).
+ *   Trigger tersebut memastikan `waktu_pulang` selalu menggunakan NOW()
+ *   dari server, berapapun nilai yang dikirim client.
+ *
+ * Semua logika validasi (fixedLat, fixedLng, namaTitikTerpilih,
+ * status_absensi, lupa absen pulang, salah absen) TIDAK berubah.
+ * ============================================================
+ */
+
 import { supabase } from './supabase.js'
 import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
@@ -75,7 +105,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  // VALIDASI BARU: Dukungan status Lupa Absen Pulang dari Otomatisasi Dashboard
   if (absen?.status_absensi === 'lupa absen pulang') {
     return {
       label: 'Lupa Absen Pulang',
@@ -85,6 +114,7 @@ function hitungKeterangan(absen, shift) {
       icon:  'fa-triangle-exclamation'
     }
   }
+
   if (absen?.status_absensi === 'lupa absen datang') {
     return {
       label: 'Lupa Absen Datang',
@@ -94,6 +124,7 @@ function hitungKeterangan(absen, shift) {
       icon:  'fa-triangle-exclamation'
     }
   }
+
   if (absen?.status_absensi === 'approved manual') {
     return {
       label: 'Approved Manual',
@@ -125,11 +156,9 @@ function hitungKeterangan(absen, shift) {
 
 
 export async function renderAbsensi(user) {
-  const content    = document.getElementById('content')
-  
-  // ====================================================================
-  // MODIFIKASI LEVEL 1: TAMPILKAN LOADING SCANNER SATELIT DI AWAL MASUK MENU
-  // ====================================================================
+  const content = document.getElementById('content')
+
+  // ── LOADING: Tampilkan spinner saat menunggu GPS ──────────────────────────
   content.innerHTML = `
     <div class="card fade-up" style="padding:30px; text-align:center; max-width:480px; margin:0 auto;">
       <i class="fa fa-satellite-dish fa-spin" style="font-size:2.4rem; color:var(--primary); margin-bottom:12px; display:block;"></i>
@@ -137,15 +166,14 @@ export async function renderAbsensi(user) {
     </div>
   `
 
-  // Jalankan pelacak radius terdekat
+  // ── GPS: Deteksi lokasi radius terdekat ──────────────────────────────────
   const geo = await dapatkanLokasiAbsenAktif()
-  
-  let dropdownOptions = ''
-  let statusBadge = ''
-  let latAbsen = geo.lat || null
-  let lngAbsen = geo.lng || null
 
-  // Tentukan status badge radius (Bypass Testing Mode)
+  let dropdownOptions = ''
+  let statusBadge     = ''
+  let latAbsen        = geo.lat || null
+  let lngAbsen        = geo.lng || null
+
   if (geo.status === 'success' && geo.areas.length > 0) {
     statusBadge = `<span class="badge badge-success" style="padding:6px 12px; font-size:.72rem; border-radius:999px; font-weight:800; display:inline-block; margin-top:6px; background:#dcfce7; color:#15803d; border:1px solid #bbf7d0;"><i class="fa fa-location-dot"></i> Berada Di Area Kerja</span>`
     dropdownOptions = geo.areas.map(a => `<option value="${a.nama_titik}">${a.nama_titik} (${a.jarak_meter}m)</option>`).join('')
@@ -154,7 +182,7 @@ export async function renderAbsensi(user) {
     dropdownOptions = `<option value="Luar Radius (Testing)">[LUAR RADIUS / TESTING]</option>`
   }
 
-  // Tarik data absensi dan jadwal seperti biasa
+  // ── DATA: Ambil absensi hari ini dan jadwal shift ────────────────────────
   const absen      = await getTodayAbsen(user.nama_lengkap)
   const todayShift = await getTodayShift(user.id)
 
@@ -183,13 +211,14 @@ export async function renderAbsensi(user) {
     statusIcon  = 'fa-circle-xmark'
   }
 
+  // ── RENDER: Kartu status utama ───────────────────────────────────────────
   content.innerHTML = `
     <div style="max-width:480px;margin:0 auto;">
 
       <div class="card fade-up" style="text-align:center;padding:24px 20px 20px;">
         <i class="fa ${statusIcon}" style="font-size:2.4rem;color:${statusColor};margin-bottom:10px;display:block;"></i>
         <div style="font-size:1rem;font-weight:800;color:${statusColor};">${statusLabel}</div>
-        
+
         <div style="margin-bottom:4px;">${statusBadge}</div>
 
         <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px;">
@@ -249,6 +278,7 @@ export async function renderAbsensi(user) {
 
   const actionCard = document.getElementById('absensiActionCard')
 
+  // ── GUARD: Shift libur / izin, tidak perlu aksi ──────────────────────────
   if (shiftSpecial && absen?.status_absensi !== 'salah absen') {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
@@ -259,6 +289,7 @@ export async function renderAbsensi(user) {
     return
   }
 
+  // ── GUARD: Tidak ada jadwal ──────────────────────────────────────────────
   if (!todayShift) {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
@@ -268,6 +299,7 @@ export async function renderAbsensi(user) {
     return
   }
 
+  // ── GUARD: Absensi sudah lengkap ─────────────────────────────────────────
   if (absen?.waktu_masuk && absen?.waktu_pulang) {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
@@ -277,9 +309,7 @@ export async function renderAbsensi(user) {
     return
   }
 
-  // ====================================================================
-  // MODIFIKASI LEVEL 2: SUNTIK KOTAK DROPDOWN AREA RADIUS DI ATAS LAYAR KAMERA
-  // ====================================================================
+  // ── UI: Render kamera + dropdown lokasi ─────────────────────────────────
   actionCard.innerHTML = `
     <input type="hidden" id="geoLatInput" value="${latAbsen}">
     <input type="hidden" id="geoLngInput" value="${lngAbsen}">
@@ -323,6 +353,13 @@ export async function renderAbsensi(user) {
 
   window.photo = null
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // ABSEN MASUK
+  // ANTI-CHEAT: `waktu_masuk` TIDAK dikirim dari client.
+  // Kolom ini diisi otomatis oleh PostgreSQL via DEFAULT now().
+  // Pastikan kolom waktu_masuk di tabel absensi sudah dikonfigurasi:
+  //   ALTER TABLE absensi ALTER COLUMN waktu_masuk SET DEFAULT now();
+  // ══════════════════════════════════════════════════════════════════════════
   if (!absen) {
     actionBox.innerHTML =
       makeBtn('btnFoto', 'fa-camera', 'Ambil Foto') +
@@ -342,25 +379,25 @@ export async function renderAbsensi(user) {
       btn.disabled = true
       btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
 
-      // ====================================================================
-      // MODIFIKASI LEVEL 3: SINKRONKAN VARIABLE SUBMIT ABSEN DENGAN COORDS ASLI & DROPDOWN LOKASI
-      // ====================================================================
-      const fixedLat = document.getElementById('geoLatInput').value
-      const fixedLng = document.getElementById('geoLngInput').value
+      // Baca koordinat GPS dan pilihan lokasi dari UI
+      const fixedLat          = document.getElementById('geoLatInput').value
+      const fixedLng          = document.getElementById('geoLngInput').value
       const namaTitikTerpilih = document.getElementById('selectLokasiAbsen').value
 
-      // TEMPELKAN KODE BARU INI (Pengunci Jatah Lokasi Masuk):
-let status_absensi = 'open'
+      // ── Logika pengunci status absensi (Anti-Cheat Lokasi) ──────────────
+      let status_absensi = 'open'
 
-// VALIDASI BARU: Jika titik yang dipilih di dropdown tidak sama dengan jatah di profilnya, kunci ke 'salah absen'
-if (user.titik_radius && namaTitikTerpilih !== user.titik_radius) {
-  status_absensi = 'salah absen' 
-}
+      // Jika titik dipilih tidak sesuai jatah radius karyawan → salah absen
+      if (user.titik_radius && namaTitikTerpilih !== user.titik_radius) {
+        status_absensi = 'salah absen'
+      }
 
-if (['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(todayShift.nama_shift)) {
-  status_absensi = 'salah absen'
-}
+      // Jika hari ini adalah hari libur/izin/cuti → tidak boleh absen masuk
+      if (['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(todayShift.nama_shift)) {
+        status_absensi = 'salah absen'
+      }
 
+      // Cek apakah kemarin lupa absen pulang
       if (status_absensi === 'open') {
         const yDate = new Date()
         yDate.setDate(yDate.getDate() - 1)
@@ -375,18 +412,23 @@ if (['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(todayShift.nama_shift)) {
 
       const hasilCheck = checkStatus(todayShift.jam_masuk)
 
+      // ── ANTI-CHEAT JAM MASUK ─────────────────────────────────────────────
+      // `waktu_masuk` SENGAJA TIDAK DISERTAKAN dalam payload ini.
+      // PostgreSQL akan mengisi kolom ini secara otomatis dengan NOW()
+      // berdasarkan DEFAULT value yang sudah dikonfigurasi di database.
+      // Karyawan tidak dapat memanipulasi jam masuk dari sisi perangkat.
       await submitAbsen({
         nama:             user.nama_lengkap,
-        tanggal:        new Date().toISOString().split('T')[0],
-        waktu_masuk:    new Date().toISOString(),
-        lat_masuk:      fixedLat !== "null" ? Number(fixedLat) : null, // Masukkan data lat asli
-        lng_masuk:      fixedLng !== "null" ? Number(fixedLng) : null, // Masukkan data lng asli
-        foto_masuk:      window.photo || null,
-        status_masuk:    hasilCheck.status,
-        menit_terlambat: hasilCheck.status === 'Terlambat' ? hasilCheck.minutesLate : 0,
+        tanggal:          new Date().toISOString().split('T')[0],
+        // waktu_masuk   ← DIHAPUS: diisi oleh DB DEFAULT now()
+        lat_masuk:        fixedLat !== 'null' ? Number(fixedLat) : null,
+        lng_masuk:        fixedLng !== 'null' ? Number(fixedLng) : null,
+        foto_masuk:       window.photo || null,
+        status_masuk:     hasilCheck.status,
+        menit_terlambat:  hasilCheck.status === 'Terlambat' ? hasilCheck.minutesLate : 0,
         jam_jadwal_masuk: todayShift.jam_masuk,
-        status_absensi:  status_absensi,
-        lokasi_masuk:    namaTitikTerpilih // Menyimpan nama titik (Kantor HK/Hotel A/Luar Radius) ke kolom database Anda
+        status_absensi:   status_absensi,
+        lokasi_masuk:     namaTitikTerpilih
       })
 
       stopCamera(video)
@@ -395,6 +437,16 @@ if (['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(todayShift.nama_shift)) {
     return
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // ABSEN PULANG
+  // ANTI-CHEAT: `waktu_pulang` dikirim dari client sebagai nilai sementara,
+  // namun akan DITIMPA PAKSA oleh PostgreSQL BEFORE UPDATE TRIGGER dengan
+  // nilai NOW() dari server. Trigger ini mencegah karyawan mundurkan atau
+  // majukan jam pulang.
+  //
+  // Pastikan trigger `trg_lock_waktu_pulang` sudah terpasang di Supabase
+  // (lihat file supabase_security.sql, bagian TRIGGER JAM SERVER).
+  // ══════════════════════════════════════════════════════════════════════════
   if (absen && !absen.waktu_pulang) {
     actionBox.innerHTML =
       makeBtn('btnFoto2', 'fa-camera', 'Ambil Foto') +
@@ -414,34 +466,38 @@ if (['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(todayShift.nama_shift)) {
       btn.disabled = true
       btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
 
-      // ====================================================================
-      // MODIFIKASI LEVEL 4: SINKRONKAN VARIABLE UPDATE ABSEN PULANG DENGAN COORDS ASLI & DROPDOWN LOKASI
-      // ====================================================================
-      const fixedLat = document.getElementById('geoLatInput').value
-      const fixedLng = document.getElementById('geoLngInput').value
+      // Baca koordinat GPS dan pilihan lokasi dari UI
+      const fixedLat          = document.getElementById('geoLatInput').value
+      const fixedLng          = document.getElementById('geoLngInput').value
       const namaTitikTerpilih = document.getElementById('selectLokasiAbsen').value
 
-      // TEMPELKAN KODE BARU INI (Pengunci Jatah Lokasi Pulang):
-let status_absensi = absen.status_absensi
+      // ── Logika pengunci status absensi (Anti-Cheat Lokasi) ──────────────
+      let status_absensi = absen.status_absensi
 
-// VALIDASI BARU: Jika saat pulang dia ganti titik yang bukan jatahnya, tandai sebagai salah lokasi
-if (user.titik_radius && namaTitikTerpilih !== user.titik_radius) {
-  status_absensi = 'salah absen'
-} else if (status_absensi === 'open') {
-  status_absensi = 'complete'
-}
+      // Jika saat pulang ganti titik yang bukan jatahnya → salah absen
+      if (user.titik_radius && namaTitikTerpilih !== user.titik_radius) {
+        status_absensi = 'salah absen'
+      } else if (status_absensi === 'open') {
+        status_absensi = 'complete'
+      }
 
-const hasilPulang = checkStatusPulang(todayShift.jam_pulang)
+      const hasilPulang = checkStatusPulang(todayShift.jam_pulang)
 
+      // ── ANTI-CHEAT JAM PULANG ────────────────────────────────────────────
+      // `waktu_pulang` dikirim sebagai nilai placeholder dari client.
+      // Nilai ini AKAN DITIMPA oleh BEFORE UPDATE TRIGGER di PostgreSQL
+      // yang memaksa penggunaan NOW() dari server.
+      // Dengan demikian karyawan tidak bisa memanipulasi jam pulang
+      // meskipun jam di HP mereka diubah secara manual.
       await supabase.from('absensi').update({
-        waktu_pulang:   new Date().toISOString(),
-        lat_pulang:      fixedLat !== "null" ? Number(fixedLat) : null, // Masukkan data lat asli
-        lng_pulang:      fixedLng !== "null" ? Number(fixedLng) : null, // Masukkan data lng asli
-        foto_pulang:    window.photo || null,
+        waktu_pulang:       new Date().toISOString(), // ← akan ditimpa trigger DB dengan NOW()
+        lat_pulang:         fixedLat !== 'null' ? Number(fixedLat) : null,
+        lng_pulang:         fixedLng !== 'null' ? Number(fixedLng) : null,
+        foto_pulang:        window.photo || null,
         status_absensi,
-        status_pulang:  hasilPulang.status,
+        status_pulang:      hasilPulang.status,
         menit_pulang_cepat: hasilPulang.minutesEarly,
-        lokasi_pulang:   namaTitikTerpilih // Menyimpan nama titik pulang ke kolom database Anda
+        lokasi_pulang:      namaTitikTerpilih
       }).eq('id', absen.id)
 
       stopCamera(video)
@@ -457,10 +513,10 @@ export async function renderRiwayat() {
 
 window.previewImageFullScreen = function(urlSrc) {
   if (!urlSrc) return
-  
+
   let existingOverlay = document.getElementById('imagePreviewOverlay')
   if (existingOverlay) existingOverlay.remove()
-  
+
   const overlay = document.createElement('div')
   overlay.id = 'imagePreviewOverlay'
   overlay.style.cssText = `
@@ -473,7 +529,7 @@ window.previewImageFullScreen = function(urlSrc) {
     opacity: 0;
     transition: opacity 0.25s ease;
   `
-  
+
   const img = document.createElement('img')
   img.src = urlSrc
   img.style.cssText = `
@@ -484,21 +540,21 @@ window.previewImageFullScreen = function(urlSrc) {
     transform: scale(0.9);
     transition: transform 0.25s ease;
   `
-  
+
   overlay.appendChild(img)
   document.body.appendChild(overlay)
-  
+
   setTimeout(() => {
     overlay.style.opacity = '1'
     img.style.transform = 'scale(1)'
   }, 10)
-  
+
   const closeHandler = () => {
     overlay.style.opacity = '0'
     img.style.transform = 'scale(0.9)'
     setTimeout(() => overlay.remove(), 250)
   }
-  
+
   overlay.onclick = closeHandler
   document.addEventListener('keydown', function escClose(e) {
     if (e.key === 'Escape') {
