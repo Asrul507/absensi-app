@@ -474,7 +474,7 @@ window.showApprovePerbaikanModal = function (id) {
      2. Update waktu_pulang, status_absensi = 'complete'
 
    Format waktu: jam dari request (HH:MM) digabung dengan
-   tanggal absensi menjadi ISO string (YYYY-MM-DDTHH:MM:00+07:00)
+   tanggal absensi menjadi ISO string dengan offset dari titik radius
    agar tersimpan dalam format timestamp yang benar di Supabase.
    ============================================================ */
 window.confirmApprovePerbaikan = async function (id, catatan) {
