@@ -280,6 +280,9 @@ function startNotificationPolling() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pengajuan' }, () => refreshNotificationBadge())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'perbaikan_absen' }, () => refreshNotificationBadge())
     .subscribe()
+  window.notifPoller = setInterval(() => {
+    refreshNotificationBadge().catch(err => console.error('Notif poll error:', err))
+  }, 60000)
 }
 
 function stopNotificationPolling() {
@@ -356,6 +359,26 @@ document.addEventListener('click', (e) => {
   if (panel.contains(e.target) || (btn && btn.contains(e.target))) return
   window.closeNotificationCenter?.()
 })
+
+
+window.openNotificationCenter = function () {
+  const user = window.currentUser
+  const n = window.notifState || { total: 0, pendingPengajuan: 0, pendingPerbaikan: 0 }
+  if (!user) return
+
+  const roleLabel = (user.role === 'admin' || user.role === 'super_admin') ? 'Admin' : 'Karyawan'
+  alert(
+    `🔔 Notifikasi ${roleLabel}
+
+` +
+    `• Pengajuan pending: ${n.pendingPengajuan}
+` +
+    `• Perbaikan absen pending: ${n.pendingPerbaikan}
+
+` +
+    `Total notifikasi aktif: ${n.total}`
+  )
+}
 
 /* ================= BOTTOM NAVIGATION (MOBILE DEVICE) ================= */
 function renderBottomNav(role) {
