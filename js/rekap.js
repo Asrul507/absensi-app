@@ -156,11 +156,15 @@ window.applyRekapFilter = async function (user) {
       window._currentRekapData = rekap.detail
 
       // Update widget summary angka
-      document.getElementById('totalHari').textContent = rekap.summary.totalHari
-      document.getElementById('totalJamKerja').textContent = rekap.summary.totalJamKerja
-      document.getElementById('totalTerlambat').textContent = rekap.summary.totalTerlambat
+      const elHari      = document.getElementById('totalHari')
+      const elJamKerja  = document.getElementById('totalJamKerja')
+      const elTerlambat = document.getElementById('totalTerlambat')
+      if (elHari)      elHari.textContent      = rekap.summary.totalHari
+      if (elJamKerja)  elJamKerja.textContent  = rekap.summary.totalJamKerja
+      if (elTerlambat) elTerlambat.textContent = rekap.summary.totalTerlambat
 
-      renderRekapTable(rekap, isAdmin)
+      const rekapDetailEl = document.getElementById('rekapDetail')
+      if (rekapDetailEl) renderRekapTable(rekap, isAdmin)
     } else {
       // Load pengajuan data (izin/sakit/cuti) yang sudah approved
       let queryPengajuan = supabase
@@ -187,7 +191,8 @@ window.applyRekapFilter = async function (user) {
     }
   } catch (err) {
     console.error('Error load rekap:', err)
-    document.getElementById('rekapDetail').innerHTML = `
+    const elRekapDetail = document.getElementById('rekapDetail')
+    if (elRekapDetail) elRekapDetail.innerHTML = `
       <div class="card"><p class="text-danger">Error: ${err.message}</p></div>
     `
   }
