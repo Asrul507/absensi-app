@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { getTodayLokal } from './timezone.js'
 
 export async function renderKalenderHR() {
   const user    = window.currentUser
@@ -31,7 +32,7 @@ async function buildKalender(isAdmin, user) {
   })
 
   const dayNames = ['Min','Sen','Sel','Rab','Kam','Jum','Sab']
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = getTodayLokal()
 
   let cells = ''
   const startDow = firstDay.getDay()
