@@ -937,7 +937,7 @@ function renderPendingList(list) {
   el.innerHTML = `
     <div class="alert info" style="margin-bottom:12px;">
       <i class="fa fa-info-circle"></i>
-      <span>Karyawan di bawah ini belum mendaftarkan emailnya. Instruksikan staff untuk registrasi mandiri di tautan <strong>register.html</strong></span>
+      <span>Karyawan di bawah ini belum mendaftarkan emailnya. Instruksikan staff untuk registrasi mandiri di tautan <strong>register</strong></span>
     </div>
     ${list.map(p => `
       <div class="user-item">
@@ -1132,7 +1132,7 @@ window.konfirmasiUploadKaryawan = async function() {
   if (error) { alert('Gagal menyimpan: ' + error.message); return }
 
   window.batalUploadKaryawan()
-  alert(`✅ ${payload.length} karyawan berhasil dimasukkan ke Daftar Tunggu!\nInstruksikan mereka untuk registrasi mandiri di halaman register.html untuk verifikasi email dan aktivasi akun.`)
+  alert(`✅ ${payload.length} karyawan berhasil dimasukkan ke Daftar Tunggu!\nInstruksikan mereka untuk registrasi mandiri di halaman register untuk verifikasi email dan aktivasi akun.`)
   await renderUsers()
   // Otomatis pindah ke tab pending
   if (window.switchTab) window.switchTab('pending')
