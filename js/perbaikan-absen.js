@@ -278,9 +278,10 @@ window.submitPerbaikanAbsen = async function (user) {
   btn.innerHTML  = '<i class="fa fa-spinner fa-spin"></i> Mengirim...'
 
   try {
-    const { error } = await supabase.from('perbaikan_absen').insert([payload])
+    const { data: insertedRows, error } = await supabase.from('perbaikan_absen').insert([payload]).select('id').limit(1)
     if (error) throw error
 
+    await logAuditEvent({ action: 'create', entityType: 'perbaikan_absen', entityId: insertedRows?.[0]?.id, after: payload })
     msgEl.style.color = '#16a34a'
     msgEl.textContent = '✅ Request berhasil dikirim'
 
@@ -411,7 +412,10 @@ async function loadApprovalRequest() {
         ${req.jam_masuk  ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Masuk: ${req.jam_masuk}</div>`  : ''}
         ${req.jam_pulang ? `<div style="font-size: .8rem; color: var(--text-muted);">Jam Pulang: ${req.jam_pulang}</div>` : ''}
         ${req.shift_baru ? `<div style="font-size: .8rem; color: var(--text-muted);">Request Shift Baru: ${shiftLabelMap[req.shift_baru] || req.shift_baru}</div>` : ''}
-        <div style="display: flex; gap: 10px; margin-top: 12px;">
+        <div style="display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap;">
+          <button onclick="showPerbaikanTimeline('${req.id}')" class="btn-secondary btn-sm" style="flex: 1;">
+            <i class="fa fa-clock-rotate-left"></i> Timeline
+          </button>
           <button onclick="showApprovePerbaikanModal('${req.id}')" class="btn-success btn-sm" style="flex: 1;">
             <i class="fa fa-check"></i> Setujui
           </button>
@@ -489,6 +493,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
     if (fetchErr || !req) throw new Error('Data request perbaikan tidak ditemukan.')
 
     // 2. Tandai request sebagai approved
+    const beforeState = { ...req }
     const { error: approveErr } = await supabase
       .from('perbaikan_absen')
       .update({
@@ -603,6 +608,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
       }
     }
 
+    await logAuditEvent({ action: 'approve', entityType: 'perbaikan_absen', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
     alert('✅ Request berhasil disetujui dan data absensi otomatis diperbarui!')
     await loadApprovalRequest()
 
@@ -648,6 +654,7 @@ window.confirmRejectPerbaikan = async function (id, catatan) {
   if (!catatan.trim()) { alert('⚠ Alasan penolakan wajib diisi'); return }
 
   try {
+    const { data: beforeReject } = await supabase.from('perbaikan_absen').select('*').eq('id', id).single()
     const { error } = await supabase
       .from('perbaikan_absen')
       .update({
@@ -659,10 +666,23 @@ window.confirmRejectPerbaikan = async function (id, catatan) {
 
     if (error) throw error
 
+    await logAuditEvent({ action: 'reject', entityType: 'perbaikan_absen', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
     alert('✅ Request ditolak')
     await loadApprovalRequest()
 
   } catch (err) {
     alert('Error: ' + err.message)
+  }
+}
+
+
+window.showPerbaikanTimeline = async function(id) {
+  try {
+    const rows = await fetchAuditTimeline('perbaikan_absen', id)
+    if (!rows.length) return alert('Belum ada audit trail untuk request ini')
+    const text = rows.map(r => `• ${new Date(r.created_at).toLocaleString('id-ID')} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
+    alert('Timeline Perbaikan Absen\n\n' + text)
+  } catch (err) {
+    alert('Gagal memuat timeline: ' + err.message)
   }
 }
