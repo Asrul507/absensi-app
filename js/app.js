@@ -26,6 +26,7 @@ import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
 import { initTimezone, resetTimezoneCache, getTodayLokal } from './timezone.js'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
+import { showToast } from './feedback.js'
 
 /* ================= GLOBAL VARIABLES ================= */
 window.currentUser  = null
@@ -361,25 +362,6 @@ document.addEventListener('click', (e) => {
 })
 
 
-window.openNotificationCenter = function () {
-  const user = window.currentUser
-  const n = window.notifState || { total: 0, pendingPengajuan: 0, pendingPerbaikan: 0 }
-  if (!user) return
-
-  const roleLabel = (user.role === 'admin' || user.role === 'super_admin') ? 'Admin' : 'Karyawan'
-  alert(
-    `🔔 Notifikasi ${roleLabel}
-
-` +
-    `• Pengajuan pending: ${n.pendingPengajuan}
-` +
-    `• Perbaikan absen pending: ${n.pendingPerbaikan}
-
-` +
-    `Total notifikasi aktif: ${n.total}`
-  )
-}
-
 /* ================= BOTTOM NAVIGATION (MOBILE DEVICE) ================= */
 function renderBottomNav(role) {
   const nav = document.getElementById('bottomNav')
@@ -405,7 +387,7 @@ function renderBottomNav(role) {
 
 /* ================= SINGLE PAGE APPLICATION NAVIGATION ================= */
 window.navigate = async function (page) {
-  if (!window.currentUser) { alert('Silakan login dulu'); return }
+  if (!window.currentUser) { showToast('Sesi berakhir. Silakan login ulang.', 'warning'); showLoginPage(); return }
 
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
   document.getElementById(`menu-${page}`)?.classList.add('active')

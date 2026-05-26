@@ -1,12 +1,10 @@
 import { supabase } from './supabase.js'
+import { showToast, setButtonLoading } from './feedback.js'
 
 /* ================= LOGIN ================= */
 export async function login(email, password) {
   const btn = document.getElementById('btnLogin')
-  if (btn) {
-    btn.disabled = true
-    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
-  }
+  setButtonLoading(btn, true, '<i class="fa fa-spinner fa-spin"></i> Memproses...')
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -16,10 +14,7 @@ export async function login(email, password) {
   console.log('LOGIN RESULT:', data)
   console.log('LOGIN ERROR:', error)
 
-  if (btn) {
-    btn.disabled = false
-    btn.innerHTML = '<i class="fa fa-sign-in-alt"></i> Masuk'
-  }
+  setButtonLoading(btn, false, '<i class="fa fa-sign-in-alt"></i> Masuk')
 
   if (error) {
     showLoginError(
@@ -181,11 +176,11 @@ export async function registerKaryawan(
    Dipakai saat HRD ingin buat akun sekaligus dengan email
 =============================================================== */
 export async function signup(email, password, role = 'staff', extraData = {}) {
-  if (!email || !password) { alert('Email & password wajib diisi'); return false }
-  if (password.length < 6) { alert('Password minimal 6 karakter'); return false }
+  if (!email || !password) { showToast('Email & password wajib diisi', 'warning'); return false }
+  if (password.length < 6) { showToast('Password minimal 6 karakter', 'warning'); return false }
 
   const { data, error } = await supabase.auth.signUp({ email, password })
-  if (error) { alert(error.message); return false }
+  if (error) { showToast(error.message, 'error'); return false }
 
   const user = data.user
   if (user) {
@@ -205,7 +200,7 @@ export async function signup(email, password, role = 'staff', extraData = {}) {
       jatah_cuti: 0,
       titik_radius: extraData.titik_radius || null
     }])
-    if (profileError) { alert(profileError.message); return false }
+    if (profileError) { showToast(profileError.message, 'error'); return false }
   }
   return true
 }
@@ -214,13 +209,13 @@ export async function signup(email, password, role = 'staff', extraData = {}) {
 function showLoginError(msg) {
   const el = document.getElementById('loginError')
   if (el) { el.textContent = '⚠ ' + msg; el.style.display = 'block' }
-  else alert(msg)
+  else showToast(msg, 'error')
 }
 
 function showRegError(msg) {
   const el = document.getElementById('regError')
   if (el) { el.textContent = '⚠ ' + msg; el.style.display = 'block' }
-  else alert(msg)
+  else showToast(msg, 'error')
 }
 
 /* ===============================================================
@@ -228,7 +223,7 @@ function showRegError(msg) {
 =============================================================== */
 export async function updateUserPassword(newPassword) {
   if (!newPassword || newPassword.length < 6) {
-    alert('Password baru minimal 6 karakter!')
+    showToast('Password baru minimal 6 karakter!', 'warning')
     return false
   }
 
@@ -237,7 +232,7 @@ export async function updateUserPassword(newPassword) {
   })
 
   if (error) {
-    alert('Gagal memperbarui password: ' + error.message)
+    showToast('Gagal memperbarui password: ' + error.message, 'error')
     return false
   }
   return true
