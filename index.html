@@ -107,6 +107,14 @@
     </div>
   </div>
 
+      <div id="notifPanel" style="display:none;position:fixed;top:58px;right:12px;width:min(360px,92vw);max-height:70vh;overflow:auto;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 34px rgba(0,0,0,.2);z-index:10020;">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <strong style="font-size:.85rem;"><i class="fa fa-bell"></i> Notifikasi</strong>
+          <button onclick="closeNotificationCenter()" style="border:none;background:none;color:var(--text-muted);cursor:pointer;"><i class="fa fa-times"></i></button>
+        </div>
+        <div id="notifPanelBody" style="padding:10px 12px;font-size:.82rem;color:var(--text-muted);">Memuat notifikasi...</div>
+      </div>
+
   <div id="overlay" onclick="closeSidebar()"></div>
 
   <div id="sidebar"></div>
