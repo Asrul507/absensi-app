@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { getTodayLokal } from './timezone.js'
 
 /* ===============================================================
    CONFIGURATION
@@ -92,7 +93,7 @@ export function checkStatusPulang(jamPulangJadwal) {
    Ambil record absensi hari ini untuk karyawan tertentu
 =============================================================== */
 export async function getTodayAbsen(nama) {
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayLokal()
 
   const { data, error } = await supabase
     .from('absensi')
@@ -119,7 +120,7 @@ export async function getTodayAbsen(nama) {
    }
 =============================================================== */
 export async function getTodayShift(user_id) {
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayLokal()
 
   const { data } = await supabase
     .from('jadwal')
