@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { toJamLokal } from './timezone.js'
 
 export async function renderDaftarAbsensi(user) {
   const content = document.getElementById('content')
@@ -115,8 +116,8 @@ async function muatLogAbsensi(user) {
         }
       }
 
-      const jamMasuk = absen.waktu_masuk ? new Date(absen.waktu_masuk).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'
-      const jamPulang = absen.waktu_pulang ? new Date(absen.waktu_pulang).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'
+      const jamMasuk = absen.waktu_masuk ? toJamLokal(absen.waktu_masuk) : '-'
+      const jamPulang = absen.waktu_pulang ? toJamLokal(absen.waktu_pulang) : '-'
 
       return `
         <div style="margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid #f1f5f9;">
