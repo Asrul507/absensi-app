@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { toJamLokal } from './timezone.js'
 
 export async function renderRekapInOut(user) {
   const content = document.getElementById('content')
@@ -202,8 +203,8 @@ function calculateRekapInOut(absensiData, isAdmin, currentUserName) {
       summary.tidakMasuk++
     }
 
-    const jamMasuk = a.waktu_masuk ? new Date(a.waktu_masuk).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
-    const jamPulang = a.waktu_pulang ? new Date(a.waktu_pulang).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
+    const jamMasuk = a.waktu_masuk ? toJamLokal(a.waktu_masuk) : '-'
+    const jamPulang = a.waktu_pulang ? toJamLokal(a.waktu_pulang) : '-'
 
     let totalJam = '-'
     if (a.waktu_masuk && a.waktu_pulang) {
