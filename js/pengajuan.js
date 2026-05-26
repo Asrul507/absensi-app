@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { getTodayLokal } from './timezone.js'
 import { isEligibleCuti, getSisaCuti, hitungMasaKerja, syncSisaCutiProfile } from './cuti.js'
 
 function hitungTanggalSelesai(startDate, hari) {
@@ -227,7 +228,7 @@ export async function renderPengajuan(user) {
       alasan,
       file: fileUrl,
       status: 'pending',
-      tanggal_pengajuan: new Date().toISOString().split('T')[0],
+      tanggal_pengajuan: getTodayLokal(),
       jumlah_hari: jumlahHari,
       tanggal_mulai: tanggalMulai,
       tanggal_selesai
