@@ -362,15 +362,29 @@ window.simpanJadwalSatu = async function() {
 window.downloadTemplateJadwal = function() {
   if (typeof XLSX === 'undefined') { alert('Library XLSX belum siap.'); return }
 
-  // Header row: nama + kolom 1-31
-  const header = ['nama', ...Array.from({length:31}, (_,i) => i+1)]
-  const contoh1 = ['Budi Santoso', ...Array.from({length:31}, (_,i) => i%3===0 ? '8' : i%3===1 ? '2' : '3')]
-  const contoh2 = ['Siti Rahayu',  ...Array.from({length:31}, (_,i) => i%2===0 ? '3' : '4')]
+  const now = new Date()
+  const bln = now.getMonth() + 1
+  const thn = now.getFullYear()
+
+  // Header: bulan | tahun | nama | 1 | 2 | ... | 31
+  const header  = ['bulan', 'tahun', 'nama', ...Array.from({length:31}, (_,i) => i+1)]
+  const contoh1 = [bln, thn, 'Budi Santoso', ...Array.from({length:31}, (_,i) => i%3===0 ? '8' : i%3===1 ? '2' : '3')]
+  const contoh2 = [bln, thn, 'Siti Rahayu',  ...Array.from({length:31}, (_,i) => i%2===0 ? '3' : '4')]
 
   const ws = XLSX.utils.aoa_to_sheet([header, contoh1, contoh2])
+
+  // Styling: freeze 3 kolom pertama, lebar kolom bulan/tahun lebih kecil
+  ws['!cols'] = [
+    { wch: 7 },  // bulan
+    { wch: 7 },  // tahun
+    { wch: 22 }, // nama
+    ...Array.from({length:31}, () => ({ wch: 5 })) // tanggal 1-31
+  ]
+  ws['!freeze'] = { xSplit: 3, ySplit: 1 } // freeze header + 3 kolom kiri
+
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Jadwal')
-  XLSX.writeFile(wb, 'template_jadwal_bulanan.xlsx')
+  XLSX.writeFile(wb, `template_jadwal_${thn}-${String(bln).padStart(2,'0')}.xlsx`)
 }
 
 /* ===============================================================
@@ -450,9 +464,6 @@ window.uploadJadwalExcel = async function() {
   const statusText = document.getElementById('uploadStatusText')
   const btn        = document.getElementById('btnUploadExcel')
   
-  const selectedMonth = document.getElementById('selMonth').value
-  const selectedYear  = document.getElementById('selYear').value
-
   if (!fileInput.files.length) {
     if (statusText) { statusText.style.color = 'var(--danger)'; statusText.textContent = '⚠ Mohon pilih file Excel terlebih dahulu.' }
     return
@@ -473,6 +484,16 @@ window.uploadJadwalExcel = async function() {
 
       if (!jsonData?.length) throw new Error('File Excel kosong atau format tidak sesuai.')
 
+      // ── Baca bulan & tahun dari file (baris pertama data)
+      // Kolom baru: bulan | tahun | nama | 1..31
+      // Fallback ke dropdown jika file pakai format lama (tanpa kolom bulan/tahun)
+      const firstRow    = jsonData[0]
+      const hasNewFmt   = (firstRow['bulan'] || firstRow['Bulan']) && (firstRow['tahun'] || firstRow['Tahun'])
+      const selMonth    = document.getElementById('selMonth')?.value
+      const selYear     = document.getElementById('selYear')?.value
+
+      // Kelompokkan baris per bulan-tahun (file bisa berisi multi-bulan sekaligus)
+      // Setiap baris punya bulan & tahun sendiri → fleksibel
       const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap')
       if (errUser) throw errUser
 
@@ -480,7 +501,7 @@ window.uploadJadwalExcel = async function() {
       users.forEach(u => { userMap[u.nama_lengkap.trim().toLowerCase()] = u.id })
 
       const bulkPayload = []
-      const totalDays   = new Date(selectedYear, selectedMonth, 0).getDate()
+      const bulanList   = new Set() // untuk log info bulan yang diproses
 
       jsonData.forEach(row => {
         const excelName = row['nama'] || row['Nama']
@@ -488,25 +509,43 @@ window.uploadJadwalExcel = async function() {
         const matchedUserId = userMap[excelName.trim().toLowerCase()]
         if (!matchedUserId) return
 
+        // Tentukan bulan & tahun baris ini
+        const rowBulan = parseInt(row['bulan'] || row['Bulan'] || selMonth || 0)
+        const rowTahun = parseInt(row['tahun'] || row['Tahun'] || selYear  || 0)
+
+        if (!rowBulan || !rowTahun) return // skip baris tanpa info bulan/tahun
+
+        const totalDays = new Date(rowTahun, rowBulan, 0).getDate()
+        bulanList.add(`${rowTahun}-${String(rowBulan).padStart(2,'0')}`)
+
         for (let d = 1; d <= totalDays; d++) {
-          const shiftCodeVal = row[String(d)] || row[d]
-          if (shiftCodeVal !== undefined && shiftCodeVal !== null) {
-            const tanggalStr = `${selectedYear}-${String(selectedMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-            bulkPayload.push({ user_id: matchedUserId, tanggal: tanggalStr, shift_code: String(shiftCodeVal).trim() })
-          }
+          const shiftCodeVal = row[String(d)] !== undefined ? row[String(d)] : row[d]
+          if (shiftCodeVal === undefined || shiftCodeVal === null || shiftCodeVal === '') continue
+          const tanggalStr = `${rowTahun}-${String(rowBulan).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+          bulkPayload.push({ user_id: matchedUserId, tanggal: tanggalStr, shift_code: String(shiftCodeVal).trim() })
         }
       })
 
-      if (!bulkPayload.length) throw new Error('Tidak ada baris data kecocokan karyawan yang valid.')
+      if (!bulkPayload.length) throw new Error('Tidak ada baris valid. Pastikan kolom bulan, tahun, dan nama terisi, serta nama karyawan sesuai data di sistem.')
 
-      if (statusText) statusText.innerHTML = `<i class="fa fa-cloud-upload-alt"></i> Mengunggah ${bulkPayload.length} jadwal ke Supabase...`
+      const bulanInfo = [...bulanList].join(', ')
+      if (statusText) statusText.innerHTML = `<i class="fa fa-cloud-upload-alt"></i> Mengunggah ${bulkPayload.length} jadwal untuk periode ${bulanInfo}...`
 
       const { error: upsertErr } = await supabase.from('jadwal').upsert(bulkPayload, { onConflict: 'user_id,tanggal' })
       if (upsertErr) throw upsertErr
 
-      if (statusText) { statusText.style.color = 'var(--success)'; statusText.innerHTML = `✅ Sukses mengunggah ${bulkPayload.length} jadwal.` }
+      if (statusText) {
+        statusText.style.color = 'var(--success)'
+        statusText.innerHTML = `✅ Sukses! ${bulkPayload.length} jadwal tersimpan untuk periode: <strong>${bulanInfo}</strong>`
+      }
       fileInput.value = ''
 
+      // Sync tampilan tabel ke bulan pertama yang diupload
+      const [thn, bln] = [...bulanList][0].split('-')
+      const selMonthEl = document.getElementById('selMonth')
+      const selYearEl  = document.getElementById('selYear')
+      if (selMonthEl) selMonthEl.value = parseInt(bln)
+      if (selYearEl)  selYearEl.value  = thn
       await loadDaftarJadwalMaster()
 
     } catch(err) {
