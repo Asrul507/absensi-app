@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { getTodayLokal } from './timezone.js'
+import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { isEligibleCuti, getSisaCuti, hitungMasaKerja, syncSisaCutiProfile } from './cuti.js'
 
 function hitungTanggalSelesai(startDate, hari) {
@@ -139,6 +140,7 @@ export async function renderPengajuan(user) {
                 <div style="color: var(--text); margin-top: 4px;">${i.catatan_approval}</div>
               </div>
             ` : ''}
+            <div style="margin-top:8px;"><button class="btn-secondary btn-sm" onclick="showPengajuanTimeline('${i.id}')"><i class="fa fa-clock-rotate-left"></i> Timeline</button></div>
             ${isAdmin && i.status === 'pending' ? `
               <div class="pq-actions">
                 <button class="btn-primary btn-sm" onclick="showApprovalModal('${i.id}', 'approve')">
@@ -221,7 +223,7 @@ export async function renderPengajuan(user) {
 
     const tanggal_selesai = hitungTanggalSelesai(tanggalMulai, jumlahHari)
 
-    const { error: insertError } = await supabase.from('pengajuan').insert([{
+    const payload = {
       user_id: user.id,
       nama: user.nama_lengkap || user.email,
       jenis,
@@ -232,7 +234,9 @@ export async function renderPengajuan(user) {
       jumlah_hari: jumlahHari,
       tanggal_mulai: tanggalMulai,
       tanggal_selesai
-    }])
+    }
+
+    const { data: insertedRows, error: insertError } = await supabase.from('pengajuan').insert([payload]).select('id').limit(1)
 
     btn.disabled = false
     btn.innerHTML = '<i class="fa fa-paper-plane"></i> Ajukan Sekarang'
@@ -243,6 +247,7 @@ export async function renderPengajuan(user) {
       return
     }
 
+    await logAuditEvent({ action: 'create', entityType: 'pengajuan', entityId: insertedRows?.[0]?.id, after: payload })
     alert('✅ Pengajuan berhasil dikirim!')
     renderPengajuan(user)
   }
@@ -309,6 +314,7 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
 
       const { user_id, jenis, tanggal_mulai, jumlah_hari } = pengajuan
 
+      const beforeState = { ...pengajuan }
       await supabase.from('pengajuan').update({
         status: 'approved',
         catatan_approval: catatan || null,
@@ -338,15 +344,18 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
         }
       }
 
+      await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
       alert('✅ Pengajuan berhasil disetujui, jadwal harian & kuota jatah cuti karyawan diperbarui otomatis!')
 
     } else {
+      const { data: beforeReject } = await supabase.from('pengajuan').select('*').eq('id', id).single()
       await supabase.from('pengajuan').update({
         status: 'rejected',
         catatan_approval: catatan,
         approved_at: new Date().toISOString()
       }).eq('id', id)
 
+      await logAuditEvent({ action: 'reject', entityType: 'pengajuan', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
       alert('❌ Pengajuan resmi ditolak')
     }
 
@@ -363,4 +372,16 @@ window.approvePengajuan = function(id) {
 
 window.rejectPengajuan = function(id) {
   showApprovalModal(id, 'reject')
+}
+
+
+window.showPengajuanTimeline = async function(id) {
+  try {
+    const rows = await fetchAuditTimeline('pengajuan', id)
+    if (!rows.length) return alert('Belum ada audit trail untuk pengajuan ini')
+    const text = rows.map(r => `• ${new Date(r.created_at).toLocaleString('id-ID')} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
+    alert('Timeline Pengajuan\n\n' + text)
+  } catch (err) {
+    alert('Gagal memuat timeline: ' + err.message)
+  }
 }

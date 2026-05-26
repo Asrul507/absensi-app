@@ -31,6 +31,9 @@ import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 window.currentUser  = null
 window.currentShift = null
 window.supabase     = supabase
+window.notifState   = { total: 0, pendingPengajuan: 0, pendingPerbaikan: 0 }
+window.notifPoller  = null
+window.notifChannel = null
 
 /* ================= INITIALIZATION ================= */
 window.addEventListener('DOMContentLoaded', async () => {
@@ -54,6 +57,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     if (event === 'SIGNED_OUT') {
       window.currentUser = null
+      stopNotificationPolling()
       showLoginPage()
     }
     if (event === 'USER_UPDATED' && session) {
@@ -107,6 +111,8 @@ async function checkUser() {
     // Render komponen navigasi sesuai hak akses
     renderMenu(profile.role)
     renderBottomNav(profile.role)
+    await refreshNotificationBadge()
+    startNotificationPolling()
     navigate('dashboard')
 
   } catch (err) {
@@ -161,6 +167,7 @@ window.login = async function () {
 }
 
 window.logout = async function () {
+  stopNotificationPolling()
   await logout()
 }
 
@@ -229,6 +236,126 @@ function renderMenu(role) {
     </div>
   `;
 }
+
+/* ================= NOTIFICATION CENTER (RINGKAS) ================= */
+async function refreshNotificationBadge() {
+  const user = window.currentUser
+  const badge = document.getElementById('notifBadge')
+  if (!user || !badge) return
+
+  let pendingPengajuan = 0
+  let pendingPerbaikan = 0
+
+  if (user.role === 'admin' || user.role === 'super_admin') {
+    const [{ count: c1 }, { count: c2 }] = await Promise.all([
+      supabase.from('pengajuan').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('perbaikan_absen').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+    ])
+    pendingPengajuan = c1 || 0
+    pendingPerbaikan = c2 || 0
+  } else {
+    const [{ count: c1 }, { count: c2 }] = await Promise.all([
+      supabase.from('pengajuan').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'pending'),
+      supabase.from('perbaikan_absen').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'pending')
+    ])
+    pendingPengajuan = c1 || 0
+    pendingPerbaikan = c2 || 0
+  }
+
+  const total = pendingPengajuan + pendingPerbaikan
+  window.notifState = { total, pendingPengajuan, pendingPerbaikan }
+
+  badge.textContent = String(total)
+  badge.style.display = total > 0 ? 'inline-block' : 'none'
+}
+
+function startNotificationPolling() {
+  stopNotificationPolling()
+  refreshNotificationBadge().catch(err => console.error('Notif first refresh error:', err))
+  window.notifPoller = setInterval(() => {
+    refreshNotificationBadge().catch(err => console.error('Notif poll error:', err))
+  }, 60000)
+
+  window.notifChannel = supabase.channel('notif-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pengajuan' }, () => refreshNotificationBadge())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'perbaikan_absen' }, () => refreshNotificationBadge())
+    .subscribe()
+}
+
+function stopNotificationPolling() {
+  if (window.notifPoller) clearInterval(window.notifPoller)
+  window.notifPoller = null
+  if (window.notifChannel) {
+    supabase.removeChannel(window.notifChannel)
+    window.notifChannel = null
+  }
+  window.closeNotificationCenter?.()
+}
+
+async function loadNotificationItems() {
+  const user = window.currentUser
+  if (!user) return []
+
+  if (user.role === 'admin' || user.role === 'super_admin') {
+    const [p1, p2] = await Promise.all([
+      supabase.from('pengajuan').select('id,nama,jenis,status,created_at').eq('status','pending').order('created_at',{ascending:false}).limit(5),
+      supabase.from('perbaikan_absen').select('id,nama,jenis,status,created_at').eq('status','pending').order('created_at',{ascending:false}).limit(5)
+    ])
+    const a=(p1.data||[]).map(i=>({type:'pengajuan',title:`${i.nama||'Karyawan'} mengajukan ${i.jenis||'-'}`,created_at:i.created_at,route:'pengajuan'}))
+    const b=(p2.data||[]).map(i=>({type:'perbaikan',title:`${i.nama||'Karyawan'} request ${i.jenis||'-'}`,created_at:i.created_at,route:'perbaikan-absen'}))
+    return [...a,...b].sort((x,y)=>new Date(y.created_at)-new Date(x.created_at)).slice(0,8)
+  }
+
+  const [p1, p2] = await Promise.all([
+    supabase.from('pengajuan').select('id,jenis,status,created_at').eq('user_id',user.id).order('created_at',{ascending:false}).limit(5),
+    supabase.from('perbaikan_absen').select('id,jenis,status,created_at').eq('user_id',user.id).order('created_at',{ascending:false}).limit(5)
+  ])
+  const a=(p1.data||[]).map(i=>({type:'pengajuan',title:`Pengajuan ${i.jenis||'-'} (${i.status||'-'})`,created_at:i.created_at,route:'pengajuan'}))
+  const b=(p2.data||[]).map(i=>({type:'perbaikan',title:`Perbaikan absen ${i.jenis||'-'} (${i.status||'-'})`,created_at:i.created_at,route:'perbaikan-absen'}))
+  return [...a,...b].sort((x,y)=>new Date(y.created_at)-new Date(x.created_at)).slice(0,8)
+}
+
+window.openNotificationCenter = async function () {
+  const panel = document.getElementById('notifPanel')
+  const body = document.getElementById('notifPanelBody')
+  if (!panel || !body || !window.currentUser) return
+
+  panel.style.display = panel.style.display === 'block' ? 'none' : 'block'
+  if (panel.style.display !== 'block') return
+
+  body.innerHTML = '<div style="padding:8px 0;">Memuat...</div>'
+  const items = await loadNotificationItems()
+  const n = window.notifState || { total: 0, pendingPengajuan: 0, pendingPerbaikan: 0 }
+
+  if (!items.length) {
+    body.innerHTML = '<div style="padding:10px 0;">Belum ada notifikasi.</div>'
+    return
+  }
+
+  body.innerHTML = `
+    <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;">Pending: ${n.total} (Pengajuan: ${n.pendingPengajuan}, Perbaikan: ${n.pendingPerbaikan})</div>
+    ${items.map(it => `
+      <button onclick="navigate('${it.route}'); closeNotificationCenter();" style="width:100%;text-align:left;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--gray-50,#f8fafc);margin-bottom:8px;cursor:pointer;">
+        <div style="font-weight:700;color:var(--text);">${it.title}</div>
+        <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px;">${new Date(it.created_at).toLocaleString('id-ID')}</div>
+      </button>
+    `).join('')}
+  `
+}
+
+window.closeNotificationCenter = function () {
+  const panel = document.getElementById('notifPanel')
+  if (panel) panel.style.display = 'none'
+}
+
+
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('notifPanel')
+  const btn = document.getElementById('notifBtn')
+  if (!panel || panel.style.display !== 'block') return
+  if (panel.contains(e.target) || (btn && btn.contains(e.target))) return
+  window.closeNotificationCenter?.()
+})
 
 /* ================= BOTTOM NAVIGATION (MOBILE DEVICE) ================= */
 function renderBottomNav(role) {
