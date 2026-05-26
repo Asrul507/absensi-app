@@ -29,6 +29,7 @@
  */
 
 import { supabase } from './supabase.js'
+import { toJamLokal } from './timezone.js'
 import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
 import { dapatkanLokasiAbsenAktif } from './geolocation.js'
@@ -251,7 +252,7 @@ export async function renderAbsensi(user) {
             <div style="text-align:center;">
               <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Masuk</div>
               <div style="font-weight:900;font-size:1.1rem;color:var(--success);">
-                ${new Date(absen.waktu_masuk).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })}
+                ${toJamLokal(absen.waktu_masuk)}
               </div>
               ${absen.status_masuk ? `<div style="font-size:.65rem;font-weight:700;margin-top:2px; color:${absen.status_masuk==='Terlambat'?'var(--danger)':'var(--success)'};">
                 ${absen.status_masuk}</div>` : ''}
@@ -261,7 +262,7 @@ export async function renderAbsensi(user) {
               <div style="text-align:center;">
                 <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Pulang</div>
                 <div style="font-weight:900;font-size:1.1rem;color:var(--primary);">
-                  ${new Date(absen.waktu_pulang).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })}
+                  ${toJamLokal(absen.waktu_pulang)}
                 </div>
               </div>` : `
               <div style="text-align:center;opacity:.4;">
