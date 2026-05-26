@@ -10,30 +10,11 @@
  */
 
 import { supabase } from './supabase.js'
+import { toJamLokal } from './timezone.js'
 
-/* ===== HELPER: Menit ke HH:MM ===== */
-function mntToHM(minutes) {
-  if (!minutes || minutes <= 0) return '00:00'
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-}
-
-/* ===== HELPER: Menit ke jam string readable ===== */
-function mntToReadable(minutes) {
-  if (!minutes || minutes <= 0) return '-'
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h > 0) return `${h}j ${m}m`
-  return `${m}m`
-}
-
-/* ===== HELPER: Format waktu dari ISO string ===== */
+/* ===== HELPER: Format waktu dari ISO string — pakai timezone dari titik radius ===== */
 function formatJam(isoStr) {
-  if (!isoStr) return '-'
-  try {
-    return new Date(isoStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-  } catch { return '-' }
+  return toJamLokal(isoStr)
 }
 
 /* ===== HELPER: Hitung durasi kerja dari 2 ISO string ===== */
