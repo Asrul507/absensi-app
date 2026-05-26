@@ -29,7 +29,7 @@
  */
 
 import { supabase } from './supabase.js'
-import { toJamLokal } from './timezone.js'
+import { toJamLokal, getTodayLokal } from './timezone.js'
 import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
 import { dapatkanLokasiAbsenAktif } from './geolocation.js'
@@ -420,7 +420,7 @@ export async function renderAbsensi(user) {
       // Karyawan tidak dapat memanipulasi jam masuk dari sisi perangkat.
       await submitAbsen({
         nama:             user.nama_lengkap,
-        tanggal:          new Date().toISOString().split('T')[0],
+        tanggal:          getTodayLokal(),
         // waktu_masuk   ← DIHAPUS: diisi oleh DB DEFAULT now()
         lat_masuk:        fixedLat !== 'null' ? Number(fixedLat) : null,
         lng_masuk:        fixedLng !== 'null' ? Number(fixedLng) : null,
