@@ -19,6 +19,7 @@
  */
 
 import { supabase } from './supabase.js'
+import { buildTimestampLokal, toJamLokal } from './timezone.js'
 
 export async function renderPerbaikanAbsen(user) {
   const content = document.getElementById('content')
@@ -502,9 +503,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
     // ── CABANG: LUPA MASUK ──────────────────────────────────────────────────
     if (req.jenis === 'lupa_masuk' && req.jam_masuk) {
       // Konversi "HH:MM" + tanggal → ISO timestamp (asumsi WIB UTC+7)
-      // Sanitize: ambil hanya HH:MM dari jam_masuk (bisa jadi HH:MM atau HH:MM:SS)
-      const jamMasukBersih = (req.jam_masuk || '').substring(0, 5)
-      const waktuMasukISO = `${req.tanggal}T${jamMasukBersih}:00+07:00`
+      const waktuMasukISO = buildTimestampLokal(req.tanggal, req.jam_masuk)
 
       // Cek apakah baris absensi hari itu sudah ada
       const { data: existingAbsen } = await supabase
@@ -545,9 +544,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
 
     // ── CABANG: LUPA PULANG ─────────────────────────────────────────────────
     if (req.jenis === 'lupa_pulang' && req.jam_pulang) {
-      // Sanitize: ambil hanya HH:MM dari jam_pulang (bisa jadi HH:MM atau HH:MM:SS)
-      const jamPulangBersih = (req.jam_pulang || '').substring(0, 5)
-      const waktuPulangISO = `${req.tanggal}T${jamPulangBersih}:00+07:00`
+      const waktuPulangISO = buildTimestampLokal(req.tanggal, req.jam_pulang)
 
       // Cari baris absensi yang sudah ada (harus ada karena sudah masuk)
       const { data: existingAbsen } = await supabase
