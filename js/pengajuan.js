@@ -2,6 +2,7 @@ import { supabase } from './supabase.js'
 import { getTodayLokal } from './timezone.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { isEligibleCuti, getSisaCuti, hitungMasaKerja, syncSisaCutiProfile } from './cuti.js'
+import { showToast, setButtonLoading } from './feedback.js'
 
 function hitungTanggalSelesai(startDate, hari) {
   if (!startDate || !hari) return null
@@ -200,24 +201,23 @@ export async function renderPengajuan(user) {
     const tanggalMulai = document.getElementById('tanggalMulai').value
     const file = document.getElementById('fileSurat').files[0]
 
-    if (!alasan) { alert('Alasan wajib diisi'); return }
-    if (!tanggalMulai) { alert('Tanggal mulai wajib diisi'); return }
-    if (!jumlahHari || jumlahHari < 1) { alert('Jumlah hari tidak valid'); return }
+    if (!alasan) { showToast('Alasan wajib diisi', 'warning'); return }
+    if (!tanggalMulai) { showToast('Tanggal mulai wajib diisi', 'warning'); return }
+    if (!jumlahHari || jumlahHari < 1) { showToast('Jumlah hari tidak valid', 'warning'); return }
 
     if (jenis === 'cuti' && !eligible) {
-      alert(`Anda belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`)
+      showToast(`Belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`, 'warning')
       return
     }
 
     const btn = document.getElementById('btnSubmit')
-    btn.disabled = true
-    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mengirim...'
+    setButtonLoading(btn, true, '<i class="fa fa-spinner fa-spin"></i> Mengirim...')
 
     let fileUrl = null
     if (file) {
       const fileName = `${Date.now()}-${file.name}`
       const { error: uploadError } = await supabase.storage.from('surat').upload(fileName, file)
-      if (uploadError) { alert('Upload surat gagal'); btn.disabled = false; btn.innerHTML = '<i class="fa fa-paper-plane"></i> Ajukan Sekarang'; return }
+      if (uploadError) { showToast('Upload surat gagal: ' + uploadError.message, 'error'); setButtonLoading(btn, false, '<i class="fa fa-paper-plane"></i> Ajukan Sekarang'); return }
       fileUrl = supabase.storage.from('surat').getPublicUrl(fileName).data.publicUrl
     }
 
@@ -238,17 +238,16 @@ export async function renderPengajuan(user) {
 
     const { data: insertedRows, error: insertError } = await supabase.from('pengajuan').insert([payload]).select('id').limit(1)
 
-    btn.disabled = false
-    btn.innerHTML = '<i class="fa fa-paper-plane"></i> Ajukan Sekarang'
+    setButtonLoading(btn, false, '<i class="fa fa-paper-plane"></i> Ajukan Sekarang')
 
     if (insertError) {
       console.error(insertError)
-      alert('Gagal kirim pengajuan')
+      showToast('Gagal kirim pengajuan: ' + insertError.message, 'error')
       return
     }
 
     await logAuditEvent({ action: 'create', entityType: 'pengajuan', entityId: insertedRows?.[0]?.id, after: payload })
-    alert('✅ Pengajuan berhasil dikirim!')
+    showToast('Pengajuan berhasil dikirim', 'success')
     renderPengajuan(user)
   }
 }

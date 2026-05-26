@@ -29,3 +29,27 @@ export function setButtonLoading(btn, isLoading, labelHtml = '') {
   btn.disabled = false
   btn.innerHTML = btn.dataset.originalHtml || labelHtml || btn.innerHTML
 }
+
+export function confirmAction(message, okLabel = 'Ya, lanjutkan') {
+  return new Promise(resolve => {
+    const bg = document.createElement('div')
+    bg.className = 'modal-bg open'
+    bg.innerHTML = `
+      <div class="modal-box" style="max-width:420px;">
+        <div class="modal-header">
+          <h3><i class="fa fa-circle-question" style="color:var(--warning,#d97706)"></i> Konfirmasi</h3>
+        </div>
+        <p style="font-size:.85rem;color:var(--text);margin-bottom:16px;">${message}</p>
+        <div class="modal-actions">
+          <button class="btn-secondary" id="cfNo">Batal</button>
+          <button class="btn-primary" id="cfYes">${okLabel}</button>
+        </div>
+      </div>
+    `
+    const done = (v) => { bg.remove(); resolve(v) }
+    bg.querySelector('#cfNo')?.addEventListener('click', () => done(false))
+    bg.querySelector('#cfYes')?.addEventListener('click', () => done(true))
+    bg.addEventListener('click', (e) => { if (e.target === bg) done(false) })
+    document.body.appendChild(bg)
+  })
+}
