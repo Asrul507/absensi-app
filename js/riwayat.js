@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { toJamLokal, getTodayLokal } from './timezone.js'
 
 /* ================= HELPER BADGE KETERANGAN ================= */
 function badgeKeterangan(status_absensi, waktu_masuk, waktu_pulang) {
@@ -174,12 +175,12 @@ window.loadRiwayat = async function (user) {
                   ${isAdmin ? `<td style="font-weight:600;">${r.nama || '-'}</td>` : ''}
                   <td style="font-weight:700;color:var(--success);">
                     ${r.waktu_masuk
-                      ? new Date(r.waktu_masuk).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })
+                      ? toJamLokal(r.waktu_masuk)
                       : '<span style="color:var(--gray-400);">-</span>'}
                   </td>
                  <td style="font-weight:700;color:var(--primary);">
                     ${r.waktu_pulang
-                      ? new Date(r.waktu_pulang).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })
+                      ? toJamLokal(r.waktu_pulang)
                       : '<span style="color:var(--gray-400);">-</span>'}
                     ${r.status_pulang === 'Pulang Cepat' 
                       ? `<div style="font-size:.65rem; color:var(--danger); font-weight:700; margin-top:2px;">
@@ -252,8 +253,8 @@ window.downloadExcelRiwayat = function () {
     return {
       'Tanggal':           r.tanggal || '-',
       'Nama':              r.nama || '-',
-      'Waktu Masuk':       r.waktu_masuk  ? new Date(r.waktu_masuk).toLocaleString('id-ID')  : '-',
-      'Waktu Pulang':      r.waktu_pulang ? new Date(r.waktu_pulang).toLocaleString('id-ID') : '-',
+      'Waktu Masuk':       r.waktu_masuk  ? toJamLokal(r.waktu_masuk)  : '-',
+      'Waktu Pulang':      r.waktu_pulang ? toJamLokal(r.waktu_pulang) : '-',
       'Status Masuk':      r.status_masuk   || '-',
       // FIX AUDIT 2: Ekspor data total menit terlambat ke Excel laporan riwayat
       'Menit Terlambat':   r.status_masuk === 'Terlambat' ? (r.menit_terlambat || 0) : 0, 
@@ -270,5 +271,5 @@ window.downloadExcelRiwayat = function () {
   ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 16) }))
 
   XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Absensi')
-  XLSX.writeFile(wb, `riwayat-absensi-${new Date().toISOString().split('T')[0]}.xlsx`)
+  XLSX.writeFile(wb, `riwayat-absensi-${getTodayLokal()}.xlsx`)
 }
