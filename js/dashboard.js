@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { getTodayLokal } from './timezone.js'
 import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
 
 export async function renderDashboard() {
@@ -15,9 +16,11 @@ export async function renderDashboard() {
     const sekarang = new Date()
     const jamSekarang = sekarang.getHours()
 
-    const kemarin = new Date()
-    kemarin.setDate(kemarin.getDate() - 1)
-    const tanggalKemarinStr = kemarin.toISOString().split('T')[0]
+    // Kemarin dalam waktu lokal (offset dari titik radius)
+    const todayStr = getTodayLokal()
+    const todayDate = new Date(todayStr + 'T00:00:00Z')
+    todayDate.setUTCDate(todayDate.getUTCDate() - 1)
+    const tanggalKemarinStr = todayDate.toISOString().split('T')[0]
 
     // 1. Ambil data absensi user hari kemarin
     const { data: absenKemarin, error: errKemarin } = await supabase
@@ -87,11 +90,13 @@ export async function renderDashboard() {
   }
 
   // Date range (current month)
-  const now = new Date()
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  // Gunakan tanggal lokal (dari titik radius) sebagai basis bulan
+  const todayLocal = getTodayLokal()
+  const [tyear, tmonth] = todayLocal.split('-').map(Number)
+  const firstDay = new Date(Date.UTC(tyear, tmonth - 1, 1))
+  const lastDay  = new Date(Date.UTC(tyear, tmonth, 0))
   const dateFrom = firstDay.toISOString().split('T')[0]
-  const dateTo = lastDay.toISOString().split('T')[0]
+  const dateTo   = lastDay.toISOString().split('T')[0]
 
   // Get total jam kerja
   const { data: absensiMonth } = await supabase
@@ -153,7 +158,7 @@ export async function renderDashboard() {
   
   if (isAdmin) {
     try {
-      const hariIniStr = new Date().toISOString().split('T')[0]
+      const hariIniStr = getTodayLokal()
       
       const { data: absenHariIni } = await supabase.from('absensi').select('*').eq('tanggal', hariIniStr)
       const { data: jadwalHariIni } = await supabase.from('jadwal').select('*').eq('tanggal', hariIniStr)
