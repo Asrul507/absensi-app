@@ -92,6 +92,11 @@
       
       <span id="userName" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; font-size:.82rem;font-weight:700;color:rgba(255,255,255,.95);" onclick="navigate('profile')" style="cursor:pointer;"></span>
       
+      <button id="notifBtn" onclick="openNotificationCenter()" aria-label="Notifikasi"
+        style="position:relative;margin-top:0!important;min-height:unset!important;width:38px!important;height:38px!important;padding:0!important;border:none;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;">
+        <i class="fa fa-bell"></i>
+        <span id="notifBadge" style="display:none;position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#ef4444;color:#fff;font-size:.65rem;font-weight:800;line-height:18px;text-align:center;">0</span>
+      </button>
       <button class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Ganti tema"
         style="margin-top:0!important;min-height:unset!important;width:38px!important;padding:0!important;">
         <i class="fa fa-moon" id="themeIcon"></i>

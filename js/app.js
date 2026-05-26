@@ -31,6 +31,8 @@ import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 window.currentUser  = null
 window.currentShift = null
 window.supabase     = supabase
+window.notifState   = { total: 0, pendingPengajuan: 0, pendingPerbaikan: 0 }
+window.notifPoller  = null
 
 /* ================= INITIALIZATION ================= */
 window.addEventListener('DOMContentLoaded', async () => {
@@ -54,6 +56,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     if (event === 'SIGNED_OUT') {
       window.currentUser = null
+      stopNotificationPolling()
       showLoginPage()
     }
     if (event === 'USER_UPDATED' && session) {
@@ -107,6 +110,8 @@ async function checkUser() {
     // Render komponen navigasi sesuai hak akses
     renderMenu(profile.role)
     renderBottomNav(profile.role)
+    await refreshNotificationBadge()
+    startNotificationPolling()
     navigate('dashboard')
 
   } catch (err) {
@@ -161,6 +166,7 @@ window.login = async function () {
 }
 
 window.logout = async function () {
+  stopNotificationPolling()
   await logout()
 }
 
@@ -228,6 +234,69 @@ function renderMenu(role) {
       </button>
     </div>
   `;
+}
+
+/* ================= NOTIFICATION CENTER (RINGKAS) ================= */
+async function refreshNotificationBadge() {
+  const user = window.currentUser
+  const badge = document.getElementById('notifBadge')
+  if (!user || !badge) return
+
+  let pendingPengajuan = 0
+  let pendingPerbaikan = 0
+
+  if (user.role === 'admin' || user.role === 'super_admin') {
+    const [{ count: c1 }, { count: c2 }] = await Promise.all([
+      supabase.from('pengajuan').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('perbaikan_absen').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+    ])
+    pendingPengajuan = c1 || 0
+    pendingPerbaikan = c2 || 0
+  } else {
+    const [{ count: c1 }, { count: c2 }] = await Promise.all([
+      supabase.from('pengajuan').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'pending'),
+      supabase.from('perbaikan_absen').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'pending')
+    ])
+    pendingPengajuan = c1 || 0
+    pendingPerbaikan = c2 || 0
+  }
+
+  const total = pendingPengajuan + pendingPerbaikan
+  window.notifState = { total, pendingPengajuan, pendingPerbaikan }
+
+  badge.textContent = String(total)
+  badge.style.display = total > 0 ? 'inline-block' : 'none'
+}
+
+function startNotificationPolling() {
+  stopNotificationPolling()
+  window.notifPoller = setInterval(() => {
+    refreshNotificationBadge().catch(err => console.error('Notif poll error:', err))
+  }, 60000)
+}
+
+function stopNotificationPolling() {
+  if (window.notifPoller) clearInterval(window.notifPoller)
+  window.notifPoller = null
+}
+
+window.openNotificationCenter = function () {
+  const user = window.currentUser
+  const n = window.notifState || { total: 0, pendingPengajuan: 0, pendingPerbaikan: 0 }
+  if (!user) return
+
+  const roleLabel = (user.role === 'admin' || user.role === 'super_admin') ? 'Admin' : 'Karyawan'
+  alert(
+    `🔔 Notifikasi ${roleLabel}
+
+` +
+    `• Pengajuan pending: ${n.pendingPengajuan}
+` +
+    `• Perbaikan absen pending: ${n.pendingPerbaikan}
+
+` +
+    `Total notifikasi aktif: ${n.total}`
+  )
 }
 
 /* ================= BOTTOM NAVIGATION (MOBILE DEVICE) ================= */
