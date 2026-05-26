@@ -360,7 +360,6 @@ document.addEventListener('click', (e) => {
   window.closeNotificationCenter?.()
 })
 
-}
 
 window.openNotificationCenter = function () {
   const user = window.currentUser
