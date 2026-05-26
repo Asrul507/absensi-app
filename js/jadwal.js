@@ -402,11 +402,13 @@ window.loadDaftarJadwalMaster = async function() {
       jadwalMap[j.user_id][j.tanggal] = j.shift_code
     })
 
+    const COL_W = 52
+
     let leftHtml = `<div class="left-name-side"><div class="header-corner-fixed">Nama Karyawan</div>`
-    let rightHtml = `<div class="right-data-side"><table class="table-split" style="min-width:${daysInMonth*40}px;"><thead><tr>`
+    let rightHtml = `<div class="right-data-side"><table class="table-split" style="min-width:${daysInMonth*COL_W}px;"><thead><tr>`
 
     for (let i = 1; i <= daysInMonth; i++) {
-      rightHtml += `<th style="width:40px;min-width:40px;">${i}</th>`
+      rightHtml += `<th style="width:${COL_W}px;min-width:${COL_W}px;">${i}</th>`
     }
     rightHtml += `</tr></thead><tbody>`
 
@@ -415,12 +417,12 @@ window.loadDaftarJadwalMaster = async function() {
       rightHtml += `<tr>`
       for (let d = 1; d <= daysInMonth; d++) {
         const currentTgl = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-        const sCode = jadwalMap[p.id]?.[currentTgl] || '-'
-        const s = SHIFT_INFO[sCode]
+        const sCode = jadwalMap[p.id]?.[currentTgl] || null
+        const s     = sCode ? SHIFT_INFO[sCode] : null
         const bgCell   = s ? s.bg    : 'transparent'
-        const textCell = s ? s.color : 'var(--text)'
-        const label    = s ? sCode   : '-'
-        rightHtml += `<td style="background:${bgCell}!important;color:${textCell}!important;width:40px;min-width:40px;" title="${s ? s.label + ' ' + s.jam : ''}">${label}</td>`
+        const textCell = s ? s.color : '#cbd5e1'
+        const label    = s ? s.label : '·'
+        rightHtml += `<td style="background:${bgCell}!important;color:${textCell}!important;width:${COL_W}px;min-width:${COL_W}px;font-size:.68rem;" title="${s ? sCode + ' · ' + s.label + ' · ' + s.jam : 'Belum dijadwalkan'}">${label}</td>`
       }
       rightHtml += `</tr>`
     })
