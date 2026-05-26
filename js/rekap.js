@@ -163,8 +163,7 @@ window.applyRekapFilter = async function (user) {
       if (elJamKerja)  elJamKerja.textContent  = rekap.summary.totalJamKerja
       if (elTerlambat) elTerlambat.textContent = rekap.summary.totalTerlambat
 
-      const rekapDetailEl = document.getElementById('rekapDetail')
-      if (rekapDetailEl) renderRekapTable(rekap, isAdmin)
+      renderRekapTable(rekap, isAdmin)
     } else {
       // Load pengajuan data (izin/sakit/cuti) yang sudah approved
       let queryPengajuan = supabase
