@@ -436,9 +436,18 @@ async function renderUsers() {
     <div class="page-header">
       <h2><i class="fa fa-users"></i> Manajemen Karyawan</h2>
       ${viewerRole !== 'staff' ? `
-        <button class="btn-primary btn-sm" onclick="openFormTambah()">
-          <i class="fa fa-plus"></i> Tambah Karyawan
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-secondary btn-sm" onclick="window.downloadTemplateKaryawan()" title="Download template Excel untuk upload massal">
+            <i class="fa fa-file-excel" style="color:#16a34a;"></i> Template Excel
+          </button>
+          <button class="btn-success btn-sm" onclick="document.getElementById('inputUploadKaryawanExcel').click()" title="Upload daftar karyawan via Excel ke daftar tunggu">
+            <i class="fa fa-upload"></i> Upload Excel
+          </button>
+          <input type="file" id="inputUploadKaryawanExcel" accept=".xlsx,.xls" style="display:none;" onchange="window.handleUploadKaryawanExcel(this)">
+          <button class="btn-primary btn-sm" onclick="openFormTambah()">
+            <i class="fa fa-plus"></i> Tambah Manual
+          </button>
+        </div>
       ` : ''}
     </div>
 
@@ -452,6 +461,9 @@ async function renderUsers() {
         </button>
       ` : ''}
     </div>
+
+    <!-- Preview Upload Excel Karyawan -->
+    <div id="previewUploadKaryawanWrap" style="display:none; margin-bottom:14px;"></div>
 
     <div class="card fade-up" style="padding:14px 18px;margin-bottom:12px;">
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -954,6 +966,176 @@ window.deletePending = async function(id, nama) {
   await supabase.from('pending_profiles').delete().eq('id', id)
   window._pendingList = window._pendingList.filter(p => p.id !== id)
   renderPendingList(window._pendingList)
+}
+
+/* ===============================================================
+   UPLOAD KARYAWAN MASSAL VIA EXCEL
+   Kolom wajib: Nama | Email (opsional: Jabatan, Departemen, No HP,
+   Tgl Bergabung, Tgl Lahir, Role, Titik Radius)
+   → Data masuk ke pending_profiles (status: waiting)
+   → Karyawan tinggal registrasi di register.html untuk verif email
+=============================================================== */
+
+window.downloadTemplateKaryawan = function() {
+  if (typeof XLSX === 'undefined') { alert('Library XLSX belum siap. Coba beberapa saat lagi.'); return }
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Nama Lengkap','Jabatan','Departemen','No HP','Tanggal Bergabung','Tanggal Lahir','Role','Titik Radius'],
+    ['Budi Santoso','Staff','IT','081234567890','2025-01-01','1995-06-15','staff',''],
+    ['Siti Rahayu','Supervisor','HR','081298765432','2025-01-01','1990-03-20','staff',''],
+  ])
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Template Karyawan')
+  XLSX.writeFile(wb, 'template_upload_karyawan.xlsx')
+}
+
+window.handleUploadKaryawanExcel = function(input) {
+  if (typeof XLSX === 'undefined') { alert('Library XLSX belum siap.'); return }
+  const file = input.files[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result)
+      const wb   = XLSX.read(data, { type: 'array' })
+      const ws   = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
+
+      if (!rows.length) { alert('File Excel kosong atau format tidak sesuai.'); return }
+
+      // Normalisasi kolom (case-insensitive)
+      const parsed = rows.map((row, i) => {
+        const get = (...keys) => {
+          for (const k of keys) {
+            const found = Object.keys(row).find(rk => rk.trim().toLowerCase() === k.toLowerCase())
+            if (found && row[found] !== '') return String(row[found]).trim()
+          }
+          return ''
+        }
+        const nama = get('Nama Lengkap', 'Nama', 'nama_lengkap', 'name')
+        const valid = !!nama
+        return {
+          _index: i + 2, // baris Excel (header = 1)
+          nama_lengkap:      nama,
+          jabatan:           get('Jabatan', 'jabatan', 'position'),
+          departemen:        get('Departemen', 'departemen', 'dept'),
+          no_hp:             get('No HP', 'no_hp', 'hp', 'phone'),
+          tanggal_bergabung: get('Tanggal Bergabung', 'tanggal_bergabung') || null,
+          tanggal_lahir:     get('Tanggal Lahir', 'tanggal_lahir') || null,
+          role:              ['staff','admin','super_admin'].includes(get('Role','role').toLowerCase())
+                               ? get('Role','role').toLowerCase() : 'staff',
+          titik_radius:      get('Titik Radius', 'titik_radius') || null,
+          valid,
+          errMsg: !valid ? 'Kolom "Nama Lengkap" kosong' : ''
+        }
+      })
+
+      window._uploadKaryawanParsed = parsed
+      renderPreviewUploadKaryawan(parsed)
+    } catch(err) {
+      alert('Gagal membaca file Excel: ' + err.message)
+    }
+  }
+  reader.readAsArrayBuffer(file)
+  input.value = '' // reset agar bisa upload file yang sama lagi
+}
+
+function renderPreviewUploadKaryawan(rows) {
+  const wrap = document.getElementById('previewUploadKaryawanWrap')
+  if (!wrap) return
+
+  const valid   = rows.filter(r => r.valid)
+  const invalid = rows.filter(r => !r.valid)
+
+  wrap.style.display = 'block'
+  wrap.innerHTML = `
+    <div class="card fade-up" style="border:1.5px solid var(--primary); padding:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+        <div>
+          <h3 style="font-size:.9rem; font-weight:800; color:var(--primary); margin:0 0 4px;">
+            <i class="fa fa-table"></i> Preview Upload Excel Karyawan
+          </h3>
+          <p style="font-size:.78rem; color:var(--text-muted); margin:0;">
+            ${valid.length} valid
+            ${invalid.length ? `· <span style="color:var(--danger);">${invalid.length} baris bermasalah</span>` : ''}
+            · Setelah disimpan, karyawan masuk <strong>Daftar Tunggu</strong> dan bisa registrasi di <code>register.html</code>
+          </p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-secondary btn-sm" onclick="window.batalUploadKaryawan()">
+            <i class="fa fa-times"></i> Batal
+          </button>
+          ${valid.length ? `
+            <button class="btn-success btn-sm" onclick="window.konfirmasiUploadKaryawan()">
+              <i class="fa fa-check"></i> Simpan ${valid.length} ke Daftar Tunggu
+            </button>` : ''}
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:.78rem;">
+          <thead>
+            <tr style="background:var(--gray-50);">
+              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Baris</th>
+              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Nama Lengkap</th>
+              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Jabatan</th>
+              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Departemen</th>
+              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Role</th>
+              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr style="border-bottom:1px solid var(--border); ${!r.valid ? 'background:#fff5f5;' : ''}">
+                <td style="padding:7px 10px; color:var(--text-muted); font-size:.75rem;">${r._index}</td>
+                <td style="padding:7px 10px; font-weight:700;">${r.nama_lengkap || '<em style="color:var(--danger);">—</em>'}</td>
+                <td style="padding:7px 10px;">${r.jabatan || '-'}</td>
+                <td style="padding:7px 10px;">${r.departemen || '-'}</td>
+                <td style="padding:7px 10px;"><span class="badge badge-gray">${r.role}</span></td>
+                <td style="padding:7px 10px;">
+                  ${r.valid
+                    ? `<span class="badge badge-green"><i class="fa fa-check"></i> Valid</span>`
+                    : `<span class="badge badge-red"><i class="fa fa-times"></i> ${r.errMsg}</span>`}
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `
+}
+
+window.batalUploadKaryawan = function() {
+  const wrap = document.getElementById('previewUploadKaryawanWrap')
+  if (wrap) { wrap.style.display = 'none'; wrap.innerHTML = '' }
+  window._uploadKaryawanParsed = null
+}
+
+window.konfirmasiUploadKaryawan = async function() {
+  const rows = (window._uploadKaryawanParsed || []).filter(r => r.valid)
+  if (!rows.length) return
+
+  const payload = rows.map(r => ({
+    nama_lengkap:      r.nama_lengkap,
+    jabatan:           r.jabatan || '',
+    departemen:        r.departemen || '',
+    no_hp:             r.no_hp || '',
+    tanggal_bergabung: r.tanggal_bergabung || null,
+    tanggal_lahir:     r.tanggal_lahir || null,
+    role:              r.role || 'staff',
+    titik_radius:      r.titik_radius || null,
+    status:            'waiting',
+    created_by:        window.currentUser?.id || null
+  }))
+
+  const { error } = await supabase.from('pending_profiles').insert(payload)
+  if (error) { alert('Gagal menyimpan: ' + error.message); return }
+
+  window.batalUploadKaryawan()
+  alert(`✅ ${payload.length} karyawan berhasil dimasukkan ke Daftar Tunggu!\nInstruksikan mereka untuk registrasi mandiri di halaman register.html untuk verifikasi email dan aktivasi akun.`)
+  await renderUsers()
+  // Otomatis pindah ke tab pending
+  if (window.switchTab) window.switchTab('pending')
 }
 
 /* ================= TOGGLE AKTIF / NON-AKTIF KARYAWAN ================= */
