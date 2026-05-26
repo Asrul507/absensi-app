@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { toJamLokal } from './timezone.js'
+import { toJamLokal, getTodayLokal } from './timezone.js'
 
 export async function renderRekapInOut(user) {
   const content = document.getElementById('content')
@@ -335,5 +335,5 @@ window.downloadExcelRekapInOut = function () {
   ]
 
   XLSX.utils.book_append_sheet(wb, ws, 'Rekap In Out')
-  XLSX.writeFile(wb, `rekap-inout-${window._selectedRekapKaryawan || 'all'}-${new Date().toISOString().split('T')[0]}.xlsx`)
+  XLSX.writeFile(wb, `rekap-inout-${window._selectedRekapKaryawan || 'all'}-${getTodayLokal()}.xlsx`)
 }
