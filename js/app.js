@@ -24,6 +24,7 @@ import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
+import { initTimezone, resetTimezoneCache } from './timezone.js'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 
 /* ================= GLOBAL VARIABLES ================= */
@@ -94,6 +95,8 @@ async function checkUser() {
     // Set user ke scope global window
     window.currentUser = profile
     showAppPage()
+    // Inisialisasi timezone dari titik radius lokasi
+    await initTimezone()
 
     const userNameEl = document.getElementById('userName')
     if (userNameEl) userNameEl.innerText = profile.nama_lengkap || user.email
@@ -995,6 +998,9 @@ window.toggleSidebar = () => {
   document.getElementById('sidebar')?.classList.toggle('open')
   document.getElementById('overlay')?.classList.toggle('active')
 }
+// Reset cache timezone saat admin mengubah titik lokasi
+window.resetTimezoneCache = resetTimezoneCache
+
 window.closeSidebar = () => {
   document.getElementById('sidebar')?.classList.remove('open')
   document.getElementById('overlay')?.classList.remove('active')
