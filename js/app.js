@@ -24,7 +24,7 @@ import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
-import { initTimezone, resetTimezoneCache } from './timezone.js'
+import { initTimezone, resetTimezoneCache, getTodayLokal } from './timezone.js'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 
 /* ================= GLOBAL VARIABLES ================= */
@@ -547,7 +547,7 @@ window.openFormTambah = async function() {
       <div class="field"><label>Jabatan</label><input id="pJabatan" placeholder="Jabatan"></div>
       <div class="field"><label>Departemen</label><input id="pDept" placeholder="Departemen"></div>
       <div class="field"><label>No. HP</label><input id="pHp" placeholder="08xx"></div>
-      <div class="field"><label>Tanggal Bergabung</label><input type="date" id="pTgl" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="field"><label>Tanggal Bergabung</label><input type="date" id="pTgl" value="${getTodayLokal()}"></div>
       <div class="field"><label>Tanggal Lahir</label><input type="date" id="pLahir"></div>
       <div class="field"><label>Role Hak Akses</label>
         <select id="pRole">
