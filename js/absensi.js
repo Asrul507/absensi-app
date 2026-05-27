@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { getTodayLokal } from './timezone.js'
+import { getShiftDetailByCode } from './shift-resolver.js'
 
 /* ===============================================================
    CONFIGURATION
@@ -207,7 +208,8 @@ export async function getTodayShift(user_id) {
     // Jika kemarin shift malam (kode 4) → return shift malam, bukan shift hari ini
     if (dataKemarin?.shift_code === '4') {
       console.log('[SHIFT MALAM] Masih dalam window shift malam kemarin:', kemarinStr)
-      return { nama_shift: 'Shift Malam', jam_masuk: '23:00', jam_pulang: '07:00' }
+      const shiftMalam = await getShiftDetailByCode('4')
+      return shiftMalam || { nama_shift: 'Shift Malam', jam_masuk: '23:00', jam_pulang: '07:00' }
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
@@ -226,15 +228,8 @@ export async function getTodayShift(user_id) {
   if (data.status_override === 'sakit') return { nama_shift: 'SAKIT',       jam_masuk: '-', jam_pulang: '-' }
   if (data.status_override === 'izin')  return { nama_shift: 'IZIN',        jam_masuk: '-', jam_pulang: '-' }
 
-  // Map shift code ke jam kerja
-  const shiftMap = {
-    '2': { nama_shift: 'Shift Pagi',  jam_masuk: '07:00', jam_pulang: '15:00' },
-    '3': { nama_shift: 'Shift Sore',  jam_masuk: '15:00', jam_pulang: '23:00' },
-    '4': { nama_shift: 'Shift Malam', jam_masuk: '23:00', jam_pulang: '07:00' },
-    '8': { nama_shift: 'OFF',         jam_masuk: '-',     jam_pulang: '-' },
-  }
-
-  return shiftMap[data.shift_code] || null
+  const detailShift = await getShiftDetailByCode(data.shift_code)
+  return detailShift || null
 }
 
 /* ===============================================================
