@@ -2,6 +2,7 @@ import { supabase } from './supabase.js'
 import { getTodayLokal } from './timezone.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { isEligibleCuti, getSisaCuti, hitungMasaKerja, syncSisaCutiProfile } from './cuti.js'
+import { showToast, setButtonLoading } from './feedback.js'
 
 function hitungTanggalSelesai(startDate, hari) {
   if (!startDate || !hari) return null
@@ -200,24 +201,23 @@ export async function renderPengajuan(user) {
     const tanggalMulai = document.getElementById('tanggalMulai').value
     const file = document.getElementById('fileSurat').files[0]
 
-    if (!alasan) { alert('Alasan wajib diisi'); return }
-    if (!tanggalMulai) { alert('Tanggal mulai wajib diisi'); return }
-    if (!jumlahHari || jumlahHari < 1) { alert('Jumlah hari tidak valid'); return }
+    if (!alasan) { showToast('Alasan wajib diisi', 'warning'); return }
+    if (!tanggalMulai) { showToast('Tanggal mulai wajib diisi', 'warning'); return }
+    if (!jumlahHari || jumlahHari < 1) { showToast('Jumlah hari tidak valid', 'warning'); return }
 
     if (jenis === 'cuti' && !eligible) {
-      alert(`Anda belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`)
+      showToast(`Belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`, 'warning')
       return
     }
 
     const btn = document.getElementById('btnSubmit')
-    btn.disabled = true
-    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Mengirim...'
+    setButtonLoading(btn, true, '<i class="fa fa-spinner fa-spin"></i> Mengirim...')
 
     let fileUrl = null
     if (file) {
       const fileName = `${Date.now()}-${file.name}`
       const { error: uploadError } = await supabase.storage.from('surat').upload(fileName, file)
-      if (uploadError) { alert('Upload surat gagal'); btn.disabled = false; btn.innerHTML = '<i class="fa fa-paper-plane"></i> Ajukan Sekarang'; return }
+      if (uploadError) { showToast('Upload surat gagal: ' + uploadError.message, 'error'); setButtonLoading(btn, false, '<i class="fa fa-paper-plane"></i> Ajukan Sekarang'); return }
       fileUrl = supabase.storage.from('surat').getPublicUrl(fileName).data.publicUrl
     }
 
@@ -238,17 +238,16 @@ export async function renderPengajuan(user) {
 
     const { data: insertedRows, error: insertError } = await supabase.from('pengajuan').insert([payload]).select('id').limit(1)
 
-    btn.disabled = false
-    btn.innerHTML = '<i class="fa fa-paper-plane"></i> Ajukan Sekarang'
+    setButtonLoading(btn, false, '<i class="fa fa-paper-plane"></i> Ajukan Sekarang')
 
     if (insertError) {
       console.error(insertError)
-      alert('Gagal kirim pengajuan')
+      showToast('Gagal kirim pengajuan: ' + insertError.message, 'error')
       return
     }
 
     await logAuditEvent({ action: 'create', entityType: 'pengajuan', entityId: insertedRows?.[0]?.id, after: payload })
-    alert('✅ Pengajuan berhasil dikirim!')
+    showToast('Pengajuan berhasil dikirim', 'success')
     renderPengajuan(user)
   }
 }
@@ -303,7 +302,7 @@ window.showApprovalModal = function(id, type) {
 // FITUR UPGRADE AUTOMATION SISA CUTI: MEMOTONG SALDO JATAH CUTI KARYAWAN SECARA REAL-TIME SAAT DISUTUJUI ADMIN
 window.submitApprovalWithComment = async function(id, type, catatan) {
   if (type === 'reject' && !catatan.trim()) {
-    alert('⚠ Alasan penolakan wajib diisi')
+    showToast('Alasan penolakan wajib diisi', 'warning')
     return
   }
 
@@ -345,7 +344,7 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
       }
 
       await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
-      alert('✅ Pengajuan berhasil disetujui, jadwal harian & kuota jatah cuti karyawan diperbarui otomatis!')
+      showToast('Pengajuan disetujui, jadwal & kuota cuti diperbarui', 'success')
 
     } else {
       const { data: beforeReject } = await supabase.from('pengajuan').select('*').eq('id', id).single()
@@ -356,13 +355,13 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
       }).eq('id', id)
 
       await logAuditEvent({ action: 'reject', entityType: 'pengajuan', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
-      alert('❌ Pengajuan resmi ditolak')
+      showToast('Pengajuan ditolak', 'info')
     }
 
     renderPengajuan(window.currentUser)
 
   } catch (err) {
-    alert('Error: ' + err.message)
+    showToast('Error: ' + err.message, 'error')
   }
 }
 
@@ -378,10 +377,11 @@ window.rejectPengajuan = function(id) {
 window.showPengajuanTimeline = async function(id) {
   try {
     const rows = await fetchAuditTimeline('pengajuan', id)
-    if (!rows.length) return alert('Belum ada audit trail untuk pengajuan ini')
+    if (!rows.length) return showToast('Belum ada audit trail untuk pengajuan ini', 'info')
     const text = rows.map(r => `• ${new Date(r.created_at).toLocaleString('id-ID')} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
-    alert('Timeline Pengajuan\n\n' + text)
+    console.log('Timeline Pengajuan\n\n' + text)
+    showToast('Timeline ditampilkan di console browser', 'info')
   } catch (err) {
-    alert('Gagal memuat timeline: ' + err.message)
+    showToast('Gagal memuat timeline: ' + err.message, 'error')
   }
 }
