@@ -19,7 +19,9 @@ function toDateStr(value) {
 =============================================================== */
 function hitungTanggalSelesai(startDate, hari) {
   if (!startDate || !hari) return null
-  const date = new Date(startDate)
+  const [y, m, d] = String(startDate).split('-').map(Number)
+  if (!y || !m || !d) return null
+  const date = new Date(y, m - 1, d)
   if (Number.isNaN(date.getTime())) return null
   const jmlHari = Number.parseInt(hari, 10)
   if (!Number.isFinite(jmlHari) || jmlHari < 1) return null

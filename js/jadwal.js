@@ -414,7 +414,10 @@ window.loadDaftarJadwalMaster = async function() {
     const jadwalMap = {}
     jadwalData?.forEach(j => {
       if (!jadwalMap[j.user_id]) jadwalMap[j.user_id] = {}
-      jadwalMap[j.user_id][j.tanggal] = j.shift_code
+      jadwalMap[j.user_id][j.tanggal] = {
+        shift_code: j.shift_code,
+        status_override: j.status_override
+      }
     })
 
     const COL_W = 52
@@ -432,12 +435,27 @@ window.loadDaftarJadwalMaster = async function() {
       rightHtml += `<tr>`
       for (let d = 1; d <= daysInMonth; d++) {
         const currentTgl = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-        const sCode = jadwalMap[p.id]?.[currentTgl] || null
+        const rowData = jadwalMap[p.id]?.[currentTgl] || null
+        const statusOverride = rowData?.status_override || null
+        const sCode = rowData?.shift_code || null
         const s     = sCode ? SHIFT_INFO[sCode] : null
-        const bgCell   = s ? s.bg    : 'transparent'
-        const textCell = s ? s.color : '#cbd5e1'
-        const label    = s ? s.label : '·'
-        rightHtml += `<td style="background:${bgCell}!important;color:${textCell}!important;width:${COL_W}px;min-width:${COL_W}px;font-size:.68rem;" title="${s ? sCode + ' · ' + s.label + ' · ' + s.jam : 'Belum dijadwalkan'}">${label}</td>`
+
+        let bgCell = 'transparent'
+        let textCell = '#cbd5e1'
+        let label = '·'
+        let title = 'Belum dijadwalkan'
+
+        if (statusOverride === 'izin') {
+          bgCell = '#dbeafe'; textCell = '#1d4ed8'; label = 'IZN'; title = 'Izin'
+        } else if (statusOverride === 'sakit') {
+          bgCell = '#fef3c7'; textCell = '#b45309'; label = 'SKT'; title = 'Sakit'
+        } else if (statusOverride === 'cuti') {
+          bgCell = '#dcfce7'; textCell = '#166534'; label = 'CTI'; title = 'Cuti'
+        } else if (s) {
+          bgCell = s.bg; textCell = s.color; label = s.label; title = `${sCode} · ${s.label} · ${s.jam}`
+        }
+
+        rightHtml += `<td style="background:${bgCell}!important;color:${textCell}!important;width:${COL_W}px;min-width:${COL_W}px;font-size:.68rem;" title="${title}">${label}</td>`
       }
       rightHtml += `</tr>`
     })
