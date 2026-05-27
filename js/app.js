@@ -26,6 +26,7 @@ import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
 import { initTimezone, resetTimezoneCache, getTodayLokal } from './timezone.js'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
+import { showToast, confirmAction } from './feedback.js'
 
 /* ================= GLOBAL VARIABLES ================= */
 window.currentUser  = null
@@ -361,25 +362,6 @@ document.addEventListener('click', (e) => {
 })
 
 
-window.openNotificationCenter = function () {
-  const user = window.currentUser
-  const n = window.notifState || { total: 0, pendingPengajuan: 0, pendingPerbaikan: 0 }
-  if (!user) return
-
-  const roleLabel = (user.role === 'admin' || user.role === 'super_admin') ? 'Admin' : 'Karyawan'
-  alert(
-    `🔔 Notifikasi ${roleLabel}
-
-` +
-    `• Pengajuan pending: ${n.pendingPengajuan}
-` +
-    `• Perbaikan absen pending: ${n.pendingPerbaikan}
-
-` +
-    `Total notifikasi aktif: ${n.total}`
-  )
-}
-
 /* ================= BOTTOM NAVIGATION (MOBILE DEVICE) ================= */
 function renderBottomNav(role) {
   const nav = document.getElementById('bottomNav')
@@ -405,7 +387,7 @@ function renderBottomNav(role) {
 
 /* ================= SINGLE PAGE APPLICATION NAVIGATION ================= */
 window.navigate = async function (page) {
-  if (!window.currentUser) { alert('Silakan login dulu'); return }
+  if (!window.currentUser) { showToast('Sesi berakhir. Silakan login ulang.', 'warning'); showLoginPage(); return }
 
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
   document.getElementById(`menu-${page}`)?.classList.add('active')
@@ -734,7 +716,7 @@ window.openFormTambah = async function() {
 
 window.savePendingKaryawan = async function() {
   const nama = document.getElementById('pNama').value.trim()
-  if (!nama) { alert('Nama wajib diisi'); return }
+  if (!nama) { showToast('Nama wajib diisi', 'warning'); return }
 
   const { error } = await supabase.from('pending_profiles').insert([{
     nama_lengkap:      nama,
@@ -748,9 +730,9 @@ window.savePendingKaryawan = async function() {
     created_by:        window.currentUser?.id || null
   }])
 
-  if (error) { alert('Gagal menyimpan: ' + error.message); return }
+  if (error) { showToast('Gagal menyimpan: ' + error.message, 'error'); return }
   window.closeUserModal()
-  alert(`✅ ${nama} Berhasil dimasukkan ke daftar tunggu pendaftaran!`)
+  showToast(`${nama} berhasil dimasukkan ke daftar tunggu`, 'success')
   await renderUsers()
 }
 
@@ -979,14 +961,14 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
 
     if (newPassword) {
       if (newPassword.length < 6) {
-        alert('⚠ Password minimal 6 karakter!')
+        showToast('Password minimal 6 karakter', 'warning')
         return
       }
       if (isMe) {
         const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
         if (passErr) throw passErr
       } else {
-        alert('ℹ️ Reset password karyawan memerlukan Supabase Service Role. Silakan koordinasikan dengan Super Admin.');
+        showToast('Reset password karyawan memerlukan Supabase Service Role.', 'info');
       }
     }
 
@@ -1013,12 +995,12 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
     }
 
     window.closeUserModal()
-    alert('✅ Seluruh perubahan data karyawan berhasil disimpan!')
+    showToast('Seluruh perubahan data karyawan berhasil disimpan', 'success')
     await renderUsers()
 
   } catch (err) {
     console.error('saveEditKaryawan error:', err)
-    alert('Gagal memperbarui data: ' + err.message)
+    showToast('Gagal memperbarui data: ' + err.message, 'error')
   }
 }
 
@@ -1112,7 +1094,7 @@ function renderPendingList(list) {
 }
 
 window.deletePending = async function(id, nama) {
-  if (!confirm(`Hapus data "${nama}" dari daftar tunggu pendaftaran?`)) return
+  if (!(await confirmAction(`Hapus data "${nama}" dari daftar tunggu pendaftaran?`, 'Ya, hapus'))) return
   await supabase.from('pending_profiles').delete().eq('id', id)
   window._pendingList = window._pendingList.filter(p => p.id !== id)
   renderPendingList(window._pendingList)
@@ -1127,7 +1109,7 @@ window.deletePending = async function(id, nama) {
 =============================================================== */
 
 window.downloadTemplateKaryawan = function() {
-  if (typeof XLSX === 'undefined') { alert('Library XLSX belum siap. Coba beberapa saat lagi.'); return }
+  if (typeof XLSX === 'undefined') { showToast('Library XLSX belum siap. Coba lagi sebentar.', 'warning'); return }
   const ws = XLSX.utils.aoa_to_sheet([
     ['Nama Lengkap','Jabatan','Departemen','No HP','Tanggal Bergabung','Tanggal Lahir','Role','Titik Radius'],
     ['Budi Santoso','Staff','IT','081234567890','2025-01-01','1995-06-15','staff',''],
@@ -1139,7 +1121,7 @@ window.downloadTemplateKaryawan = function() {
 }
 
 window.handleUploadKaryawanExcel = function(input) {
-  if (typeof XLSX === 'undefined') { alert('Library XLSX belum siap.'); return }
+  if (typeof XLSX === 'undefined') { showToast('Library XLSX belum siap.', 'warning'); return }
   const file = input.files[0]
   if (!file) return
 
@@ -1151,7 +1133,7 @@ window.handleUploadKaryawanExcel = function(input) {
       const ws   = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
-      if (!rows.length) { alert('File Excel kosong atau format tidak sesuai.'); return }
+      if (!rows.length) { showToast('File Excel kosong atau format tidak sesuai.', 'warning'); return }
 
       // Normalisasi kolom (case-insensitive)
       const parsed = rows.map((row, i) => {
@@ -1183,7 +1165,7 @@ window.handleUploadKaryawanExcel = function(input) {
       window._uploadKaryawanParsed = parsed
       renderPreviewUploadKaryawan(parsed)
     } catch(err) {
-      alert('Gagal membaca file Excel: ' + err.message)
+      showToast('Gagal membaca file Excel: ' + err.message, 'error')
     }
   }
   reader.readAsArrayBuffer(file)
@@ -1279,10 +1261,10 @@ window.konfirmasiUploadKaryawan = async function() {
   }))
 
   const { error } = await supabase.from('pending_profiles').insert(payload)
-  if (error) { alert('Gagal menyimpan: ' + error.message); return }
+  if (error) { showToast('Gagal menyimpan: ' + error.message, 'error'); return }
 
   window.batalUploadKaryawan()
-  alert(`✅ ${payload.length} karyawan berhasil dimasukkan ke Daftar Tunggu!\nInstruksikan mereka untuk registrasi mandiri di halaman register untuk verifikasi email dan aktivasi akun.`)
+  showToast(`${payload.length} karyawan berhasil dimasukkan ke daftar tunggu`, 'success')
   await renderUsers()
   // Otomatis pindah ke tab pending
   if (window.switchTab) window.switchTab('pending')
@@ -1291,14 +1273,14 @@ window.konfirmasiUploadKaryawan = async function() {
 /* ================= TOGGLE AKTIF / NON-AKTIF KARYAWAN ================= */
 window.toggleStatusUser = async function(userId, statusSekarang) {
   const statusBaru = statusSekarang === 'Aktif' ? 'Non-Aktif' : 'Aktif'
-  if (!confirm(`Apakah Anda yakin ingin mengubah status karyawan ini menjadi ${statusBaru}?`)) return
+  if (!(await confirmAction(`Ubah status karyawan menjadi ${statusBaru}?`, 'Ya, ubah'))) return
   
   await supabase.from('profiles').update({ status_akun: statusBaru }).eq('id', userId)
   if (statusBaru === 'Non-Aktif') {
     await resetCutiKaryawan(userId)
-    alert('Karyawan berhasil di-non-aktifkan dan kuota cuti disinkronisasikan kembali.')
+    showToast('Karyawan berhasil dinonaktifkan dan kuota cuti disinkronkan', 'success')
   } else {
-    alert('Karyawan berhasil diaktifkan kembali.')
+    showToast('Karyawan berhasil diaktifkan kembali', 'success')
   }
   await renderUsers()
 }

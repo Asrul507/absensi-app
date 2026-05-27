@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { toJamLokal, getTodayLokal } from './timezone.js'
+import { showToast } from './feedback.js'
 
 export async function renderRekapInOut(user) {
   const content = document.getElementById('content')
@@ -304,12 +305,12 @@ function renderRekapInOutTable(detail, isAdmin) {
 
 window.downloadExcelRekapInOut = function () {
   if (!window._rekapInOutDetail || !window._rekapInOutDetail.length) {
-    alert('Tidak ada data untuk didownload')
+    showToast('Tidak ada data untuk didownload', 'info')
     return
   }
 
   if (typeof XLSX === 'undefined') {
-    alert('Library XLSX belum dimuat')
+    showToast('Library XLSX belum dimuat', 'warning')
     return
   }
 
