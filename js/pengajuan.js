@@ -13,6 +13,10 @@ function toDateStr(value) {
   return `${y}-${m}-${day}`
 }
 
+/* ===============================================================
+   HITUNG TANGGAL SELESAI
+   FIX: ganti toISOString() → toDateStr() agar tidak geser 1 hari
+=============================================================== */
 function hitungTanggalSelesai(startDate, hari) {
   if (!startDate || !hari) return null
   const date = new Date(startDate)
@@ -21,6 +25,11 @@ function hitungTanggalSelesai(startDate, hari) {
   if (!Number.isFinite(jmlHari) || jmlHari < 1) return null
   date.setDate(date.getDate() + (jmlHari - 1))
   return toDateStr(date)
+  // Parse "YYYY-MM-DD" sebagai waktu lokal (bukan UTC)
+  const [y, m, d] = startDate.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  date.setDate(date.getDate() + (parseInt(hari) - 1))
+  return toDateStr(date)  // FIX: was date.toISOString().split('T')[0]
 }
 
 export async function renderPengajuan(user) {
@@ -311,7 +320,20 @@ window.showApprovalModal = function(id, type) {
   document.body.appendChild(modal)
 }
 
-// FITUR UPGRADE AUTOMATION SISA CUTI: MEMOTONG SALDO JATAH CUTI KARYAWAN SECARA REAL-TIME SAAT DISUTUJUI ADMIN
+/* ===============================================================
+   APPROVE PENGAJUAN
+   FIX UTAMA: Loop generate tanggal jadwal sekarang pakai toDateStr()
+   agar tidak geser 1 hari akibat konversi UTC dari toISOString().
+
+   Sebelumnya:
+     const date = new Date(tanggal_mulai)   ← parse sebagai UTC jam 00:00
+     const tgl = date.toISOString().split('T')[0]  ← balik ke UTC → geser!
+
+   Sesudah:
+     const [y,m,d] = tanggal_mulai.split('-').map(Number)
+     const date = new Date(y, m-1, d)       ← parse sebagai waktu LOKAL
+     const tgl = toDateStr(date)            ← format YYYY-MM-DD dari lokal
+=============================================================== */
 window.submitApprovalWithComment = async function(id, type, catatan) {
   if (type === 'reject' && !catatan.trim()) {
     showToast('Alasan penolakan wajib diisi', 'warning')
@@ -332,31 +354,53 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
         approved_at: new Date().toISOString()
       }).eq('id', id)
 
+      // ── FIX: Parse tanggal_mulai sebagai waktu lokal, bukan UTC ──────────
+      const [y, m, d] = tanggal_mulai.split('-').map(Number)
+
       // Distribusikan override ke jadwal harian staff
       for (let i = 0; i < (jumlah_hari || 1); i++) {
-        const date = new Date(tanggal_mulai)
+        const date = new Date(y, m - 1, d)   // new Date(tahun, bulan-1, hari) = waktu LOKAL
         date.setDate(date.getDate() + i)
-        const tgl = date.toISOString().split('T')[0]
+        const tgl = toDateStr(date)           // FIX: was date.toISOString().split('T')[0]
 
-        const { data: existing } = await supabase.from('jadwal').select('id').eq('user_id', user_id).eq('tanggal', tgl).maybeSingle()
+        console.log(`[APPROVAL] Insert jadwal override: ${tgl} - ${jenis}`)
+
+        const { data: existing } = await supabase
+          .from('jadwal')
+          .select('id')
+          .eq('user_id', user_id)
+          .eq('tanggal', tgl)
+          .maybeSingle()
 
         if (existing) {
-          await supabase.from('jadwal').update({ status_override: jenis, shift_id: null, pengajuan_id: id }).eq('id', existing.id)
+          await supabase.from('jadwal')
+            .update({ status_override: jenis, shift_id: null, pengajuan_id: id })
+            .eq('id', existing.id)
         } else {
-          await supabase.from('jadwal').insert([{ user_id, tanggal: tgl, shift_id: null, status_override: jenis, pengajuan_id: id }])
+          await supabase.from('jadwal')
+            .insert([{ user_id, tanggal: tgl, shift_id: null, status_override: jenis, pengajuan_id: id }])
         }
       }
+      // ─────────────────────────────────────────────────────────────────────
 
-      // AKSI AUTOMATION UTAMA: Jika jenisnya cuti resmi, panggil fungsi sinkronisasi sisa cuti untuk memotong profile
+      // Jika jenisnya cuti, sinkronisasi sisa cuti
       if (jenis === 'cuti') {
         const { data: prof } = await supabase.from('profiles').select('tanggal_bergabung').eq('id', user_id).single()
         if (prof) {
-          await syncSisaCutiProfile(user_id, prof.tanggal_bergabung) // Otomatis hitung ulang sisa kuota & simpan ke DB
+          await syncSisaCutiProfile(user_id, prof.tanggal_bergabung)
         }
       }
 
       await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
       showToast('Pengajuan disetujui, jadwal & kuota cuti diperbarui', 'success')
+      await logAuditEvent({
+        action: 'approve',
+        entityType: 'pengajuan',
+        entityId: id,
+        before: beforeState,
+        after: { ...beforeState, status: 'approved', catatan_approval: catatan || null }
+      })
+      alert('✅ Pengajuan berhasil disetujui, jadwal harian & kuota jatah cuti karyawan diperbarui otomatis!')
 
     } else {
       const { data: beforeReject } = await supabase.from('pengajuan').select('*').eq('id', id).single()
@@ -368,6 +412,14 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
 
       await logAuditEvent({ action: 'reject', entityType: 'pengajuan', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
       showToast('Pengajuan ditolak', 'info')
+      await logAuditEvent({
+        action: 'reject',
+        entityType: 'pengajuan',
+        entityId: id,
+        before: beforeReject || null,
+        after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan }
+      })
+      alert('❌ Pengajuan resmi ditolak')
     }
 
     renderPengajuan(window.currentUser)
@@ -384,7 +436,6 @@ window.approvePengajuan = function(id) {
 window.rejectPengajuan = function(id) {
   showApprovalModal(id, 'reject')
 }
-
 
 window.showPengajuanTimeline = async function(id) {
   try {
