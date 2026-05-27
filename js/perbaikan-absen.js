@@ -372,6 +372,7 @@ async function loadDaftarRequest(user) {
 
 async function loadApprovalRequest() {
   const el = document.getElementById('approvalRequestList')
+  if (!el) return
 
   try {
     const { data, error } = await supabase
@@ -428,6 +429,7 @@ async function loadApprovalRequest() {
     `).join('')
 
   } catch (err) {
+    if (!el) return
     el.innerHTML = `<div class="card"><p style="color: var(--danger);">Error: ${err.message}</p></div>`
   }
 }
