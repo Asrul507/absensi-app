@@ -20,6 +20,7 @@
 
 import { supabase } from './supabase.js'
 import { buildTimestampLokal, toJamLokal } from './timezone.js'
+import { showToast } from './feedback.js'
 
 export async function renderPerbaikanAbsen(user) {
   const content = document.getElementById('content')
@@ -609,12 +610,12 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
     }
 
     await logAuditEvent({ action: 'approve', entityType: 'perbaikan_absen', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
-    alert('✅ Request berhasil disetujui dan data absensi otomatis diperbarui!')
+    showToast('Request berhasil disetujui dan data absensi diperbarui', 'success')
     await loadApprovalRequest()
 
   } catch (err) {
     console.error('confirmApprovePerbaikan error:', err)
-    alert('❌ Error saat memproses approval: ' + err.message)
+    showToast('Error saat memproses approval: ' + err.message, 'error')
   }
 }
 
@@ -651,7 +652,7 @@ window.showRejectModal = function (id) {
 }
 
 window.confirmRejectPerbaikan = async function (id, catatan) {
-  if (!catatan.trim()) { alert('⚠ Alasan penolakan wajib diisi'); return }
+  if (!catatan.trim()) { showToast('Alasan penolakan wajib diisi', 'warning'); return }
 
   try {
     const { data: beforeReject } = await supabase.from('perbaikan_absen').select('*').eq('id', id).single()
@@ -667,11 +668,11 @@ window.confirmRejectPerbaikan = async function (id, catatan) {
     if (error) throw error
 
     await logAuditEvent({ action: 'reject', entityType: 'perbaikan_absen', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
-    alert('✅ Request ditolak')
+    showToast('Request ditolak', 'success')
     await loadApprovalRequest()
 
   } catch (err) {
-    alert('Error: ' + err.message)
+    showToast('Error: ' + err.message, 'error')
   }
 }
 
@@ -679,10 +680,11 @@ window.confirmRejectPerbaikan = async function (id, catatan) {
 window.showPerbaikanTimeline = async function(id) {
   try {
     const rows = await fetchAuditTimeline('perbaikan_absen', id)
-    if (!rows.length) return alert('Belum ada audit trail untuk request ini')
+    if (!rows.length) return showToast('Belum ada audit trail untuk request ini', 'info')
     const text = rows.map(r => `• ${new Date(r.created_at).toLocaleString('id-ID')} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
-    alert('Timeline Perbaikan Absen\n\n' + text)
+    console.log('Timeline Perbaikan Absen\n\n' + text)
+    showToast('Timeline ditampilkan di console browser', 'info')
   } catch (err) {
-    alert('Gagal memuat timeline: ' + err.message)
+    showToast('Gagal memuat timeline: ' + err.message, 'error')
   }
 }

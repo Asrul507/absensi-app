@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { showToast } from './feedback.js'
 
 /* ===============================================================
    DEFINISI SHIFT — sumber kebenaran tunggal untuk seluruh file
@@ -360,7 +361,7 @@ window.simpanJadwalSatu = async function() {
    DOWNLOAD TEMPLATE EXCEL JADWAL
 =============================================================== */
 window.downloadTemplateJadwal = function() {
-  if (typeof XLSX === 'undefined') { alert('Library XLSX belum siap.'); return }
+  if (typeof XLSX === 'undefined') { showToast('Library XLSX belum siap.', 'warning'); return }
 
   const now = new Date()
   const bln = now.getMonth() + 1
@@ -456,7 +457,7 @@ window.loadDaftarJadwalMaster = async function() {
 =============================================================== */
 window.uploadJadwalExcel = async function() {
   if (typeof XLSX === 'undefined') {
-    alert('Library XLSX belum siap dimuat. Mohon tunggu sebentar.')
+    showToast('Library XLSX belum siap dimuat. Mohon tunggu sebentar.', 'warning')
     return
   }
 
