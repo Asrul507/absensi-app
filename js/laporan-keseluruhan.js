@@ -37,16 +37,6 @@ function mntToReadable(totalMenit) {
   return menit ? `${jam}j ${menit}m` : `${jam}j`
 }
 
-/* ===== HELPER: Format total menit menjadi jam-menit (mis. 8j 30m) ===== */
-function mntToHM(totalMenit) {
-  const m = Number.parseInt(totalMenit, 10) || 0
-  if (m <= 0) return '-'
-  const jam = Math.floor(m / 60)
-  const menit = m % 60
-  if (jam <= 0) return `${menit}m`
-  return menit ? `${jam}j ${menit}m` : `${jam}j`
-}
-
 /* ===== HELPER: Badge radius HTML ===== */
 function badgeRadius(status) {
   if (!status) return '<span style="font-size:.72rem;color:var(--text-muted);">-</span>'
