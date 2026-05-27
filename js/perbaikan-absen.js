@@ -25,6 +25,7 @@ import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 
 export async function renderPerbaikanAbsen(user) {
   const content = document.getElementById('content')
+  if (!content) return
   const isAdmin = user.role === 'admin' || user.role === 'super_admin'
 
   content.innerHTML = `
@@ -130,7 +131,7 @@ export async function renderPerbaikanAbsen(user) {
               font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; resize: vertical;"></textarea>
         </div>
 
-        <button class="btn-primary" onclick="submitPerbaikanAbsen(window.currentUser)" style="width: 100%; margin-top: 16px;">
+        <button class="btn-primary" onclick="submitPerbaikanAbsen(window.currentUser, event)" style="width: 100%; margin-top: 16px;">
           <i class="fa fa-paper-plane"></i> Kirim Request
         </button>
         <p id="msgStatusBuat" style="font-size: .8rem; margin-top: 8px; min-height: 18px; text-align: center;"></p>
@@ -244,13 +245,14 @@ window.switchPerbaikanTab = async function (tab) {
   if (tab === 'daftar') await loadDaftarRequest(window._currentPerbaikanUser)
 }
 
-window.submitPerbaikanAbsen = async function (user) {
+window.submitPerbaikanAbsen = async function (user, ev) {
   const tanggal     = document.getElementById('inputTanggal').value
   const jenis       = document.getElementById('inputJenis').value
   const keterangan  = document.getElementById('inputKeterangan').value
   const msgEl       = document.getElementById('msgStatusBuat')
-  const btn         = event.target
+  const btn         = ev?.target || document.querySelector('#tabBuatContent button.btn-primary')
 
+  if (!msgEl || !btn) return
   msgEl.textContent = ''
 
   if (!tanggal)          { msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Tanggal wajib diisi'; return }
@@ -283,7 +285,11 @@ window.submitPerbaikanAbsen = async function (user) {
     const { data: insertedRows, error } = await supabase.from('perbaikan_absen').insert([payload]).select('id').limit(1)
     if (error) throw error
 
-    await logAuditEvent({ action: 'create', entityType: 'perbaikan_absen', entityId: insertedRows?.[0]?.id, after: payload })
+    try {
+      await logAuditEvent({ action: 'create', entityType: 'perbaikan_absen', entityId: insertedRows?.[0]?.id, after: payload })
+    } catch (auditErr) {
+      console.warn('Audit create perbaikan gagal:', auditErr)
+    }
     msgEl.style.color = '#16a34a'
     msgEl.textContent = '✅ Request berhasil dikirim'
 
@@ -612,7 +618,11 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
       }
     }
 
-    await logAuditEvent({ action: 'approve', entityType: 'perbaikan_absen', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
+    try {
+      await logAuditEvent({ action: 'approve', entityType: 'perbaikan_absen', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
+    } catch (auditErr) {
+      console.warn('Audit approve perbaikan gagal:', auditErr)
+    }
     showToast('Request berhasil disetujui dan data absensi diperbarui', 'success')
     await loadApprovalRequest()
 
@@ -670,7 +680,11 @@ window.confirmRejectPerbaikan = async function (id, catatan) {
 
     if (error) throw error
 
-    await logAuditEvent({ action: 'reject', entityType: 'perbaikan_absen', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
+    try {
+      await logAuditEvent({ action: 'reject', entityType: 'perbaikan_absen', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
+    } catch (auditErr) {
+      console.warn('Audit reject perbaikan gagal:', auditErr)
+    }
     showToast('Request ditolak', 'success')
     await loadApprovalRequest()
 
