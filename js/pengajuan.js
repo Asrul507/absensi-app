@@ -25,11 +25,6 @@ function hitungTanggalSelesai(startDate, hari) {
   if (!Number.isFinite(jmlHari) || jmlHari < 1) return null
   date.setDate(date.getDate() + (jmlHari - 1))
   return toDateStr(date)
-  // Parse "YYYY-MM-DD" sebagai waktu lokal (bukan UTC)
-  const [y, m, d] = startDate.split('-').map(Number)
-  const date = new Date(y, m - 1, d)
-  date.setDate(date.getDate() + (parseInt(hari) - 1))
-  return toDateStr(date)  // FIX: was date.toISOString().split('T')[0]
 }
 
 export async function renderPengajuan(user) {
@@ -393,14 +388,6 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
 
       await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
       showToast('Pengajuan disetujui, jadwal & kuota cuti diperbarui', 'success')
-      await logAuditEvent({
-        action: 'approve',
-        entityType: 'pengajuan',
-        entityId: id,
-        before: beforeState,
-        after: { ...beforeState, status: 'approved', catatan_approval: catatan || null }
-      })
-      alert('✅ Pengajuan berhasil disetujui, jadwal harian & kuota jatah cuti karyawan diperbarui otomatis!')
 
     } else {
       const { data: beforeReject } = await supabase.from('pengajuan').select('*').eq('id', id).single()
@@ -412,14 +399,6 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
 
       await logAuditEvent({ action: 'reject', entityType: 'pengajuan', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
       showToast('Pengajuan ditolak', 'info')
-      await logAuditEvent({
-        action: 'reject',
-        entityType: 'pengajuan',
-        entityId: id,
-        before: beforeReject || null,
-        after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan }
-      })
-      alert('❌ Pengajuan resmi ditolak')
     }
 
     renderPengajuan(window.currentUser)
