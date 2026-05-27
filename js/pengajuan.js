@@ -8,7 +8,6 @@ import { showToast, setButtonLoading } from './feedback.js'
    HELPER: Format tanggal Date → "YYYY-MM-DD" tanpa UTC shift
    Selalu pakai getFullYear/getMonth/getDate (waktu lokal device)
    agar tidak bergeser saat melewati tengah malam UTC.
-=============================================================== */
 function toDateStr(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -333,7 +332,7 @@ window.showApprovalModal = function(id, type) {
 =============================================================== */
 window.submitApprovalWithComment = async function(id, type, catatan) {
   if (type === 'reject' && !catatan.trim()) {
-    alert('⚠ Alasan penolakan wajib diisi')
+    showToast('Alasan penolakan wajib diisi', 'warning')
     return
   }
 
@@ -418,7 +417,7 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
     renderPengajuan(window.currentUser)
 
   } catch (err) {
-    alert('Error: ' + err.message)
+    showToast('Error: ' + err.message, 'error')
   }
 }
 
@@ -433,10 +432,11 @@ window.rejectPengajuan = function(id) {
 window.showPengajuanTimeline = async function(id) {
   try {
     const rows = await fetchAuditTimeline('pengajuan', id)
-    if (!rows.length) return alert('Belum ada audit trail untuk pengajuan ini')
+    if (!rows.length) return showToast('Belum ada audit trail untuk pengajuan ini', 'info')
     const text = rows.map(r => `• ${new Date(r.created_at).toLocaleString('id-ID')} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
-    alert('Timeline Pengajuan\n\n' + text)
+    console.log('Timeline Pengajuan\n\n' + text)
+    showToast('Timeline ditampilkan di console browser', 'info')
   } catch (err) {
-    alert('Gagal memuat timeline: ' + err.message)
+    showToast('Gagal memuat timeline: ' + err.message, 'error')
   }
 }
