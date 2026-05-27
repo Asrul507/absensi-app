@@ -18,6 +18,8 @@ function formatJam(isoStr) {
   return toJamLokal(isoStr)
 }
 
+
+
 /* ===== HELPER: Hitung durasi kerja dari 2 ISO string ===== */
 function hitungDurasiKerja(waktuMasuk, waktuPulang) {
   if (!waktuMasuk || !waktuPulang) return { menit: 0, label: '-' }
