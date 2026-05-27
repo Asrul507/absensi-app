@@ -22,6 +22,7 @@ import { supabase } from './supabase.js'
 import { buildTimestampLokal, toJamLokal } from './timezone.js'
 import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
+import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
 
 export async function renderPerbaikanAbsen(user) {
   const content = document.getElementById('content')
@@ -116,9 +117,9 @@ export async function renderPerbaikanAbsen(user) {
               style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
                 font-size: .85rem; font-family: inherit; outline: none;">
               <option value="">-- Pilih Shift --</option>
-              <option value="2" id="optShiftPagi">Shift Pagi (07:00 - 15:00)</option>
-              <option value="3" id="optShiftSore">Shift Sore (15:00 - 23:00)</option>
-              <option value="4" id="optShiftMalam">Shift Malam (23:00 - 07:00)</option>
+              <option value="2" id="optShiftPagi">Shift Pagi</option>
+              <option value="3" id="optShiftSore">Shift Sore</option>
+              <option value="4" id="optShiftMalam">Shift Malam</option>
               <option value="8" id="optShiftOff">OFF</option>
             </select>
           </div>
@@ -159,10 +160,36 @@ export async function renderPerbaikanAbsen(user) {
   window._isAdminPerbaikan         = user.role === 'admin' || user.role === 'super_admin'
   window._currentShiftCodeHariIni  = null
 
+  await hydrateShiftOptionsUI()
+
   await loadDaftarRequest(user)
   if (window._isAdminPerbaikan) {
     await loadApprovalRequest()
   }
+}
+
+
+async function hydrateShiftOptionsUI() {
+  const select = document.getElementById('inputShiftBaru')
+  if (!select) return
+
+  const options = await getAllShiftOptions()
+  const labels = {
+    '2': document.getElementById('optShiftPagi'),
+    '3': document.getElementById('optShiftSore'),
+    '4': document.getElementById('optShiftMalam'),
+    '8': document.getElementById('optShiftOff')
+  }
+
+  options.forEach((s) => {
+    const el = labels[String(s.code)]
+    if (!el) return
+    if (s.code === '8' || s.jam_masuk === '-' || s.jam_pulang === '-') {
+      el.textContent = `${s.nama_shift}`
+      return
+    }
+    el.textContent = `${s.nama_shift} (${s.jam_masuk} - ${s.jam_pulang})`
+  })
 }
 
 window.updatePerbaikanForm = function () {
@@ -200,24 +227,17 @@ window.loadJadwalForDate = async function (user) {
 
     window._currentShiftCodeHariIni = jadwal?.shift_code || '2'
 
-    const textMap = {
-      '2': 'Shift Pagi (07:00 - 15:00)',
-      '3': 'Shift Sore (15:00 - 23:00)',
-      '4': 'Shift Malam (23:00 - 07:00)',
-      '8': 'OFF / Libur'
-    }
-    infoEl.textContent = `Jadwal Anda saat ini di tanggal tersebut: ${textMap[window._currentShiftCodeHariIni] || 'Regular Pagi'}`
+    const shiftData = await getShiftDetailByCode(window._currentShiftCodeHariIni)
+    const shiftLabel = shiftData
+      ? (shiftData.jam_masuk === '-' || shiftData.jam_pulang === '-'
+        ? `${shiftData.nama_shift} / Libur`
+        : `${shiftData.nama_shift} (${shiftData.jam_masuk} - ${shiftData.jam_pulang})`)
+      : 'Regular Pagi'
 
-    const shiftMap = {
-      '2': { jam_masuk: '07:00', jam_pulang: '15:00' },
-      '3': { jam_masuk: '15:00', jam_pulang: '23:00' },
-      '4': { jam_masuk: '23:00', jam_pulang: '07:00' },
-      '8': { jam_masuk: '00:00', jam_pulang: '00:00' }
-    }
-    const shiftData = shiftMap[window._currentShiftCodeHariIni] || { jam_masuk: '07:00', jam_pulang: '15:00' }
+    infoEl.textContent = `Jadwal Anda saat ini di tanggal tersebut: ${shiftLabel}`
 
-    document.getElementById('inputJamMasukShouldBe').value  = shiftData.jam_masuk
-    document.getElementById('inputJamPulangShouldBe').value = shiftData.jam_pulang
+    document.getElementById('inputJamMasukShouldBe').value  = shiftData?.jam_masuk && shiftData.jam_masuk !== '-' ? shiftData.jam_masuk : '00:00'
+    document.getElementById('inputJamPulangShouldBe').value = shiftData?.jam_pulang && shiftData.jam_pulang !== '-' ? shiftData.jam_pulang : '00:00'
 
     updatePerbaikanForm()
 
