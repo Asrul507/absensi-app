@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { showToast, confirmAction } from './feedback.js'
 import { resetTimezoneCache } from './timezone.js'
 
 export async function renderPengaturanLokasi() {
@@ -123,11 +124,11 @@ window.tangkapDanSimpanLokasi = function() {
 }
 
 window.hapusTitikLokasi = async function(id) {
-  if (!confirm('Hapus titik lokasi patokan ini?')) return
+  if (!(await confirmAction('Hapus titik lokasi patokan ini?', 'Ya, hapus'))) return
   try {
     const { error } = await supabase.from('lokasi_absen').delete().eq('id', id)
     if (error) throw error
     resetTimezoneCache()
     await muatDaftarLokasiAdmin()
-  } catch (err) { alert('Gagal menghapus: ' + err.message) }
+  } catch (err) { showToast('Gagal menghapus: ' + err.message, 'error') }
 }

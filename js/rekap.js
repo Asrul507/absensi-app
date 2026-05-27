@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { showToast } from './feedback.js'
 
 /* ===============================================================
    HELPER: Konversi menit ke HH:MM:SS
@@ -364,7 +365,7 @@ function renderPengajuanTable(pengajuanData, jenis, isAdmin) {
 =============================================================== */
 window.downloadExcelRekap = function () {
   if (typeof XLSX === 'undefined') {
-    alert('Library Excel (XLSX) belum siap dimuat.')
+    showToast('Library Excel (XLSX) belum siap dimuat.', 'warning')
     return
   }
 
@@ -375,7 +376,7 @@ window.downloadExcelRekap = function () {
 
   if (tab === 'absensi') {
     if (!window._currentRekapData || !window._currentRekapData.length) {
-      alert('Tidak ada data absensi untuk didownload')
+      showToast('Tidak ada data absensi untuk didownload', 'info')
       return
     }
 
@@ -395,7 +396,7 @@ window.downloadExcelRekap = function () {
   } else {
     // Jalankan download laporan bulk khusus Tab Izin/Cuti/Sakit
     if (!window._currentPengajuanData || !window._currentPengajuanData.length) {
-      alert(`Tidak ada record data ${tab} untuk diunduh.`);
+      showToast(`Tidak ada record data ${tab} untuk diunduh.`, 'info');
       return
     }
 
@@ -423,7 +424,7 @@ window.downloadExcelRekap = function () {
 window.showDetailModal = function (tipe) {
   const data = window._currentRekapData || []
   if (!data.length) {
-    alert('Tidak ada ringkasan data yang bisa ditampilkan.')
+    showToast('Tidak ada ringkasan data yang bisa ditampilkan.', 'info')
     return
   }
 

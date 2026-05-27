@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { registerKaryawan } from './auth.js'
+import { showToast } from './feedback.js'
 
 /* ===============================================================
    HALAMAN DAFTAR KARYAWAN BARU
@@ -93,7 +94,7 @@ function bindEvents() {
   if (btnDaftar) {
     btnDaftar.addEventListener('click', async () => {
       if (!selectedPending) {
-        alert('Pilih nama kamu dari daftar terlebih dahulu')
+        showToast('Pilih nama kamu dari daftar terlebih dahulu', 'warning')
         return
       }
 
