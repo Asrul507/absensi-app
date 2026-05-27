@@ -154,9 +154,11 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
 
     if (a.waktu_masuk) {
       masukTxt = toJamLokal(a.waktu_masuk)
+      const dMasuk = new Date(a.waktu_masuk)
       
       if (a.waktu_pulang) {
         pulangTxt = toJamLokal(a.waktu_pulang)
+        const dPulang = new Date(a.waktu_pulang)
         jamEfektif = (dPulang - dMasuk) / (1000 * 60 * 60)
       }
     }

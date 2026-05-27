@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { showToast, confirmAction, setButtonLoading } from './feedback.js'
 
 export async function renderShiftManagement() {
   const content = document.getElementById('content')
@@ -62,20 +63,24 @@ export async function renderShiftManagement() {
     const masuk    = document.getElementById('sJamMasuk').value
     const pulang   = document.getElementById('sJamPulang').value
     const ket      = document.getElementById('sKet').value.trim()
-    if (!nama || !masuk || !pulang) { alert('Lengkapi data shift'); return }
+    if (!nama || !masuk || !pulang) { showToast('Lengkapi data shift', 'warning'); return }
+    const btn = document.querySelector('#shiftModal .btn-primary')
+    setButtonLoading(btn, true)
 
     const { error } = await supabase.from('shift').insert([{ nama_shift: nama, jam_masuk: masuk, jam_pulang: pulang, keterangan: ket }])
-    if (error) { alert('Gagal tambah shift'); return }
+    setButtonLoading(btn, false)
+    if (error) { showToast('Gagal tambah shift: ' + error.message, 'error'); return }
     closeShiftModal()
-    alert('✅ Shift berhasil ditambahkan')
+    showToast('Shift berhasil ditambahkan', 'success')
     renderShiftManagement()
   }
 }
 
 window.deleteShift = async function (id) {
-  if (!confirm('Hapus shift ini?')) return
+  if (!(await confirmAction('Hapus shift ini?', 'Ya, hapus'))) return
   const { error } = await supabase.from('shift').delete().eq('id', id)
-  if (error) { alert('Gagal hapus shift'); return }
+  if (error) { showToast('Gagal hapus shift: ' + error.message, 'error'); return }
+  showToast('Shift dihapus', 'success')
   renderShiftManagement()
 }
 

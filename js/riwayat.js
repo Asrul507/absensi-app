@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { toJamLokal, getTodayLokal } from './timezone.js'
+import { showToast, promptAction } from './feedback.js'
 
 /* ================= HELPER BADGE KETERANGAN ================= */
 function badgeKeterangan(status_absensi, waktu_masuk, waktu_pulang) {
@@ -223,23 +224,23 @@ window.loadRiwayat = async function (user) {
 
 /* ================= APPROVE ================= */
 window.approveAbsen = async function (id) {
-  const note = prompt('Keterangan approval (opsional):') ?? ''
+  const note = (await promptAction('Keterangan approval (opsional):', 'Tambahkan catatan jika diperlukan', 'Approve')) ?? ''
   const { error } = await supabase.from('absensi').update({
     approve_manual:  true,
     approve_note:    note,
     status_absensi:  'approved manual'
   }).eq('id', id)
 
-  if (error) { alert('Gagal approve'); return }
-  alert('✅ Approval berhasil')
+  if (error) { showToast('Gagal approve: ' + error.message, 'error'); return }
+  showToast('Approval berhasil', 'success')
   loadRiwayat(window.currentUser)
 }
 
 /* ================= DOWNLOAD EXCEL ================= */
 window.downloadExcelRiwayat = function () {
   const data = window._riwayatData
-  if (!data?.length) { alert('Tidak ada data untuk didownload'); return }
-  if (typeof XLSX === 'undefined') { alert('Library XLSX belum dimuat'); return }
+  if (!data?.length) { showToast('Tidak ada data untuk didownload', 'info'); return }
+  if (typeof XLSX === 'undefined') { showToast('Library XLSX belum dimuat', 'warning'); return }
 
   const rows = data.map(r => {
     let keterangan = r.status_absensi || 'open'
