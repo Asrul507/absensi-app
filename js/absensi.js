@@ -73,13 +73,32 @@ export function checkStatusPulang(jamPulangJadwal) {
   const [h, m] = jamPulangJadwal.split(':').map(Number)
   const targetMinutes = h * 60 + m
 
-  // Jika waktu sekarang kurang dari jam seharusnya pulang
+  // ── FIX SHIFT MALAM: jam pulang 07:00 (420 menit dari tengah malam) ──────
+  // Jika jam pulang jadwal adalah dini hari (mis. 07:00 = 420 menit)
+  // dan jam sekarang sudah lewat tengah malam (currentMinutes kecil),
+  // maka perlu deteksi lintas hari agar tidak salah hitung "Pulang Cepat"
+  // Contoh: jam pulang 07:00 (420), sekarang 06:45 (405) → memang belum saatnya
+  // Contoh: jam pulang 07:00 (420), sekarang 23:30 (1410) → ini shift malam, jangan dianggap Pulang Cepat
+
+  // Deteksi shift malam: jam pulang < 12:00 (kemungkinan besar lintas hari)
+  if (targetMinutes < 12 * 60) {
+    // Jika jam sekarang > 12:00 (sore/malam), artinya shift belum selesai (masih menuju dini hari)
+    // Jangan anggap "Pulang Cepat"
+    if (currentMinutes > 12 * 60) {
+      return { status: 'Selesai', minutesEarly: 0 }
+    }
+    // Jika jam sekarang < jam pulang (mis. 06:45 < 07:00) → memang belum waktunya
+    if (currentMinutes < targetMinutes) {
+      const minutesEarly = targetMinutes - currentMinutes
+      return { status: 'Pulang Cepat', minutesEarly }
+    }
+    return { status: 'Selesai', minutesEarly: 0 }
+  }
+
+  // Shift biasa (jam pulang siang/sore/malam tapi tidak lintas hari)
   if (currentMinutes < targetMinutes) {
     const minutesEarly = targetMinutes - currentMinutes
-    return {
-      status: 'Pulang Cepat',
-      minutesEarly: minutesEarly
-    }
+    return { status: 'Pulang Cepat', minutesEarly }
   }
 
   return {
@@ -90,7 +109,15 @@ export function checkStatusPulang(jamPulangJadwal) {
 
 /* ===============================================================
    GET TODAY ABSEN
-   Ambil record absensi hari ini untuk karyawan tertentu
+   Ambil record absensi hari ini untuk karyawan tertentu.
+
+   FIX SHIFT MALAM:
+   Jika tidak ada absensi hari ini, cek kemarin.
+   Kasus: karyawan absen masuk jam 23:00 (tanggal kemarin),
+   pulang jam 07:00 (tanggal hari ini) → data tersimpan di tanggal kemarin.
+   Jika data kemarin ada waktu_masuk tapi belum ada waktu_pulang,
+   artinya karyawan masih dalam shift malam → kembalikan data kemarin
+   agar tombol "Absen Pulang" bisa muncul.
 =============================================================== */
 export async function getTodayAbsen(nama) {
   const today = getTodayLokal()
@@ -107,12 +134,49 @@ export async function getTodayAbsen(nama) {
     return null
   }
 
-  return data
+  // Jika ada absensi hari ini (masuk/sudah lengkap) → return langsung
+  if (data) return data
+
+  // ── FIX SHIFT MALAM: cek absensi tanggal kemarin ─────────────────────────
+  // Hanya relevan jika sekarang dini hari (00:00 – 08:00)
+  const jamSekarang = new Date().getHours()
+  if (jamSekarang >= 8) return null  // Bukan window shift malam, return null saja
+
+  // Hitung tanggal kemarin
+  const kemarin = new Date()
+  kemarin.setDate(kemarin.getDate() - 1)
+  // Gunakan format YYYY-MM-DD manual agar tidak terpengaruh timezone
+  const yyyy = kemarin.getFullYear()
+  const mm   = String(kemarin.getMonth() + 1).padStart(2, '0')
+  const dd   = String(kemarin.getDate()).padStart(2, '0')
+  const kemarinStr = `${yyyy}-${mm}-${dd}`
+
+  const { data: dataKemarin } = await supabase
+    .from('absensi')
+    .select('*')
+    .eq('nama', nama)
+    .eq('tanggal', kemarinStr)
+    .maybeSingle()
+
+  // Jika kemarin ada absen masuk tapi belum pulang → shift malam masih aktif
+  if (dataKemarin?.waktu_masuk && !dataKemarin?.waktu_pulang) {
+    console.log('[SHIFT MALAM] Ditemukan absensi kemarin yang belum pulang:', kemarinStr)
+    return dataKemarin
+  }
+
+  return null
 }
 
 /* ===============================================================
    GET TODAY SHIFT
-   Ambil jadwal shift hari ini untuk user tertentu
+   Ambil jadwal shift hari ini untuk user tertentu.
+
+   FIX SHIFT MALAM:
+   Jika sekarang masih dini hari (00:00 – 08:00) dan kemarin
+   karyawan punya shift malam (kode 4), kembalikan shift malam
+   kemarin agar UI tidak berpindah ke shift hari ini sebelum
+   karyawan sempat absen pulang.
+   
    Return: {
      nama_shift: string,
      jam_masuk: string (HH:MM),
@@ -121,6 +185,32 @@ export async function getTodayAbsen(nama) {
 =============================================================== */
 export async function getTodayShift(user_id) {
   const today = getTodayLokal()
+
+  // ── FIX SHIFT MALAM: Cek kemarin jika masih dini hari ───────────────────
+  const jamSekarang = new Date().getHours()
+  if (jamSekarang < 8) {
+    // Hitung tanggal kemarin
+    const kemarin = new Date()
+    kemarin.setDate(kemarin.getDate() - 1)
+    const yyyy = kemarin.getFullYear()
+    const mm   = String(kemarin.getMonth() + 1).padStart(2, '0')
+    const dd   = String(kemarin.getDate()).padStart(2, '0')
+    const kemarinStr = `${yyyy}-${mm}-${dd}`
+
+    const { data: dataKemarin } = await supabase
+      .from('jadwal')
+      .select('*')
+      .eq('user_id', user_id)
+      .eq('tanggal', kemarinStr)
+      .maybeSingle()
+
+    // Jika kemarin shift malam (kode 4) → return shift malam, bukan shift hari ini
+    if (dataKemarin?.shift_code === '4') {
+      console.log('[SHIFT MALAM] Masih dalam window shift malam kemarin:', kemarinStr)
+      return { nama_shift: 'Shift Malam', jam_masuk: '23:00', jam_pulang: '07:00' }
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   const { data } = await supabase
     .from('jadwal')
