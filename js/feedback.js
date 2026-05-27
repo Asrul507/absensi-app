@@ -53,3 +53,26 @@ export function confirmAction(message, okLabel = 'Ya, lanjutkan') {
     document.body.appendChild(bg)
   })
 }
+
+export function promptAction(message, placeholder = '', okLabel = 'Simpan') {
+  return new Promise(resolve => {
+    const bg = document.createElement('div')
+    bg.className = 'modal-bg open'
+    bg.innerHTML = `
+      <div class="modal-box" style="max-width:420px;">
+        <div class="modal-header"><h3><i class="fa fa-pen"></i> Input</h3></div>
+        <p style="font-size:.85rem;margin-bottom:10px;">${message}</p>
+        <textarea id="promptActionInput" placeholder="${placeholder}" style="width:100%;min-height:90px;padding:10px;border:1.5px solid var(--border);border-radius:10px;"></textarea>
+        <div class="modal-actions">
+          <button class="btn-secondary" id="paCancel">Batal</button>
+          <button class="btn-primary" id="paOk">${okLabel}</button>
+        </div>
+      </div>
+    `
+    const done = (v) => { bg.remove(); resolve(v) }
+    bg.querySelector('#paCancel')?.addEventListener('click', () => done(null))
+    bg.querySelector('#paOk')?.addEventListener('click', () => done(bg.querySelector('#promptActionInput')?.value ?? ''))
+    bg.addEventListener('click', e => { if (e.target === bg) done(null) })
+    document.body.appendChild(bg)
+  })
+}
