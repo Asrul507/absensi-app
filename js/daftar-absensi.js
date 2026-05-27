@@ -1,5 +1,7 @@
 import { supabase } from './supabase.js'
-import { toJamLokal } from './timezone.js'
+import { toJamLokal, getDurasiMenit } from './timezone.js'
+import { getShiftDetailByCode, getShiftDetailByJamMasuk } from './shift-resolver.js'
+import { getStatusPulangReminder } from './absensi.js'
 
 export async function renderDaftarAbsensi(user) {
   const content = document.getElementById('content')
@@ -79,15 +81,27 @@ async function muatLogAbsensi(user) {
       return
     }
 
-    listContainer.innerHTML = listAbsen.map(absen => {
+    const rowsWithShift = await Promise.all(listAbsen.map(async (absen) => {
+      const shiftByCode = await getShiftDetailByCode(absen.shift_code)
+      const shiftByJamMasuk = !shiftByCode ? await getShiftDetailByJamMasuk(absen.jam_jadwal_masuk) : null
+      const shiftRef = shiftByCode || shiftByJamMasuk
+
+      const jamJadwalMasuk = absen.jam_jadwal_masuk || shiftRef?.jam_masuk || '--:--'
+      const jamJadwalPulang = absen.jam_jadwal_pulang || shiftRef?.jam_pulang || '--:--'
+      return { absen, jamJadwalMasuk, jamJadwalPulang, shiftRef }
+    }))
+
+    listContainer.innerHTML = rowsWithShift.map(({ absen, jamJadwalMasuk, jamJadwalPulang, shiftRef }) => {
       const opt = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
       const formatHari = new Date(absen.tanggal).toLocaleDateString('id-ID', opt)
 
       let teksJamKerja = ''
       if (absen.waktu_masuk && CorelJamLengkap(absen)) {
-        const selisihMs = new Date(absen.waktu_pulang) - new Date(absen.waktu_masuk)
-        const totalJam = selisihMs / (1000 * 60 * 60)
-        teksJamKerja = `<span style="font-size:.78rem; color:var(--text-muted); font-weight:600;">${totalJam.toFixed(2)} Jam Kerja <i class="fa fa-chevron-right" style="font-size:.65rem; margin-left:2px;"></i></span>`
+        const durasiMenit = getDurasiMenit(absen.waktu_masuk, absen.waktu_pulang)
+        if (durasiMenit !== null) {
+          const totalJam = durasiMenit / 60
+          teksJamKerja = `<span style="font-size:.78rem; color:var(--text-muted); font-weight:600;">${totalJam.toFixed(2)} Jam Kerja <i class="fa fa-chevron-right" style="font-size:.65rem; margin-left:2px;"></i></span>`
+        }
       }
 
       // LOGIKA VALIDASI BADGE RADIUS MASUK (MENGUNCI ATURAN JATAH)
@@ -126,7 +140,7 @@ async function muatLogAbsensi(user) {
             <div>
               <div style="font-weight:800; font-size:.9rem; color:var(--text);">${formatHari}</div>
               <div style="font-size:.72rem; color:var(--text-muted); font-weight:600; margin-top:2px;">
-                Shift: ${absen.jam_jadwal_masuk || '--:--'} - ${absen.jam_jadwal_pulang || '--:--'}
+                Shift: ${jamJadwalMasuk} - ${jamJadwalPulang}
               </div>
             </div>
             <div>${teksJamKerja}</div>
@@ -143,7 +157,7 @@ async function muatLogAbsensi(user) {
           <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:${absen.waktu_pulang ? '#f8fafc' : '#f1f5f9'}; border-radius:10px; opacity:${absen.waktu_pulang ? '1' : '0.65'}">
             <div style="display:flex; align-items:center; gap:10px;">
               <i class="fa fa-arrow-right-from-bracket" style="color:#ea580c; font-size:.95rem;"></i>
-              <span style="font-family:monospace; font-weight:700; font-size:.9rem; color:${absen.waktu_pulang ? 'var(--text)' : 'var(--text-muted)'}">${jamJamPulang(absen, jamPulang)}</span>
+              <span style="font-family:monospace; font-weight:700; font-size:.9rem; color:${absen.waktu_pulang ? 'var(--text)' : 'var(--text-muted)'}">${jamJamPulang(absen, jamPulang, { jam_masuk: jamJadwalMasuk, jam_pulang: jamJadwalPulang, ...shiftRef })}</span>
             </div>
             <div>${badgePulang}</div>
           </div>
@@ -158,10 +172,15 @@ async function muatLogAbsensi(user) {
 }
 
 function CorelJamLengkap(absen) {
-  return absen.waktu_pulang && absen.status_absency !== 'lupa absen pulang'
+  return Boolean(absen.waktu_pulang)
 }
 
-function jamJamPulang(absen, jamPulang) {
-  if (absen.status_absensi === 'lupa absen pulang') return 'Lupa Absen Pulang'
-  return jamPulang
+function jamJamPulang(absen, jamPulang, shiftInfo) {
+  if (absen.waktu_pulang) return jamPulang
+
+  const reminder = getStatusPulangReminder(absen, shiftInfo)
+  if (reminder.status === 'Lupa Absen Pulang') return 'Lupa Absen Pulang'
+  if (reminder.status === 'Belum Absen Pulang') return 'Belum Absen Pulang'
+
+  return '-'
 }
