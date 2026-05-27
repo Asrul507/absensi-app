@@ -27,6 +27,7 @@ import { supabase } from './supabase.js'
 ================================================================ */
 const CACHE_KEY = 'genius_hr_tz_offset'
 let _utcOffset = null   // number: jam offset dari UTC, mis. 8 untuk WITA
+const DEFAULT_UTC_OFFSET_ID = 7 // fallback aman: WIB
 
 /* ================================================================
    INISIALISASI — panggil sekali saat app login
@@ -49,9 +50,9 @@ export async function initTimezone() {
     if (error) throw error
 
     if (!lokasiList || lokasiList.length === 0) {
-      // Fallback: pakai timezone browser perangkat
-      _utcOffset = -new Date().getTimezoneOffset() / 60
-      console.warn(`[TZ] Tidak ada titik lokasi di DB, pakai timezone browser: UTC+${_utcOffset}`)
+      // Fallback aman untuk operasional Indonesia
+      _utcOffset = DEFAULT_UTC_OFFSET_ID
+      console.warn(`[TZ] Tidak ada titik lokasi di DB, fallback ke WIB: UTC+${_utcOffset}`)
     } else {
       // Hitung rata-rata longitude semua titik
       const totalLng = lokasiList.reduce((sum, l) => sum + parseFloat(l.longitude || 0), 0)
@@ -67,8 +68,8 @@ export async function initTimezone() {
 
   } catch (err) {
     console.error('[TZ] Gagal fetch lokasi:', err)
-    // Fallback: timezone browser
-    _utcOffset = -new Date().getTimezoneOffset() / 60
+    // Fallback aman untuk operasional Indonesia
+    _utcOffset = DEFAULT_UTC_OFFSET_ID
     return _utcOffset
   }
 }
@@ -87,10 +88,9 @@ export function resetTimezoneCache() {
 ================================================================ */
 export function getUtcOffset() {
   if (_utcOffset !== null) return _utcOffset
-  // Belum diinisialisasi — fallback ke browser timezone
-  const browserOffset = -new Date().getTimezoneOffset() / 60
-  console.warn('[TZ] getUtcOffset dipanggil sebelum initTimezone(), pakai browser offset:', browserOffset)
-  return browserOffset
+  // Belum diinisialisasi — fallback aman ke WIB
+  console.warn('[TZ] getUtcOffset dipanggil sebelum initTimezone(), pakai fallback WIB:', DEFAULT_UTC_OFFSET_ID)
+  return DEFAULT_UTC_OFFSET_ID
 }
 
 /* ================================================================
@@ -101,9 +101,19 @@ export function getUtcOffset() {
 export function toJamLokal(isoStr) {
   if (!isoStr) return '-'
   try {
+    // Jika sudah berbentuk HH:MM(:SS), kembalikan HH:MM apa adanya
+    const raw = String(isoStr).trim()
+    const m = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+    if (m) {
+      const hh = String(Math.max(0, Math.min(23, Number(m[1])))).padStart(2, '0')
+      return `${hh}:${m[2]}`
+    }
+
     const offset = getUtcOffset()
     const d      = new Date(isoStr)
-    // Geser ke waktu lokal secara manual
+    if (Number.isNaN(d.getTime())) return '-'
+
+    // Geser ke waktu lokal secara manual (24 jam)
     const lokal  = new Date(d.getTime() + offset * 60 * 60 * 1000)
     const jam    = String(lokal.getUTCHours()).padStart(2, '0')
     const menit  = String(lokal.getUTCMinutes()).padStart(2, '0')
