@@ -27,6 +27,31 @@ function hitungDurasiKerja(waktuMasuk, waktuPulang) {
   return { menit, label: mntToHM(menit) }
 }
 
+/* ===== HELPER: Format menit keterlambatan agar mudah dibaca ===== */
+function mntToReadable(totalMenit) {
+  const m = Number.parseInt(totalMenit, 10) || 0
+  if (m <= 0) return '0m'
+  if (m < 60) return `${m}m`
+  const jam = Math.floor(m / 60)
+  const menit = m % 60
+  return menit ? `${jam}j ${menit}m` : `${jam}j`
+}
+
+/* ===== HELPER: Format total menit menjadi jam-menit (mis. 8j 30m) ===== */
+const mntToHM = (totalMenit) => {
+  const m = Number.parseInt(totalMenit, 10) || 0
+  if (m <= 0) return '-'
+  const jam = Math.floor(m / 60)
+  const menit = m % 60
+  if (jam <= 0) return `${menit}m`
+  return menit ? `${jam}j ${menit}m` : `${jam}j`
+}
+
+// Fallback agar fungsi tetap tersedia jika dipanggil dari konteks global lama
+if (typeof window !== 'undefined') {
+  window.mntToHM = window.mntToHM || mntToHM
+}
+
 /* ===== HELPER: Badge radius HTML ===== */
 function badgeRadius(status) {
   if (!status) return '<span style="font-size:.72rem;color:var(--text-muted);">-</span>'
