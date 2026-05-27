@@ -1,119 +1,29 @@
-/**
- * js/timezone.js
- * ============================================================
- * Timezone Utility — Genius HR
- *
- * Timezone ditentukan secara otomatis dari koordinat longitude
- * titik radius absensi yang tersimpan di tabel `lokasi_absen`.
- *
- * Cara kerja:
- *   1. Saat login / init, ambil semua titik lokasi dari Supabase
- *   2. Hitung UTC offset dari rata-rata longitude semua titik:
- *        offset = Math.round(longitude / 15)
- *      Contoh: Balikpapan lng ~116.8° → offset +8 (WITA ✅)
- *              Jakarta         lng ~106.8° → offset +7 (WIB  ✅)
- *              Jayapura        lng ~140.7° → offset +9 (WIT  ✅)
- *   3. Simpan hasil ke localStorage sebagai cache agar tidak
- *      fetch ulang setiap kali halaman dibuka.
- *   4. Semua fungsi format jam/tanggal di aplikasi memanggil
- *      toJamLokal() / toTanggalLokal() dari file ini.
- * ============================================================
- */
-
 import { supabase } from './supabase.js'
 
-/* ================================================================
-   INTERNAL STATE
-================================================================ */
-const CACHE_KEY = 'genius_hr_tz_offset'
-let _utcOffset = null   // number: jam offset dari UTC, mis. 8 untuk WITA
-const DEFAULT_UTC_OFFSET_ID = 8 // fallback aman: WITA (Asia/Makassar)
+const TZ_NAME = 'Asia/Makassar'
+const LOCALE_ID = 'id-ID'
 
-/* ================================================================
-   INISIALISASI — panggil sekali saat app login
-================================================================ */
 export async function initTimezone() {
-  // Coba ambil dari cache localStorage dulu
-  const cached = localStorage.getItem(CACHE_KEY)
-  if (cached !== null) {
-    _utcOffset = parseInt(cached)
-    console.log(`[TZ] Timezone dari cache: UTC+${_utcOffset}`)
-    return _utcOffset
-  }
-
-  // Fetch dari Supabase
-  try {
-    const { data: lokasiList, error } = await supabase
-      .from('lokasi_absen')
-      .select('longitude, nama_titik')
-
-    if (error) throw error
-
-    if (!lokasiList || lokasiList.length === 0) {
-      // Fallback aman untuk operasional Indonesia
-      _utcOffset = DEFAULT_UTC_OFFSET_ID
-      console.warn(`[TZ] Tidak ada titik lokasi di DB, fallback ke WITA: UTC+${_utcOffset}`)
-    } else {
-      // Hitung rata-rata longitude semua titik
-      const totalLng = lokasiList.reduce((sum, l) => sum + parseFloat(l.longitude || 0), 0)
-      const avgLng   = totalLng / lokasiList.length
-      _utcOffset     = Math.round(avgLng / 15)
-
-      const namaTitik = lokasiList.map(l => l.nama_titik).join(', ')
-      console.log(`[TZ] Longitude rata-rata: ${avgLng.toFixed(2)}° → UTC+${_utcOffset} (dari: ${namaTitik})`)
-    }
-
-    localStorage.setItem(CACHE_KEY, String(_utcOffset))
-    return _utcOffset
-
-  } catch (err) {
-    console.error('[TZ] Gagal fetch lokasi:', err)
-    // Fallback aman untuk operasional Indonesia
-    _utcOffset = DEFAULT_UTC_OFFSET_ID
-    return _utcOffset
-  }
+  return TZ_NAME
 }
 
-/* ================================================================
-   RESET CACHE — panggil saat admin ubah/tambah titik lokasi
-================================================================ */
 export function resetTimezoneCache() {
-  localStorage.removeItem(CACHE_KEY)
-  _utcOffset = null
-  console.log('[TZ] Cache timezone direset')
+  // no-op: timezone dikunci ke Asia/Makassar
 }
 
-/* ================================================================
-   GET CURRENT OFFSET — return offset aktif (inisialisasi jika belum)
-================================================================ */
 export function getUtcOffset() {
-  if (_utcOffset !== null) return _utcOffset
-  // Belum diinisialisasi — fallback aman ke WIB
-  console.warn('[TZ] getUtcOffset dipanggil sebelum initTimezone(), pakai fallback WITA:', DEFAULT_UTC_OFFSET_ID)
-  return DEFAULT_UTC_OFFSET_ID
+  return 8
 }
 
-/* ================================================================
-   FORMAT JAM — tampilkan jam dari ISO/UTC timestamp ke waktu lokal
-   Input : ISO string dari Supabase (mis. "2026-05-25T12:00:00+00:00")
-   Output: "20:00" (jika offset +8)
-================================================================ */
-
-
-/* ================================================================
-   PARSE TIMESTAMP ABSENSI — konsisten lintas device/browser
-================================================================ */
 export function parseAbsensiTimestamp(value) {
   if (!value) return null
   const raw = String(value).trim()
 
-  // Jika ada timezone eksplisit (Z / +07:00), parse normal
   if (/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(raw)) {
     const d = new Date(raw)
     return Number.isNaN(d.getTime()) ? null : d
   }
 
-  // Format tanpa timezone dari backend: paksa sebagai UTC agar tidak beda HP vs PC
   if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(raw)) {
     const norm = raw.replace(' ', 'T') + 'Z'
     const d = new Date(norm)
@@ -127,7 +37,6 @@ export function parseAbsensiTimestamp(value) {
 export function toJamLokal(isoStr) {
   if (!isoStr) return '-'
   try {
-    // Jika sudah berbentuk HH:MM(:SS), kembalikan HH:MM apa adanya
     const raw = String(isoStr).trim()
     const m = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
     if (m) {
@@ -135,102 +44,82 @@ export function toJamLokal(isoStr) {
       return `${hh}:${m[2]}`
     }
 
-    const offset = getUtcOffset()
-    const d      = parseAbsensiTimestamp(isoStr)
+    const d = parseAbsensiTimestamp(isoStr)
     if (!d) return '-'
-
-    // Geser ke waktu lokal secara manual (24 jam)
-    const lokal  = new Date(d.getTime() + offset * 60 * 60 * 1000)
-    const jam    = String(lokal.getUTCHours()).padStart(2, '0')
-    const menit  = String(lokal.getUTCMinutes()).padStart(2, '0')
-    return `${jam}:${menit}`
+    return new Intl.DateTimeFormat(LOCALE_ID, {
+      timeZone: TZ_NAME,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      hourCycle: 'h23'
+    }).format(d)
   } catch {
     return '-'
   }
 }
 
-/* ================================================================
-   FORMAT TANGGAL — tampilkan tanggal lokal dari ISO string
-   Output: "25/05/2026"
-================================================================ */
 export function toTanggalLokal(isoStr) {
   if (!isoStr) return '-'
   try {
-    const offset = getUtcOffset()
-    const d      = parseAbsensiTimestamp(isoStr)
+    const d = parseAbsensiTimestamp(isoStr)
     if (!d) return '-'
-    const lokal  = new Date(d.getTime() + offset * 60 * 60 * 1000)
-    const tgl    = String(lokal.getUTCDate()).padStart(2, '0')
-    const bln    = String(lokal.getUTCMonth() + 1).padStart(2, '0')
-    const thn    = lokal.getUTCFullYear()
-    return `${tgl}/${bln}/${thn}`
+    return new Intl.DateTimeFormat(LOCALE_ID, {
+      timeZone: TZ_NAME,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(d)
   } catch {
     return '-'
   }
 }
 
-/* ================================================================
-   BUILD ISO TIMESTAMP — konversi "YYYY-MM-DD" + "HH:MM"
-   ke ISO string dengan offset lokasi yang benar.
-   Dipakai oleh perbaikan-absen.js saat kirim waktu ke Supabase.
-   Output: "2026-05-25T20:00:00+08:00"
-================================================================ */
 export function buildTimestampLokal(tanggal, jamHHMM) {
   if (!tanggal || !jamHHMM) return null
   try {
-    // Sanitize jam: ambil HH:MM saja
     const parts  = jamHHMM.trim().split(':')
     const jam    = String(parts[0] || '00').padStart(2, '0')
     const menit  = String(parts[1] || '00').padStart(2, '0')
-    const offset = getUtcOffset()
-    const sign   = offset >= 0 ? '+' : '-'
-    const absOff = String(Math.abs(offset)).padStart(2, '0')
-    return `${tanggal}T${jam}:${menit}:00${sign}${absOff}:00`
+    return `${tanggal}T${jam}:${menit}:00+08:00`
   } catch {
     return null
   }
 }
 
-/* ================================================================
-   GET LABEL TIMEZONE — untuk tampilan di UI
-   Output: "WITA (UTC+8)"
-================================================================ */
 export function getLabelTimezone() {
-  const offset = getUtcOffset()
-  const labels = {
-    7:  'WIB',
-    8:  'WITA',
-    9:  'WIT',
-  }
-  const nama = labels[offset] || `UTC+${offset}`
-  return `${nama} (UTC+${offset})`
+  return 'WITA (UTC+8)'
 }
 
-/* ================================================================
-   HITUNG DURASI KERJA (menit) — aman lintas device & shift malam
-================================================================ */
 export function getDurasiMenit(waktuMasuk, waktuPulang) {
   const masuk = parseAbsensiTimestamp(waktuMasuk)
   const pulang = parseAbsensiTimestamp(waktuPulang)
   if (!masuk || !pulang) return null
 
   let menit = Math.round((pulang - masuk) / 60000)
-
-  // Jika negatif namun kemungkinan lintas tengah malam, geser +24 jam
   if (menit < 0) menit += 24 * 60
-
   if (menit < 0) return null
   return menit
 }
 
-/* ================================================================
-   GET TODAY STRING — tanggal hari ini dalam waktu lokal (YYYY-MM-DD)
-   Lebih akurat dari new Date().toISOString().split('T')[0]
-   yang pakai UTC dan bisa berbeda tanggal di tengah malam.
-================================================================ */
 export function getTodayLokal() {
-  const offset = getUtcOffset()
-  const now    = new Date()
-  const lokal  = new Date(now.getTime() + offset * 60 * 60 * 1000)
-  return lokal.toISOString().split('T')[0]
+  const now = new Date()
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ_NAME,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(now)
+
+  const y = parts.find(p => p.type === 'year')?.value
+  const m = parts.find(p => p.type === 'month')?.value
+  const d = parts.find(p => p.type === 'day')?.value
+  return `${y}-${m}-${d}`
+}
+
+export async function getTimezoneFromLokasi() {
+  // Pertahankan compatibility agar import lama tidak rusak
+  try {
+    await supabase.from('lokasi_absen').select('id').limit(1)
+  } catch {}
+  return TZ_NAME
 }
