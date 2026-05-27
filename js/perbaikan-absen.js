@@ -21,7 +21,6 @@
 import { supabase } from './supabase.js'
 import { buildTimestampLokal, toJamLokal } from './timezone.js'
 import { showToast } from './feedback.js'
-import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 
 export async function renderPerbaikanAbsen(user) {
   const content = document.getElementById('content')
