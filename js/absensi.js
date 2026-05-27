@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { getTodayLokal } from './timezone.js'
+import { getTodayLokal, buildTimestampLokal, parseAbsensiTimestamp } from './timezone.js'
 import { getShiftDetailByCode } from './shift-resolver.js'
 
 /* ===============================================================
@@ -287,4 +287,42 @@ export function getLocation() {
       { timeout: 10000, enableHighAccuracy: true }
     )
   })
+}
+
+
+export function getStatusPulangReminder(absen, shiftInfo, nowDate = new Date()) {
+  if (!absen?.waktu_masuk) return { status: 'Tidak Absen Masuk', isLateCheckout: false }
+  if (absen?.waktu_pulang) return { status: 'Sudah Pulang', isLateCheckout: false }
+
+  const jamMasukJadwal = shiftInfo?.jam_masuk || absen?.jam_jadwal_masuk || null
+  const jamPulangJadwal = shiftInfo?.jam_pulang || absen?.jam_jadwal_pulang || null
+
+  if (!jamPulangJadwal || jamPulangJadwal === '-') {
+    return { status: 'Belum Absen Pulang', isLateCheckout: false }
+  }
+
+  let dueDate = absen?.tanggal || getTodayLokal()
+
+  if (jamMasukJadwal && jamMasukJadwal !== '-') {
+    const [inH, inM] = jamMasukJadwal.split(':').map(Number)
+    const [outH, outM] = jamPulangJadwal.split(':').map(Number)
+    const masukMin = (inH * 60) + inM
+    const pulangMin = (outH * 60) + outM
+
+    if (pulangMin <= masukMin) {
+      const d = new Date(`${dueDate}T00:00:00+08:00`)
+      d.setUTCDate(d.getUTCDate() + 1)
+      dueDate = d.toISOString().slice(0, 10)
+    }
+  }
+
+  const dueISO = buildTimestampLokal(dueDate, jamPulangJadwal)
+  const dueAt = parseAbsensiTimestamp(dueISO)
+  if (!dueAt) return { status: 'Belum Absen Pulang', isLateCheckout: false }
+
+  if (nowDate.getTime() >= dueAt.getTime()) {
+    return { status: 'Lupa Absen Pulang', isLateCheckout: true }
+  }
+
+  return { status: 'Belum Absen Pulang', isLateCheckout: false }
 }

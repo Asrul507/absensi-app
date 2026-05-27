@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js'
 import { toJamLokal, getDurasiMenit } from './timezone.js'
 import { getShiftDetailByCode, getShiftDetailByJamMasuk } from './shift-resolver.js'
+import { getStatusPulangReminder } from './absensi.js'
 
 export async function renderDaftarAbsensi(user) {
   const content = document.getElementById('content')
@@ -87,10 +88,10 @@ async function muatLogAbsensi(user) {
 
       const jamJadwalMasuk = absen.jam_jadwal_masuk || shiftRef?.jam_masuk || '--:--'
       const jamJadwalPulang = absen.jam_jadwal_pulang || shiftRef?.jam_pulang || '--:--'
-      return { absen, jamJadwalMasuk, jamJadwalPulang }
+      return { absen, jamJadwalMasuk, jamJadwalPulang, shiftRef }
     }))
 
-    listContainer.innerHTML = rowsWithShift.map(({ absen, jamJadwalMasuk, jamJadwalPulang }) => {
+    listContainer.innerHTML = rowsWithShift.map(({ absen, jamJadwalMasuk, jamJadwalPulang, shiftRef }) => {
       const opt = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
       const formatHari = new Date(absen.tanggal).toLocaleDateString('id-ID', opt)
 
@@ -156,7 +157,7 @@ async function muatLogAbsensi(user) {
           <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:${absen.waktu_pulang ? '#f8fafc' : '#f1f5f9'}; border-radius:10px; opacity:${absen.waktu_pulang ? '1' : '0.65'}">
             <div style="display:flex; align-items:center; gap:10px;">
               <i class="fa fa-arrow-right-from-bracket" style="color:#ea580c; font-size:.95rem;"></i>
-              <span style="font-family:monospace; font-weight:700; font-size:.9rem; color:${absen.waktu_pulang ? 'var(--text)' : 'var(--text-muted)'}">${jamJamPulang(absen, jamPulang)}</span>
+              <span style="font-family:monospace; font-weight:700; font-size:.9rem; color:${absen.waktu_pulang ? 'var(--text)' : 'var(--text-muted)'}">${jamJamPulang(absen, jamPulang, { jam_masuk: jamJadwalMasuk, jam_pulang: jamJadwalPulang, ...shiftRef })}</span>
             </div>
             <div>${badgePulang}</div>
           </div>
@@ -174,8 +175,12 @@ function CorelJamLengkap(absen) {
   return Boolean(absen.waktu_pulang)
 }
 
-function jamJamPulang(absen, jamPulang) {
+function jamJamPulang(absen, jamPulang, shiftInfo) {
   if (absen.waktu_pulang) return jamPulang
-  if (absen.status_absensi === 'lupa absen pulang') return 'Lupa Absen Pulang'
+
+  const reminder = getStatusPulangReminder(absen, shiftInfo)
+  if (reminder.status === 'Lupa Absen Pulang') return 'Lupa Absen Pulang'
+  if (reminder.status === 'Belum Absen Pulang') return 'Belum Absen Pulang'
+
   return '-'
 }
