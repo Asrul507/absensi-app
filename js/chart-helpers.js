@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { toJamLokal } from './timezone.js'
+import { toJamLokal, getDurasiMenit } from './timezone.js'
 
 /* ===============================================================
    CHART INSTANCE TRACKER (DIPERKETAT: FIX CONFLICT CANVAS)
@@ -154,12 +154,10 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
 
     if (a.waktu_masuk) {
       masukTxt = toJamLokal(a.waktu_masuk)
-      const dMasuk = new Date(a.waktu_masuk)
-      
       if (a.waktu_pulang) {
         pulangTxt = toJamLokal(a.waktu_pulang)
-        const dPulang = new Date(a.waktu_pulang)
-        jamEfektif = (dPulang - dMasuk) / (1000 * 60 * 60)
+        const durasiMenit = getDurasiMenit(a.waktu_masuk, a.waktu_pulang)
+        jamEfektif = durasiMenit !== null ? (durasiMenit / 60) : 0
       }
     }
 

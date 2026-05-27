@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { toJamLokal, getTodayLokal } from './timezone.js'
+import { toJamLokal, getTodayLokal, getDurasiMenit } from './timezone.js'
 import { showToast } from './feedback.js'
 
 export async function renderRekapInOut(user) {
@@ -209,12 +209,12 @@ function calculateRekapInOut(absensiData, isAdmin, currentUserName) {
 
     let totalJam = '-'
     if (a.waktu_masuk && a.waktu_pulang) {
-      const masuk = new Date(a.waktu_masuk)
-      const pulang = new Date(a.waktu_pulang)
-      const durationMinutes = Math.round((pulang - masuk) / 60000)
-      const jam = Math.floor(durationMinutes / 60)
-      const menit = durationMinutes % 60
-      totalJam = `${jam}h ${menit}m`
+      const durationMinutes = getDurasiMenit(a.waktu_masuk, a.waktu_pulang)
+      if (durationMinutes !== null) {
+        const jam = Math.floor(durationMinutes / 60)
+        const menit = durationMinutes % 60
+        totalJam = `${jam}h ${menit}m`
+      }
     }
 
     // Buat keterangan dinamis berdasarkan data menit riil Supabase
