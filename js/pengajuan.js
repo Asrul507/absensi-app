@@ -4,12 +4,27 @@ import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { isEligibleCuti, getSisaCuti, hitungMasaKerja, syncSisaCutiProfile } from './cuti.js'
 import { showToast, setButtonLoading } from './feedback.js'
 
+function toDateStr(value) {
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 /* ===============================================================
    HITUNG TANGGAL SELESAI
    FIX: ganti toISOString() → toDateStr() agar tidak geser 1 hari
 =============================================================== */
 function hitungTanggalSelesai(startDate, hari) {
   if (!startDate || !hari) return null
+  const date = new Date(startDate)
+  if (Number.isNaN(date.getTime())) return null
+  const jmlHari = Number.parseInt(hari, 10)
+  if (!Number.isFinite(jmlHari) || jmlHari < 1) return null
+  date.setDate(date.getDate() + (jmlHari - 1))
+  return toDateStr(date)
   // Parse "YYYY-MM-DD" sebagai waktu lokal (bukan UTC)
   const [y, m, d] = startDate.split('-').map(Number)
   const date = new Date(y, m - 1, d)
@@ -376,6 +391,8 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
         }
       }
 
+      await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
+      showToast('Pengajuan disetujui, jadwal & kuota cuti diperbarui', 'success')
       await logAuditEvent({
         action: 'approve',
         entityType: 'pengajuan',
@@ -393,6 +410,8 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
         approved_at: new Date().toISOString()
       }).eq('id', id)
 
+      await logAuditEvent({ action: 'reject', entityType: 'pengajuan', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
+      showToast('Pengajuan ditolak', 'info')
       await logAuditEvent({
         action: 'reject',
         entityType: 'pengajuan',
