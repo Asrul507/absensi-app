@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { showToast } from './feedback.js'
 
 export async function submitAbsen(data) {
 
@@ -8,9 +9,9 @@ export async function submitAbsen(data) {
 
   if(error){
     console.error(error)
-    alert('Gagal absen')
+    showToast('Gagal absen: ' + error.message, 'error')
     return
   }
 
-  alert('Absen berhasil ✔')
+  showToast('Absen berhasil', 'success')
 }

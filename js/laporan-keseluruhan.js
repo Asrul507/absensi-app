@@ -11,6 +11,7 @@
 
 import { supabase } from './supabase.js'
 import { toJamLokal } from './timezone.js'
+import { showToast } from './feedback.js'
 
 /* ===== HELPER: Format waktu dari ISO string — pakai timezone dari titik radius ===== */
 function formatJam(isoStr) {
@@ -485,7 +486,7 @@ function renderTabRekap(data, isAdmin) {
 ================================================================ */
 window.downloadLaporanExcel = function () {
   if (typeof XLSX === 'undefined') {
-    alert('Library Excel (XLSX) belum dimuat.')
+    showToast('Library Excel (XLSX) belum dimuat.', 'warning')
     return
   }
 
@@ -498,7 +499,7 @@ window.downloadLaporanExcel = function () {
 
   if (tab === 'rinci') {
     const src = window._lkExportRinci || []
-    if (!src.length) { alert('Tidak ada data untuk didownload.'); return }
+    if (!src.length) { showToast('Tidak ada data untuk didownload.', 'info'); return }
 
     const dataExcel = src.map((r, i) => ({
       'No':                i + 1,
@@ -522,7 +523,7 @@ window.downloadLaporanExcel = function () {
 
   } else {
     const src = window._lkExportRekap || []
-    if (!src.length) { alert('Tidak ada data untuk didownload.'); return }
+    if (!src.length) { showToast('Tidak ada data untuk didownload.', 'info'); return }
 
     const dataExcel = src.map((r, i) => ({
       'No':                   i + 1,
