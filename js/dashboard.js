@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { getTodayLokal } from './timezone.js'
+import { getTodayLokal, getDurasiMenit } from './timezone.js'
 import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
 
 export async function renderDashboard() {
@@ -109,9 +109,8 @@ export async function renderDashboard() {
   let totalJamKerja = 0
   absensiMonth?.forEach(a => {
     if (a.waktu_masuk && a.waktu_pulang) {
-      const masuk = new Date(a.waktu_masuk)
-      const pulang = new Date(a.waktu_pulang)
-      totalJamKerja += (pulang - masuk) / (1000 * 60 * 60)
+      const durasiMenit = getDurasiMenit(a.waktu_masuk, a.waktu_pulang)
+      if (durasiMenit !== null) totalJamKerja += durasiMenit / 60
     }
   })
 

@@ -27,7 +27,7 @@ import { supabase } from './supabase.js'
 ================================================================ */
 const CACHE_KEY = 'genius_hr_tz_offset'
 let _utcOffset = null   // number: jam offset dari UTC, mis. 8 untuk WITA
-const DEFAULT_UTC_OFFSET_ID = 7 // fallback aman: WIB
+const DEFAULT_UTC_OFFSET_ID = 8 // fallback aman: WITA (Asia/Makassar)
 
 /* ================================================================
    INISIALISASI — panggil sekali saat app login
@@ -52,7 +52,7 @@ export async function initTimezone() {
     if (!lokasiList || lokasiList.length === 0) {
       // Fallback aman untuk operasional Indonesia
       _utcOffset = DEFAULT_UTC_OFFSET_ID
-      console.warn(`[TZ] Tidak ada titik lokasi di DB, fallback ke WIB: UTC+${_utcOffset}`)
+      console.warn(`[TZ] Tidak ada titik lokasi di DB, fallback ke WITA: UTC+${_utcOffset}`)
     } else {
       // Hitung rata-rata longitude semua titik
       const totalLng = lokasiList.reduce((sum, l) => sum + parseFloat(l.longitude || 0), 0)
@@ -89,7 +89,7 @@ export function resetTimezoneCache() {
 export function getUtcOffset() {
   if (_utcOffset !== null) return _utcOffset
   // Belum diinisialisasi — fallback aman ke WIB
-  console.warn('[TZ] getUtcOffset dipanggil sebelum initTimezone(), pakai fallback WIB:', DEFAULT_UTC_OFFSET_ID)
+  console.warn('[TZ] getUtcOffset dipanggil sebelum initTimezone(), pakai fallback WITA:', DEFAULT_UTC_OFFSET_ID)
   return DEFAULT_UTC_OFFSET_ID
 }
 
@@ -98,6 +98,32 @@ export function getUtcOffset() {
    Input : ISO string dari Supabase (mis. "2026-05-25T12:00:00+00:00")
    Output: "20:00" (jika offset +8)
 ================================================================ */
+
+
+/* ================================================================
+   PARSE TIMESTAMP ABSENSI — konsisten lintas device/browser
+================================================================ */
+export function parseAbsensiTimestamp(value) {
+  if (!value) return null
+  const raw = String(value).trim()
+
+  // Jika ada timezone eksplisit (Z / +07:00), parse normal
+  if (/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(raw)) {
+    const d = new Date(raw)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+
+  // Format tanpa timezone dari backend: paksa sebagai UTC agar tidak beda HP vs PC
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(raw)) {
+    const norm = raw.replace(' ', 'T') + 'Z'
+    const d = new Date(norm)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+
+  const d = new Date(raw)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 export function toJamLokal(isoStr) {
   if (!isoStr) return '-'
   try {
@@ -110,8 +136,8 @@ export function toJamLokal(isoStr) {
     }
 
     const offset = getUtcOffset()
-    const d      = new Date(isoStr)
-    if (Number.isNaN(d.getTime())) return '-'
+    const d      = parseAbsensiTimestamp(isoStr)
+    if (!d) return '-'
 
     // Geser ke waktu lokal secara manual (24 jam)
     const lokal  = new Date(d.getTime() + offset * 60 * 60 * 1000)
@@ -131,7 +157,8 @@ export function toTanggalLokal(isoStr) {
   if (!isoStr) return '-'
   try {
     const offset = getUtcOffset()
-    const d      = new Date(isoStr)
+    const d      = parseAbsensiTimestamp(isoStr)
+    if (!d) return '-'
     const lokal  = new Date(d.getTime() + offset * 60 * 60 * 1000)
     const tgl    = String(lokal.getUTCDate()).padStart(2, '0')
     const bln    = String(lokal.getUTCMonth() + 1).padStart(2, '0')
@@ -177,6 +204,23 @@ export function getLabelTimezone() {
   }
   const nama = labels[offset] || `UTC+${offset}`
   return `${nama} (UTC+${offset})`
+}
+
+/* ================================================================
+   HITUNG DURASI KERJA (menit) — aman lintas device & shift malam
+================================================================ */
+export function getDurasiMenit(waktuMasuk, waktuPulang) {
+  const masuk = parseAbsensiTimestamp(waktuMasuk)
+  const pulang = parseAbsensiTimestamp(waktuPulang)
+  if (!masuk || !pulang) return null
+
+  let menit = Math.round((pulang - masuk) / 60000)
+
+  // Jika negatif namun kemungkinan lintas tengah malam, geser +24 jam
+  if (menit < 0) menit += 24 * 60
+
+  if (menit < 0) return null
+  return menit
 }
 
 /* ================================================================

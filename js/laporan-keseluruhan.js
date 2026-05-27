@@ -10,7 +10,7 @@
  */
 
 import { supabase } from './supabase.js'
-import { toJamLokal } from './timezone.js'
+import { toJamLokal, getDurasiMenit } from './timezone.js'
 import { showToast } from './feedback.js'
 
 /* ===== HELPER: Format waktu dari ISO string — pakai timezone dari titik radius ===== */
@@ -21,9 +21,7 @@ function formatJam(isoStr) {
 /* ===== HELPER: Hitung durasi kerja dari 2 ISO string ===== */
 function hitungDurasiKerja(waktuMasuk, waktuPulang) {
   if (!waktuMasuk || !waktuPulang) return { menit: 0, label: '-' }
-  const masuk  = new Date(waktuMasuk)
-  const pulang = new Date(waktuPulang)
-  const menit  = Math.max(0, Math.round((pulang - masuk) / 60000))
+  const menit = getDurasiMenit(waktuMasuk, waktuPulang) ?? 0
   return { menit, label: mntToHM(menit) }
 }
 
