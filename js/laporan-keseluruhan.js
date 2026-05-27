@@ -18,8 +18,6 @@ function formatJam(isoStr) {
   return toJamLokal(isoStr)
 }
 
-
-
 /* ===== HELPER: Hitung durasi kerja dari 2 ISO string ===== */
 function hitungDurasiKerja(waktuMasuk, waktuPulang) {
   if (!waktuMasuk || !waktuPulang) return { menit: 0, label: '-' }
@@ -30,14 +28,19 @@ function hitungDurasiKerja(waktuMasuk, waktuPulang) {
 }
 
 /* ===== HELPER: Format menit keterlambatan agar mudah dibaca ===== */
-function mntToReadable(totalMenit) {
+function mntToHM(totalMenit) {
   const m = Number.parseInt(totalMenit, 10) || 0
-  if (m <= 0) return '0m'
-  if (m < 60) return `${m}m`
+
+  if (m <= 0) return '-'
+
   const jam = Math.floor(m / 60)
   const menit = m % 60
+
+  if (jam <= 0) return `${menit}m`
+
   return menit ? `${jam}j ${menit}m` : `${jam}j`
 }
+
 
 /* ===== HELPER: Badge radius HTML ===== */
 function badgeRadius(status) {
