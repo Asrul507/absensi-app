@@ -67,3 +67,15 @@ export async function getAllShiftOptions() {
 
   return Object.values(LEGACY_SHIFT_MAP)
 }
+
+export async function getShiftDetailByJamMasuk(jamMasuk) {
+  const jam = String(jamMasuk || '').trim()
+  if (!jam || jam === '--:--' || jam === '-') return null
+
+  const rows = await loadShiftMaster()
+  const byJam = rows.find(r => String(r.jam_masuk || '').trim() === jam)
+  if (byJam) return fromRow(byJam)
+
+  const legacy = Object.values(LEGACY_SHIFT_MAP).find(v => v.jam_masuk === jam)
+  return legacy ? { ...legacy } : null
+}
