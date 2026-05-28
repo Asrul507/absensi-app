@@ -1,9 +1,10 @@
 import { supabase } from './supabase.js'
 import { toJamLokal, getTodayLokal } from './timezone.js'
 import { showToast, promptAction } from './feedback.js'
+import { getStatusPulangReminder } from './absensi.js'
 
 /* ================= HELPER BADGE KETERANGAN ================= */
-function badgeKeterangan(status_absensi, waktu_masuk, waktu_pulang) {
+function badgeKeterangan(status_absensi, waktu_masuk, waktu_pulang, row = null) {
   // complete / approved manual → hijau
   if (status_absensi === 'complete' || status_absensi === 'approved manual') {
     return `<span class="badge badge-green"><i class="fa fa-circle-check"></i> ${status_absensi === 'complete' ? 'Complete' : 'Approved Manual'}</span>`
@@ -13,8 +14,10 @@ function badgeKeterangan(status_absensi, waktu_masuk, waktu_pulang) {
   if (status_absensi === 'salah absen') {
     return `<span class="badge badge-red"><i class="fa fa-circle-xmark"></i> Salah Absen</span>`
   }
-  if (status_absensi === 'lupa absen pulang' || (!waktu_pulang && waktu_masuk)) {
-    return `<span class="badge badge-red"><i class="fa fa-triangle-exclamation"></i> Belum Pulang</span>`
+  if (!waktu_pulang && waktu_masuk) {
+    const reminder = getStatusPulangReminder(row || { waktu_masuk, waktu_pulang, tanggal: row?.tanggal, jam_jadwal_masuk: row?.jam_jadwal_masuk, jam_jadwal_pulang: row?.jam_jadwal_pulang }, { jam_masuk: row?.jam_jadwal_masuk, jam_pulang: row?.jam_jadwal_pulang })
+    const label = reminder.status === 'Lupa Absen Pulang' ? 'Lupa Absen Pulang' : 'Belum Pulang'
+    return `<span class="badge badge-red"><i class="fa fa-triangle-exclamation"></i> ${label}</span>`
   }
   if (status_absensi === 'lupa absen datang' || (!waktu_masuk && waktu_pulang)) {
     return `<span class="badge badge-red"><i class="fa fa-triangle-exclamation"></i> Tidak Absen Masuk</span>`
@@ -193,7 +196,7 @@ window.loadRiwayat = async function (user) {
                     ${statusMasukHtml}
                   </td>
                   <td>
-                    ${badgeKeterangan(r.status_absensi, r.waktu_masuk, r.waktu_pulang)}
+                    ${badgeKeterangan(r.status_absensi, r.waktu_masuk, r.waktu_pulang, r)}
                   </td>
                   ${isAdmin ? `
                     <td class="td-action">

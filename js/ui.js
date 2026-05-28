@@ -30,7 +30,7 @@
 
 import { supabase } from './supabase.js'
 import { toJamLokal, getTodayLokal } from './timezone.js'
-import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang } from './absensi.js'
+import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang, getStatusPulangReminder } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
 import { dapatkanLokasiAbsenAktif } from './geolocation.js'
 
@@ -44,6 +44,7 @@ function stopCamera(video) {
 }
 
 function hitungKeterangan(absen, shift) {
+  const reminder = getStatusPulangReminder(absen, shift)
   const shiftSpecial = ['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(shift?.nama_shift)
 
   if (absen?.status_absensi === 'salah absen') {
@@ -78,7 +79,7 @@ function hitungKeterangan(absen, shift) {
 
   if (absen?.waktu_masuk && !absen?.waktu_pulang) {
     return {
-      label: 'Belum Absen Pulang',
+      label: reminder.status === 'Lupa Absen Pulang' ? 'Lupa Absen Pulang' : 'Belum Absen Pulang',
       color: '#dc2626',
       bg:    '#fef2f2',
       border:'#fca5a5',
@@ -203,9 +204,10 @@ export async function renderAbsensi(user) {
     statusColor = 'var(--success)'
     statusIcon  = 'fa-circle-check'
   } else if (absen?.waktu_masuk && !absen?.waktu_pulang) {
-    statusLabel = 'Sedang Bekerja'
-    statusColor = 'var(--warning)'
-    statusIcon  = 'fa-spinner fa-spin'
+    const reminder = getStatusPulangReminder(absen, todayShift)
+    statusLabel = reminder.status === 'Lupa Absen Pulang' ? 'Lupa Absen Pulang' : 'Sedang Bekerja'
+    statusColor = reminder.status === 'Lupa Absen Pulang' ? 'var(--danger)' : 'var(--warning)'
+    statusIcon  = reminder.status === 'Lupa Absen Pulang' ? 'fa-triangle-exclamation' : 'fa-spinner fa-spin'
   } else if (absen?.status_absensi === 'salah absen') {
     statusLabel = 'Salah Absen'
     statusColor = 'var(--danger)'
