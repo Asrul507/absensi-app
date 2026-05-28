@@ -9,6 +9,7 @@ import { getShiftDetailByCode } from './shift-resolver.js'
 export const ATTENDANCE_CONFIG = {
   GRACE_PERIOD_MINUTES: 5,        // Toleransi keterlambatan (menit)
   MAX_ALLOWED_LATE_MINUTES: 30,   // Jika > 30 menit = consider as "tidak masuk"
+  CHECKOUT_GRACE_HOURS: 3,        // Grace period lupa pulang setelah jam pulang shift
 }
 
 /* ===============================================================
@@ -135,22 +136,12 @@ export async function getTodayAbsen(nama) {
     return null
   }
 
-  // Jika ada absensi hari ini (masuk/sudah lengkap) → return langsung
-  if (data) return data
+  if (data?.waktu_masuk && !data?.waktu_pulang) return data
+  if (data?.waktu_masuk && data?.waktu_pulang) return data
 
-  // ── FIX SHIFT MALAM: cek absensi tanggal kemarin ─────────────────────────
-  // Hanya relevan jika sekarang dini hari (00:00 – 08:00)
-  const jamSekarang = new Date().getHours()
-  if (jamSekarang >= 8) return null  // Bukan window shift malam, return null saja
-
-  // Hitung tanggal kemarin
-  const kemarin = new Date()
-  kemarin.setDate(kemarin.getDate() - 1)
-  // Gunakan format YYYY-MM-DD manual agar tidak terpengaruh timezone
-  const yyyy = kemarin.getFullYear()
-  const mm   = String(kemarin.getMonth() + 1).padStart(2, '0')
-  const dd   = String(kemarin.getDate()).padStart(2, '0')
-  const kemarinStr = `${yyyy}-${mm}-${dd}`
+  const kemarin = new Date(`${today}T00:00:00+08:00`)
+  kemarin.setUTCDate(kemarin.getUTCDate() - 1)
+  const kemarinStr = kemarin.toISOString().slice(0, 10)
 
   const { data: dataKemarin } = await supabase
     .from('absensi')
@@ -159,13 +150,20 @@ export async function getTodayAbsen(nama) {
     .eq('tanggal', kemarinStr)
     .maybeSingle()
 
-  // Jika kemarin ada absen masuk tapi belum pulang → shift malam masih aktif
-  if (dataKemarin?.waktu_masuk && !dataKemarin?.waktu_pulang) {
-    console.log('[SHIFT MALAM] Ditemukan absensi kemarin yang belum pulang:', kemarinStr)
+  if (!dataKemarin?.waktu_masuk || dataKemarin?.waktu_pulang) return data || null
+
+  const reminder = getStatusPulangReminder(dataKemarin, {
+    jam_masuk: dataKemarin.jam_jadwal_masuk,
+    jam_pulang: dataKemarin.jam_jadwal_pulang,
+    lintas_hari: true
+  })
+
+  if (reminder.status !== 'Lupa Absen Pulang') {
+    console.log('[SHIFT AKTIF] Melanjutkan absensi terbuka dari kemarin:', kemarinStr)
     return dataKemarin
   }
 
-  return null
+  return data || null
 }
 
 /* ===============================================================
@@ -205,11 +203,12 @@ export async function getTodayShift(user_id) {
       .eq('tanggal', kemarinStr)
       .maybeSingle()
 
-    // Jika kemarin shift malam (kode 4) → return shift malam, bukan shift hari ini
-    if (dataKemarin?.shift_code === '4') {
-      console.log('[SHIFT MALAM] Masih dalam window shift malam kemarin:', kemarinStr)
-      const shiftMalam = await getShiftDetailByCode('4')
-      return shiftMalam || { nama_shift: 'Shift Malam', jam_masuk: '23:00', jam_pulang: '07:00' }
+    if (dataKemarin?.shift_code) {
+      const shiftKemarin = await getShiftDetailByCode(dataKemarin.shift_code)
+      if (shiftKemarin?.lintas_hari) {
+        console.log('[SHIFT MALAM] Masih dalam window shift lintas hari kemarin:', kemarinStr)
+        return shiftKemarin
+      }
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
@@ -303,13 +302,17 @@ export function getStatusPulangReminder(absen, shiftInfo, nowDate = new Date()) 
 
   let dueDate = absen?.tanggal || getTodayLokal()
 
+  let lintasHari = Boolean(shiftInfo?.lintas_hari)
+
   if (jamMasukJadwal && jamMasukJadwal !== '-') {
     const [inH, inM] = jamMasukJadwal.split(':').map(Number)
     const [outH, outM] = jamPulangJadwal.split(':').map(Number)
     const masukMin = (inH * 60) + inM
     const pulangMin = (outH * 60) + outM
 
-    if (pulangMin <= masukMin) {
+    if (pulangMin <= masukMin) lintasHari = true
+
+    if (lintasHari) {
       const d = new Date(`${dueDate}T00:00:00+08:00`)
       d.setUTCDate(d.getUTCDate() + 1)
       dueDate = d.toISOString().slice(0, 10)
@@ -320,7 +323,10 @@ export function getStatusPulangReminder(absen, shiftInfo, nowDate = new Date()) 
   const dueAt = parseAbsensiTimestamp(dueISO)
   if (!dueAt) return { status: 'Belum Absen Pulang', isLateCheckout: false }
 
-  if (nowDate.getTime() >= dueAt.getTime()) {
+  const graceMs = ATTENDANCE_CONFIG.CHECKOUT_GRACE_HOURS * 60 * 60 * 1000
+  const cutOff = new Date(dueAt.getTime() + graceMs)
+
+  if (nowDate.getTime() >= cutOff.getTime()) {
     return { status: 'Lupa Absen Pulang', isLateCheckout: true }
   }
 

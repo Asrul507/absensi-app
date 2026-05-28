@@ -1,10 +1,10 @@
 import { supabase } from './supabase.js'
 
 export const LEGACY_SHIFT_MAP = {
-  '2': { code: '2', nama_shift: 'Shift Pagi', jam_masuk: '07:00', jam_pulang: '15:00' },
-  '3': { code: '3', nama_shift: 'Shift Sore', jam_masuk: '15:00', jam_pulang: '23:00' },
-  '4': { code: '4', nama_shift: 'Shift Malam', jam_masuk: '23:00', jam_pulang: '07:00' },
-  '8': { code: '8', nama_shift: 'OFF', jam_masuk: '-', jam_pulang: '-' }
+  '2': { code: '2', nama_shift: 'Shift Pagi', jam_masuk: '07:00', jam_pulang: '15:00', lintas_hari: false },
+  '3': { code: '3', nama_shift: 'Shift Sore', jam_masuk: '15:00', jam_pulang: '23:00', lintas_hari: false },
+  '4': { code: '4', nama_shift: 'Shift Malam', jam_masuk: '23:00', jam_pulang: '07:00', lintas_hari: true },
+  '8': { code: '8', nama_shift: 'OFF', jam_masuk: '-', jam_pulang: '-', lintas_hari: false }
 }
 
 let cachedShiftRows = null
@@ -18,7 +18,8 @@ function fromRow(row, fallbackCode = null) {
     code: String(row.shift_code ?? row.kode_shift ?? fallbackCode ?? ''),
     nama_shift: row.nama_shift || row.nama || 'Shift',
     jam_masuk: row.jam_masuk || '-',
-    jam_pulang: row.jam_pulang || '-'
+    jam_pulang: row.jam_pulang || '-',
+    lintas_hari: Boolean(row.lintas_hari)
   }
 }
 
