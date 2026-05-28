@@ -98,10 +98,12 @@ export async function renderDashboard() {
   const dateFrom = firstDay.toISOString().split('T')[0]
   const dateTo   = lastDay.toISOString().split('T')[0]
 
-  // Get total jam kerja
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+
+  // Get total jam kerja (personal user login)
   const { data: absensiMonth } = await supabase
     .from('absensi')
-    .select('waktu_masuk, waktu_pulang')
+    .select('waktu_masuk, waktu_pulang, status_masuk, status_absensi')
     .eq('nama', fullName)
     .gte('tanggal', dateFrom)
     .lte('tanggal', dateTo)
@@ -153,7 +155,6 @@ export async function renderDashboard() {
 
   // ===== WIDGET STATISTIK KEHADIRAN REAL-TIME KHUSUS ADMIN =====
   let adminWidgetHtml = ''
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
   
   if (isAdmin) {
     try {
@@ -209,6 +210,92 @@ export async function renderDashboard() {
     }
   }
 
+  // ===== DASHBOARD PERSONAL STAFF =====
+  const { data: absensiHariIni } = await supabase
+    .from('absensi')
+    .select('waktu_masuk, waktu_pulang, status_absensi')
+    .eq('nama', fullName)
+    .eq('tanggal', todayLocal)
+    .maybeSingle()
+
+  const { data: shiftHariIni } = await supabase
+    .from('jadwal')
+    .select('shift_code, status_override')
+    .eq('user_id', user.id)
+    .eq('tanggal', todayLocal)
+    .maybeSingle()
+
+  const totalHadirBulanIni = absensiMonth?.filter(a => a.waktu_masuk).length || 0
+  const totalTerlambatBulanIni = absensiMonth?.filter(a => a.status_masuk === 'Terlambat').length || 0
+  const totalLupaPulangBulanIni = absensiMonth?.filter(a => a.status_absensi === 'lupa absen pulang').length || 0
+
+  const { data: riwayatTerbaru } = await supabase
+    .from('absensi')
+    .select('tanggal, waktu_masuk, waktu_pulang, status_absensi')
+    .eq('nama', fullName)
+    .order('tanggal', { ascending: false })
+    .limit(5)
+
+  const personalHtml = `
+    <div style="margin-bottom: 20px;">
+      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Dashboard Personal</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Hadir Bulan Ini</div><div style="font-size:1.2rem;font-weight:800">${totalHadirBulanIni}</div></div>
+        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Terlambat Bulan Ini</div><div style="font-size:1.2rem;font-weight:800">${totalTerlambatBulanIni}</div></div>
+        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Lupa Absen Pulang</div><div style="font-size:1.2rem;font-weight:800">${totalLupaPulangBulanIni}</div></div>
+        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Jam Kerja Bulan Ini</div><div style="font-size:1.2rem;font-weight:800">${totalJamKerja.toFixed(1)} jam</div></div>
+        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Shift Hari Ini</div><div style="font-size:1rem;font-weight:800">${shiftHariIni?.status_override || shiftHariIni?.shift_code || '-'}</div></div>
+        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Status Absensi Hari Ini</div><div style="font-size:1rem;font-weight:800">${absensiHariIni?.status_absensi || 'Belum Absen'}</div></div>
+      </div>
+    </div>
+
+    <div class="card fade-up" style="padding: 16px; margin-bottom: 20px;">
+      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Riwayat Absensi Terbaru</div>
+      ${(riwayatTerbaru || []).map(r => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>${r.tanggal}</span><span>${r.waktu_masuk || '-'} → ${r.waktu_pulang || '-'}</span><strong>${r.status_absensi || '-'}</strong></div>`).join('') || '<div style="font-size:.82rem;color:var(--text-muted)">Belum ada riwayat absensi.</div>'}
+    </div>
+  `
+
+  // ===== HR ANALYTICS GLOBAL (ADMIN / SUPER ADMIN) =====
+  let adminGlobalHtml = ''
+  if (isAdmin) {
+    const { data: globalAbsensi } = await supabase
+      .from('absensi')
+      .select('nama, status_masuk, status_absensi, waktu_masuk, waktu_pulang')
+      .gte('tanggal', dateFrom)
+      .lte('tanggal', dateTo)
+
+    const hadirGlobal = globalAbsensi?.filter(a => a.waktu_masuk).length || 0
+    const terlambatGlobal = globalAbsensi?.filter(a => a.status_masuk === 'Terlambat').length || 0
+    const lupaPulangGlobal = globalAbsensi?.filter(a => a.status_absensi === 'lupa absen pulang').length || 0
+
+    const rankMap = {}
+    ;(globalAbsensi || []).forEach(a => {
+      if (!a.nama) return
+      if (!rankMap[a.nama]) rankMap[a.nama] = { hadir: 0 }
+      if (a.waktu_masuk) rankMap[a.nama].hadir += 1
+    })
+    const ranking = Object.entries(rankMap).sort((a, b) => b[1].hadir - a[1].hadir).slice(0, 5)
+
+    adminGlobalHtml = `
+      <div style="margin-bottom: 20px;">
+        <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">HR Analytics Global</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Total Hadir</div><div style="font-size:1.2rem;font-weight:800">${hadirGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Total Terlambat</div><div style="font-size:1.2rem;font-weight:800">${terlambatGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Lupa Absen Pulang</div><div style="font-size:1.2rem;font-weight:800">${lupaPulangGlobal}</div></div>
+        </div>
+      </div>
+      <div class="card fade-up" style="padding:16px;margin-bottom:20px;" id="adminGlobalStats" data-hadir="${hadirGlobal}" data-terlambat="${terlambatGlobal}" data-lupa="${lupaPulangGlobal}">
+        <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Ranking Staff (Top 5 Kehadiran)</div>
+        ${ranking.map(([nama, v], i) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>#${i + 1} ${nama}</span><strong>${v.hadir} hadir</strong></div>`).join('')}
+      </div>
+      <div class="card fade-up" style="padding:16px;margin-bottom:20px;">
+        <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Grafik Global Kehadiran</div>
+        <div style="position:relative;width:100%;height:220px;"><canvas id="adminGlobalChart"></canvas></div>
+      </div>
+    `
+  }
+
   content.innerHTML = `
     <div class="page-header" style="margin-bottom: 20px;">
       <h2 style="margin: 0;"><i class="fa fa-tachometer-alt"></i> Dashboard</h2>
@@ -225,6 +312,7 @@ export async function renderDashboard() {
     </div>
 
     ${adminWidgetHtml}
+    ${isAdmin ? adminGlobalHtml : personalHtml}
 
     <div style="margin-bottom: 25px; display: flex; justify-content: center; width: 100%;">
       <div style="
@@ -326,5 +414,20 @@ async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
     createTotalJamKerjaChart('jamKerjaChart', totalJamKerja)
     createAktivitasChart('aktivitasChart', userId, dateFrom, dateTo)
     createAbsensiChart('absensiChartKehadiran', 'absensiChartMasuk', 'absensiChartPulang', userId, dateFrom, dateTo)
+    if ((window.currentUser?.role === 'admin' || window.currentUser?.role === 'super_admin') && document.getElementById('adminGlobalChart')) {
+      const ctx = document.getElementById('adminGlobalChart')
+      const statsEl = document.getElementById('adminGlobalStats')
+      const hadir = Number(statsEl?.dataset?.hadir || 0)
+      const terlambat = Number(statsEl?.dataset?.terlambat || 0)
+      const lupa = Number(statsEl?.dataset?.lupa || 0)
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Hadir', 'Terlambat', 'Lupa Pulang'],
+          datasets: [{ data: [hadir, terlambat, lupa], backgroundColor: ['#16a34a', '#d97706', '#dc2626'] }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+      })
+    }
   }, 100)
 }
