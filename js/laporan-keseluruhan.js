@@ -222,6 +222,7 @@ window.applyLaporanFilter = async function () {
     let query = supabase
       .from('absensi')
       .select('*')
+      .eq('status_absensi', 'COMPLETE')
       .order('tanggal', { ascending: false })
       .order('waktu_masuk', { ascending: true })
 
