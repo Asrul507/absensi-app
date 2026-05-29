@@ -2,6 +2,7 @@ import { supabase } from './supabase.js'
 import { getTodayLokal, getDurasiMenit } from './timezone.js'
 import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
 import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
+import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
 
 export async function renderDashboard() {
   const content = document.getElementById('content')
@@ -37,6 +38,8 @@ export async function renderDashboard() {
   } catch (e) {
     console.error('Gagal sinkronisasi status OPEN absensi:', e)
   }
+
+  const dashboardServerIso = await getServerTimeIso()
 
   // Get profile terbaru
   const { data: profile } = await supabase
@@ -282,6 +285,12 @@ export async function renderDashboard() {
       <h2 style="margin: 0;"><i class="fa fa-tachometer-alt"></i> Dashboard</h2>
     </div>
 
+    <div class="card fade-up" style="padding: 16px; margin-bottom: 16px; text-align:center;">
+      <div style="font-size:.7rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;margin-bottom:4px;">Waktu Server</div>
+      <div id="dashboardLiveClock" style="font-family:monospace;font-size:1.8rem;font-weight:900;color:var(--primary);">--:--:--</div>
+      <div id="dashboardLiveDate" style="font-size:.8rem;color:var(--text-muted);margin-top:2px;">Memuat waktu server...</div>
+    </div>
+
     <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white; border: none;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
@@ -379,6 +388,8 @@ export async function renderDashboard() {
       .fav-btn:active { transform: translateY(-1px); }
     </style>
   `
+
+  startServerDigitalClock({ key: 'dashboard', timeElementId: 'dashboardLiveClock', dateElementId: 'dashboardLiveDate', serverIso: dashboardServerIso || new Date().toISOString() })
 
   if (typeof Chart === 'undefined') {
     const script = document.createElement('script')

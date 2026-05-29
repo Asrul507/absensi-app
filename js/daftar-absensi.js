@@ -65,17 +65,28 @@ async function muatLogAbsensi(user) {
       .from('absensi')
       .select('*')
       .eq('nama', user.nama_lengkap)
+      .eq('status_absensi', 'COMPLETE')
       .gte('tanggal', tglMulai)
       .lte('tanggal', tglSelesai)
       .order('tanggal', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      if (String(error.message || '').includes('status_absensi')) {
+        listContainer.innerHTML = `
+          <div style="text-align:center; padding:32px 20px; background:#fff; border-radius:12px; border:1px dashed #fbbf24;">
+            <i class="fa fa-database" style="font-size:1.8rem; color:#d97706; margin-bottom:8px; display:block;"></i>
+            <p style="font-size:.85rem; color:#92400e; font-weight:700; margin:0;">Kolom status_absensi belum tersedia. Jalankan migration Attendance Approval terlebih dahulu.</p>
+          </div>`
+        return
+      }
+      throw error
+    }
 
     if (!listAbsen || listAbsen.length === 0) {
       listContainer.innerHTML = `
         <div style="text-align:center; padding:40px 20px; background:#fff; border-radius:12px; border:1px dashed #e2e8f0;">
           <i class="fa fa-calendar-xmark" style="font-size:2rem; color:#cbd5e1; margin-bottom:8px; display:block;"></i>
-          <p style="font-size:.85rem; color:var(--text-muted); font-weight:600; margin:0;">Tidak ada riwayat absensi pada rentang tanggal ini.</p>
+          <p style="font-size:.85rem; color:var(--text-muted); font-weight:600; margin:0;">Belum ada absensi COMPLETE pada rentang tanggal ini.</p>
         </div>
       `
       return

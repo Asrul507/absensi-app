@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
-import { toJamLokal, getDurasiMenit } from './timezone.js'
+import { toJamLokal, getDurasiMenit, buildTimestampLokal } from './timezone.js'
+import { getServerTimeIso } from './server-time.js'
 
 export const STATUS_ABSENSI = {
   OPEN: 'OPEN',
@@ -80,6 +81,14 @@ export function getTotalJamKerja(row) {
   const durasi = getDurasiMenit(row.waktu_masuk, row.waktu_pulang)
   if (durasi === null) return '-'
   return `${(durasi / 60).toFixed(2)} jam`
+}
+
+
+function localInputToMakassarIso(value) {
+  if (!value) return null
+  const [tanggal, jamRaw] = String(value).split('T')
+  const jam = jamRaw?.slice(0, 5)
+  return buildTimestampLokal(tanggal, jam)
 }
 
 function escapeHtml(value) {
@@ -193,15 +202,16 @@ window.approveAttendance = async function (id, finalStatus) {
   const note = document.getElementById(`note-${id}`)?.value || ''
   const masuk = document.getElementById(`editMasuk-${id}`)?.value || null
   const pulang = document.getElementById(`editPulang-${id}`)?.value || null
+  const serverIso = await getServerTimeIso()
   const payload = {
     status_absensi: STATUS_ABSENSI.COMPLETE,
     status_kehadiran: finalStatus || STATUS_KEHADIRAN.HADIR,
     approved_by: window.currentUser?.id || null,
-    approved_at: new Date().toISOString(),
+    approved_at: serverIso,
     approval_note: note || null
   }
-  if (masuk) payload.waktu_masuk = new Date(masuk).toISOString()
-  if (pulang) payload.waktu_pulang = new Date(pulang).toISOString()
+  if (masuk) payload.waktu_masuk = localInputToMakassarIso(masuk)
+  if (pulang) payload.waktu_pulang = localInputToMakassarIso(pulang)
 
   const { error } = await supabase.from('absensi').update(payload).eq('id', id)
   if (error) { alert('Gagal approve: ' + error.message); return }
@@ -211,10 +221,11 @@ window.approveAttendance = async function (id, finalStatus) {
 window.rejectAttendance = async function (id) {
   if (!canApproveAttendance()) return
   const note = document.getElementById(`note-${id}`)?.value || ''
+  const serverIso = await getServerTimeIso()
   const { error } = await supabase.from('absensi').update({
     status_absensi: STATUS_ABSENSI.REJECTED,
     approved_by: window.currentUser?.id || null,
-    approved_at: new Date().toISOString(),
+    approved_at: serverIso,
     approval_note: note || null
   }).eq('id', id)
   if (error) { alert('Gagal reject: ' + error.message); return }
