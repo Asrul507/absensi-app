@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js'
 import { getTodayLokal, buildTimestampLokal, parseAbsensiTimestamp } from './timezone.js'
-import { getShiftDetailByCode } from './shift-resolver.js'
+// PATCH: tambah import getShiftDetailByJamMasuk sebagai fallback saat shift_code null
+import { getShiftDetailByCode, getShiftDetailByJamMasuk } from './shift-resolver.js'
 
 /* ===============================================================
    CONFIGURATION
@@ -147,6 +148,11 @@ function isOvernightShiftStillActive(shiftKemarin, nowDate = new Date()) {
    absensi terbuka (waktu_masuk ada, waktu_pulang null) dengan
    shift lintas_hari yang masih dalam window aktif.
    Jika ya → return data kemarin agar tombol "Absen Pulang" muncul.
+
+   PATCH BUG SHIFT LINTAS HARI:
+   Jika shift_code tidak tersimpan di record absensi (null),
+   fallback ke getShiftDetailByJamMasuk(jam_jadwal_masuk) agar
+   shift malam tetap terdeteksi dengan benar.
 =============================================================== */
 export async function getTodayAbsen(nama) {
   const today = getTodayLokal()
@@ -165,9 +171,18 @@ export async function getTodayAbsen(nama) {
 
   if (dataKemarin?.waktu_masuk && !dataKemarin?.waktu_pulang) {
     // Ada absensi terbuka kemarin → cek apakah shift-nya masih aktif sekarang
-    const shiftKemarin = await getShiftDetailByCode(
+    let shiftKemarin = await getShiftDetailByCode(
       dataKemarin.shift_code || dataKemarin.kode_shift
     )
+
+    // ── PATCH: Fallback ke jam_jadwal_masuk jika shift_code tidak tersimpan ──
+    // Bug terjadi ketika record absensi lama tidak memiliki shift_code (null).
+    // Solusi: lookup shift berdasarkan jam_jadwal_masuk yang selalu tersimpan.
+    if (!shiftKemarin && dataKemarin.jam_jadwal_masuk) {
+      console.log('[SHIFT FALLBACK] shift_code null, lookup via jam_jadwal_masuk:', dataKemarin.jam_jadwal_masuk)
+      shiftKemarin = await getShiftDetailByJamMasuk(dataKemarin.jam_jadwal_masuk)
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     if (isOvernightShiftStillActive(shiftKemarin)) {
       console.log('[SHIFT AKTIF] Melanjutkan absensi terbuka dari kemarin:', kemarinStr)
