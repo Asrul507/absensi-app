@@ -25,6 +25,11 @@
  *
  * Semua logika validasi (fixedLat, fixedLng, namaTitikTerpilih,
  * status_absensi, lupa absen pulang, salah absen) TIDAK berubah.
+ *
+ * PATCH BUG SHIFT MALAM LINTAS HARI:
+ *   Ditambahkan `shift_code: todayShift.code` ke payload submitAbsen
+ *   agar getTodayAbsen() dapat mendeteksi shift lintas hari dengan benar
+ *   saat karyawan absen pulang di keesokan harinya.
  * ============================================================
  */
 
@@ -420,10 +425,15 @@ export async function renderAbsensi(user) {
       // PostgreSQL akan mengisi kolom ini secara otomatis dengan NOW()
       // berdasarkan DEFAULT value yang sudah dikonfigurasi di database.
       // Karyawan tidak dapat memanipulasi jam masuk dari sisi perangkat.
+      //
+      // PATCH BUG SHIFT MALAM: shift_code ditambahkan ke payload agar
+      // getTodayAbsen() dapat mendeteksi shift lintas hari dengan benar
+      // ketika karyawan absen pulang di hari berikutnya.
       await submitAbsen({
         nama:             user.nama_lengkap,
         tanggal:          getTodayLokal(),
         // waktu_masuk   ← DIHAPUS: diisi oleh DB DEFAULT now()
+        shift_code:       todayShift.code || null,          // ← PATCH: simpan shift_code
         lat_masuk:        fixedLat !== 'null' ? Number(fixedLat) : null,
         lng_masuk:        fixedLng !== 'null' ? Number(fixedLng) : null,
         foto_masuk:       window.photo || null,
