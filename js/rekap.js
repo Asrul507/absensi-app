@@ -138,7 +138,7 @@ window.applyRekapFilter = async function (user) {
 
   try {
     if (tab === 'absensi') {
-      let query = supabase.from('absensi').select('*').order('tanggal', { ascending: false })
+      let query = supabase.from('absensi').select('*').eq('status_absensi', 'COMPLETE').order('tanggal', { ascending: false })
 
       if (!isAdmin) {
         query = query.eq('nama', user.nama_lengkap)

@@ -119,6 +119,7 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
   const { data: absensiData } = await supabase
     .from('absensi')
     .select('*')
+    .eq('status_absensi', 'COMPLETE')
     .gte('tanggal', dateFrom)
     .lte('tanggal', dateTo)
     .order('tanggal', { ascending: true })
@@ -266,6 +267,7 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
   const { data: absensiData } = await supabase
     .from('absensi')
     .select('*')
+    .eq('status_absensi', 'COMPLETE')
     .gte('tanggal', dateFrom)
     .lte('tanggal', dateTo)
 

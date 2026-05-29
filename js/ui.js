@@ -38,6 +38,7 @@ import { toJamLokal, getTodayLokal } from './timezone.js'
 import { openCamera, takePhoto, getLocation, checkStatus, getTodayAbsen, getTodayShift, checkStatusPulang, getStatusPulangReminder } from './absensi.js'
 import { submitAbsen } from './submit_absensi.js'
 import { dapatkanLokasiAbsenAktif } from './geolocation.js'
+import { buildPendingAttendanceFields, determineRadiusStatus, RADIUS_STATUS } from './attendance-approval.js'
 
 window.activeVideoStream = null
 
@@ -46,6 +47,16 @@ function stopCamera(video) {
   if (stream) stream.getTracks().forEach(t => t.stop())
   if (video) video.srcObject = null
   window.activeVideoStream = null
+}
+
+
+function isLateCheckinMissingWindow(shift) {
+  if (!shift?.jam_masuk || shift.jam_masuk === '-') return false
+  const [h, m] = shift.jam_masuk.split(':').map(Number)
+  const now = new Date()
+  const start = new Date(now)
+  start.setHours(h, m, 0, 0)
+  return now.getTime() >= start.getTime() + (2 * 60 * 60 * 1000)
 }
 
 function hitungKeterangan(absen, shift) {
@@ -62,6 +73,16 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
+  if (absen?.status_absensi === 'OPEN') {
+    return {
+      label: 'Menunggu Verifikasi',
+      color: '#d97706',
+      bg:    '#fffbeb',
+      border:'#fcd34d',
+      icon:  'fa-clock'
+    }
+  }
+
   if (shiftSpecial) {
     return {
       label: `Complete · ${shift.nama_shift}`,
@@ -74,7 +95,7 @@ function hitungKeterangan(absen, shift) {
 
   if (absen?.waktu_masuk && absen?.waktu_pulang) {
     return {
-      label: 'Complete',
+      label: absen?.status_absensi === 'COMPLETE' ? 'Complete' : 'Menunggu Verifikasi',
       color: '#16a34a',
       bg:    '#f0fdf4',
       border:'#86efac',
@@ -205,7 +226,7 @@ export async function renderAbsensi(user) {
     statusColor = 'var(--success)'
     statusIcon  = 'fa-umbrella-beach'
   } else if (absen?.waktu_masuk && absen?.waktu_pulang) {
-    statusLabel = 'Selesai Hari Ini'
+    statusLabel = absen.status_absensi === 'COMPLETE' ? 'Selesai Hari Ini' : 'Menunggu Verifikasi'
     statusColor = 'var(--success)'
     statusIcon  = 'fa-circle-check'
   } else if (absen?.waktu_masuk && !absen?.waktu_pulang) {
@@ -263,6 +284,7 @@ export async function renderAbsensi(user) {
               </div>
               ${absen.status_masuk ? `<div style="font-size:.65rem;font-weight:700;margin-top:2px; color:${absen.status_masuk==='Terlambat'?'var(--danger)':'var(--success)'};">
                 ${absen.status_masuk}</div>` : ''}
+              ${absen.status_kehadiran ? `<div style="font-size:.62rem;font-weight:800;margin-top:3px;color:var(--warning);">${absen.status_kehadiran.replaceAll('_',' ')}</div>` : ''}
             </div>
             ${absen.waktu_pulang ? `
               <div style="width:1px;background:var(--gray-200);"></div>
@@ -278,6 +300,8 @@ export async function renderAbsensi(user) {
               </div>`}
           </div>` : ''}
       </div>
+
+      ${absen?.radius_status === RADIUS_STATUS.OUT_RADIUS ? `<div style="margin-top:10px;"><span style="padding:5px 10px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:.72rem;font-weight:900;">⚠ OUT_RADIUS · Wajib approval</span></div>` : ''}
 
       <div class="card fade-up-1" id="absensiActionCard"></div>
 
@@ -312,7 +336,7 @@ export async function renderAbsensi(user) {
     actionCard.innerHTML = `
       <div style="text-align:center;padding:18px 12px;">
         <i class="fa fa-circle-check" style="font-size:2rem;color:var(--success);margin-bottom:8px;display:block;"></i>
-        <p style="font-weight:800;color:var(--success);font-size:.95rem;">Absensi hari ini sudah lengkap</p>
+        <p style="font-weight:800;color:var(--success);font-size:.95rem;">Absensi sudah dikirim dan menunggu/selesai approval</p>
       </div>`
     return
   }
@@ -369,9 +393,11 @@ export async function renderAbsensi(user) {
   //   ALTER TABLE absensi ALTER COLUMN waktu_masuk SET DEFAULT now();
   // ══════════════════════════════════════════════════════════════════════════
   if (!absen) {
+    const allowCheckoutWithoutCheckin = isLateCheckinMissingWindow(todayShift)
     actionBox.innerHTML =
       makeBtn('btnFoto', 'fa-camera', 'Ambil Foto') +
-      makeBtn('btnMasuk', 'fa-sign-in-alt', 'Absen Masuk', true, true)
+      makeBtn('btnMasuk', 'fa-sign-in-alt', 'Absen Masuk', true, true) +
+      (allowCheckoutWithoutCheckin ? makeBtn('btnPulangTanpaMasuk', 'fa-right-from-bracket', 'Absen Pulang', false, true) : '')
 
     document.getElementById('btnFoto').onclick = () => {
       window.photo = takePhoto(video, canvas)
@@ -380,6 +406,45 @@ export async function renderAbsensi(user) {
       document.getElementById('btnMasuk').disabled = false
       document.getElementById('btnMasuk').style.opacity = '1'
       document.getElementById('btnMasuk').style.cursor = 'pointer'
+      const btnPulangTanpaMasuk = document.getElementById('btnPulangTanpaMasuk')
+      if (btnPulangTanpaMasuk) {
+        btnPulangTanpaMasuk.disabled = false
+        btnPulangTanpaMasuk.style.opacity = '1'
+        btnPulangTanpaMasuk.style.cursor = 'pointer'
+      }
+    }
+
+    const btnPulangTanpaMasuk = document.getElementById('btnPulangTanpaMasuk')
+    if (btnPulangTanpaMasuk) {
+      btnPulangTanpaMasuk.onclick = async () => {
+        btnPulangTanpaMasuk.disabled = true
+        btnPulangTanpaMasuk.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
+        const fixedLat          = document.getElementById('geoLatInput').value
+        const fixedLng          = document.getElementById('geoLngInput').value
+        const namaTitikTerpilih = document.getElementById('selectLokasiAbsen').value
+        const radiusStatus = determineRadiusStatus({ geo, selectedLocation: namaTitikTerpilih, assignedLocation: user.titik_radius })
+        const hasilPulang = checkStatusPulang(todayShift.jam_pulang)
+
+        await submitAbsen({
+          nama:               user.nama_lengkap,
+          tanggal:            getTodayLokal(),
+          waktu_masuk:        null,
+          waktu_pulang:       new Date().toISOString(),
+          shift_code:         todayShift.code || null,
+          lat_pulang:         fixedLat !== 'null' ? Number(fixedLat) : null,
+          lng_pulang:         fixedLng !== 'null' ? Number(fixedLng) : null,
+          foto_pulang:        window.photo || null,
+          status_pulang:      hasilPulang.status,
+          menit_pulang_cepat: hasilPulang.minutesEarly,
+          jam_jadwal_masuk:   todayShift.jam_masuk,
+          jam_jadwal_pulang:  todayShift.jam_pulang,
+          lokasi_pulang:      namaTitikTerpilih,
+          ...buildPendingAttendanceFields(radiusStatus, 'LATE_CHECKIN_MISSING')
+        })
+
+        stopCamera(video)
+        renderAbsensi(user)
+      }
     }
 
     document.getElementById('btnMasuk').onclick = async () => {
@@ -392,21 +457,20 @@ export async function renderAbsensi(user) {
       const fixedLng          = document.getElementById('geoLngInput').value
       const namaTitikTerpilih = document.getElementById('selectLokasiAbsen').value
 
-      // ── Logika pengunci status absensi (Anti-Cheat Lokasi) ──────────────
-      let status_absensi = 'open'
+      const radiusStatus = determineRadiusStatus({
+        geo,
+        selectedLocation: namaTitikTerpilih,
+        assignedLocation: user.titik_radius
+      })
+      let pendingFields = buildPendingAttendanceFields(radiusStatus)
 
-      // Jika titik dipilih tidak sesuai jatah radius karyawan → salah absen
-      if (user.titik_radius && namaTitikTerpilih !== user.titik_radius) {
-        status_absensi = 'salah absen'
-      }
-
-      // Jika hari ini adalah hari libur/izin/cuti → tidak boleh absen masuk
+      // Jika hari ini adalah hari libur/izin/cuti → tetap tandai butuh verifikasi, bukan final otomatis.
       if (['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(todayShift.nama_shift)) {
-        status_absensi = 'salah absen'
+        pendingFields.approval_flag = 'SHIFT_SPECIAL_ATTENDANCE'
       }
 
-      // Cek apakah kemarin lupa absen pulang
-      if (status_absensi === 'open') {
+      // Cek apakah kemarin lupa absen pulang tanpa mengunci final status.
+      if (pendingFields.status_absensi === 'OPEN') {
         const yDate = new Date()
         yDate.setDate(yDate.getDate() - 1)
         const { data: lastAbsen } = await supabase.from('absensi').select('*')
@@ -414,7 +478,7 @@ export async function renderAbsensi(user) {
           .eq('tanggal', yDate.toISOString().split('T')[0])
           .maybeSingle()
         if (lastAbsen?.waktu_masuk && !lastAbsen?.waktu_pulang) {
-          status_absensi = 'lupa absen pulang'
+          pendingFields.approval_flag = 'PREVIOUS_CHECKOUT_MISSING'
         }
       }
 
@@ -440,7 +504,8 @@ export async function renderAbsensi(user) {
         status_masuk:     hasilCheck.status,
         menit_terlambat:  hasilCheck.status === 'Terlambat' ? hasilCheck.minutesLate : 0,
         jam_jadwal_masuk: todayShift.jam_masuk,
-        status_absensi:   status_absensi,
+        ...pendingFields,
+        jam_jadwal_pulang: todayShift.jam_pulang,
         lokasi_masuk:     namaTitikTerpilih
       })
 
@@ -484,15 +549,11 @@ export async function renderAbsensi(user) {
       const fixedLng          = document.getElementById('geoLngInput').value
       const namaTitikTerpilih = document.getElementById('selectLokasiAbsen').value
 
-      // ── Logika pengunci status absensi (Anti-Cheat Lokasi) ──────────────
-      let status_absensi = absen.status_absensi
-
-      // Jika saat pulang ganti titik yang bukan jatahnya → salah absen
-      if (user.titik_radius && namaTitikTerpilih !== user.titik_radius) {
-        status_absensi = 'salah absen'
-      } else if (status_absensi === 'open') {
-        status_absensi = 'complete'
-      }
+      const radiusStatus = determineRadiusStatus({
+        geo,
+        selectedLocation: namaTitikTerpilih,
+        assignedLocation: user.titik_radius
+      })
 
       const hasilPulang = checkStatusPulang(todayShift.jam_pulang)
 
@@ -507,7 +568,9 @@ export async function renderAbsensi(user) {
         lat_pulang:         fixedLat !== 'null' ? Number(fixedLat) : null,
         lng_pulang:         fixedLng !== 'null' ? Number(fixedLng) : null,
         foto_pulang:        window.photo || null,
-        status_absensi,
+        status_absensi:     'OPEN',
+        status_kehadiran:   'MENUNGGU_VERIFIKASI',
+        radius_status:      (absen.radius_status === RADIUS_STATUS.OUT_RADIUS || radiusStatus === RADIUS_STATUS.OUT_RADIUS) ? RADIUS_STATUS.OUT_RADIUS : RADIUS_STATUS.VALID,
         status_pulang:      hasilPulang.status,
         menit_pulang_cepat: hasilPulang.minutesEarly,
         lokasi_pulang:      namaTitikTerpilih

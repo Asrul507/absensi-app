@@ -161,6 +161,7 @@ window.applyRekapInOutFilter = async function (user) {
     let query = supabase
       .from('absensi')
       .select('*')
+      .eq('status_absensi', 'COMPLETE')
       .order('tanggal', { ascending: false })
 
     if (window._selectedRekapKaryawan) {

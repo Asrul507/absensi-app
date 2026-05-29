@@ -27,12 +27,13 @@ import { renderPengaturanLokasi } from './admin_lokasi.js'
 import { initTimezone, resetTimezoneCache, getTodayLokal } from './timezone.js'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 import { showToast, confirmAction } from './feedback.js'
+import { renderAttendanceApproval, canApproveAttendance } from './attendance-approval.js'
 
 /* ================= GLOBAL VARIABLES ================= */
 window.currentUser  = null
 window.currentShift = null
 window.supabase     = supabase
-window.notifState   = { total: 0, pendingPengajuan: 0, pendingPerbaikan: 0 }
+window.notifState   = { total: 0, pendingPengajuan: 0, pendingPerbaikan: 0, pendingApproval: 0 }
 window.notifPoller  = null
 window.notifChannel = null
 
@@ -206,6 +207,7 @@ function renderMenu(role) {
       <div class="sidebar-section-title">APPROVAL & MANAJEMEN</div>
       <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-inbox"></i> Persetujuan Cuti <span class="sidebar-badge-info">Staff</span></a>
       <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen <span class="sidebar-badge-info">Staff</span></a>
+      <a href="#" id="menu-approval-absensi" onclick="navigate('approval-absensi'); closeSidebar(); return false;"><i class="fa fa-clipboard-check"></i> Approval Absensi <span class="sidebar-badge-info">OPEN</span></a>
       <a href="#" id="menu-jadwal" onclick="navigate('jadwal'); closeSidebar(); return false;"><i class="fa fa-calendar-week"></i> Atur Jadwal Kerja</a>
       <a href="#" id="menu-shift" onclick="navigate('shift'); closeSidebar(); return false;"><i class="fa fa-business-time"></i> Kelola Shift</a>
 
@@ -245,14 +247,17 @@ async function refreshNotificationBadge() {
 
   let pendingPengajuan = 0
   let pendingPerbaikan = 0
+  let pendingApproval = 0
 
-  if (user.role === 'admin' || user.role === 'super_admin') {
-    const [{ count: c1 }, { count: c2 }] = await Promise.all([
+  if (canApproveAttendance(user)) {
+    const [{ count: c1 }, { count: c2 }, { count: c3 }] = await Promise.all([
       supabase.from('pengajuan').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('perbaikan_absen').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+      supabase.from('perbaikan_absen').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('absensi').select('*', { count: 'exact', head: true }).eq('status_absensi', 'OPEN')
     ])
     pendingPengajuan = c1 || 0
     pendingPerbaikan = c2 || 0
+    pendingApproval = c3 || 0
   } else {
     const [{ count: c1 }, { count: c2 }] = await Promise.all([
       supabase.from('pengajuan').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'pending'),
@@ -262,8 +267,8 @@ async function refreshNotificationBadge() {
     pendingPerbaikan = c2 || 0
   }
 
-  const total = pendingPengajuan + pendingPerbaikan
-  window.notifState = { total, pendingPengajuan, pendingPerbaikan }
+  const total = pendingPengajuan + pendingPerbaikan + pendingApproval
+  window.notifState = { total, pendingPengajuan, pendingPerbaikan, pendingApproval }
 
   badge.textContent = String(total)
   badge.style.display = total > 0 ? 'inline-block' : 'none'
@@ -272,13 +277,10 @@ async function refreshNotificationBadge() {
 function startNotificationPolling() {
   stopNotificationPolling()
   refreshNotificationBadge().catch(err => console.error('Notif first refresh error:', err))
-  window.notifPoller = setInterval(() => {
-    refreshNotificationBadge().catch(err => console.error('Notif poll error:', err))
-  }, 60000)
-
   window.notifChannel = supabase.channel('notif-live')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pengajuan' }, () => refreshNotificationBadge())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'perbaikan_absen' }, () => refreshNotificationBadge())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'absensi' }, () => refreshNotificationBadge())
     .subscribe()
   window.notifPoller = setInterval(() => {
     refreshNotificationBadge().catch(err => console.error('Notif poll error:', err))
@@ -299,14 +301,16 @@ async function loadNotificationItems() {
   const user = window.currentUser
   if (!user) return []
 
-  if (user.role === 'admin' || user.role === 'super_admin') {
-    const [p1, p2] = await Promise.all([
+  if (canApproveAttendance(user)) {
+    const [p1, p2, p3] = await Promise.all([
       supabase.from('pengajuan').select('id,nama,jenis,status,created_at').eq('status','pending').order('created_at',{ascending:false}).limit(5),
-      supabase.from('perbaikan_absen').select('id,nama,jenis,status,created_at').eq('status','pending').order('created_at',{ascending:false}).limit(5)
+      supabase.from('perbaikan_absen').select('id,nama,jenis,status,created_at').eq('status','pending').order('created_at',{ascending:false}).limit(5),
+      supabase.from('absensi').select('id,nama,tanggal,status_absensi,created_at').eq('status_absensi','OPEN').order('tanggal',{ascending:false}).limit(5)
     ])
     const a=(p1.data||[]).map(i=>({type:'pengajuan',title:`${i.nama||'Karyawan'} mengajukan ${i.jenis||'-'}`,created_at:i.created_at,route:'pengajuan'}))
     const b=(p2.data||[]).map(i=>({type:'perbaikan',title:`${i.nama||'Karyawan'} request ${i.jenis||'-'}`,created_at:i.created_at,route:'perbaikan-absen'}))
-    return [...a,...b].sort((x,y)=>new Date(y.created_at)-new Date(x.created_at)).slice(0,8)
+    const c=(p3.data||[]).map(i=>({type:'approval',title:`Absensi menunggu approval: ${i.nama||'-'} (${i.tanggal||'-'})`,created_at:i.created_at || i.tanggal,route:'approval-absensi'}))
+    return [...a,...b,...c].sort((x,y)=>new Date(y.created_at)-new Date(x.created_at)).slice(0,8)
   }
 
   const [p1, p2] = await Promise.all([
@@ -336,7 +340,7 @@ window.openNotificationCenter = async function () {
   }
 
   body.innerHTML = `
-    <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;">Pending: ${n.total} (Pengajuan: ${n.pendingPengajuan}, Perbaikan: ${n.pendingPerbaikan})</div>
+    <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;">Pending: ${n.total} (Pengajuan: ${n.pendingPengajuan}, Perbaikan: ${n.pendingPerbaikan}, Approval Absensi: ${n.pendingApproval || 0})</div>
     ${items.map(it => `
       <button onclick="navigate('${it.route}'); closeNotificationCenter();" style="width:100%;text-align:left;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--gray-50,#f8fafc);margin-bottom:8px;cursor:pointer;">
         <div style="font-weight:700;color:var(--text);">${it.title}</div>
@@ -374,7 +378,7 @@ function renderBottomNav(role) {
     : [
         { key:'dashboard', icon:'fa-house',    label:'Home' },
         { key:'absensi',   icon:'fa-clock',    label:'Absen' },
-        { key:'pengajuan', icon:'fa-inbox',    label:'Approval' },
+        { key:'approval-absensi', icon:'fa-clipboard-check', label:'Approval' },
         { key:'users',     icon:'fa-users',    label:'Karyawan' },
       ]
 
@@ -399,6 +403,7 @@ window.navigate = async function (page) {
     case 'daftar-absensi': renderDaftarAbsensi(window.currentUser); break
     case 'rekap-inout': renderRekapInOut(window.currentUser); break
     case 'perbaikan-absen': renderPerbaikanAbsen(window.currentUser); break
+    case 'approval-absensi': renderAttendanceApproval(window.currentUser); break
     case 'shift':      renderShiftManagement(); break
     case 'jadwal':     renderJadwalManagement(); break
     case 'pengajuan': renderPengajuan(window.currentUser); break
@@ -1153,7 +1158,7 @@ window.handleUploadKaryawanExcel = function(input) {
           no_hp:             get('No HP', 'no_hp', 'hp', 'phone'),
           tanggal_bergabung: get('Tanggal Bergabung', 'tanggal_bergabung') || null,
           tanggal_lahir:     get('Tanggal Lahir', 'tanggal_lahir') || null,
-          role:              ['staff','admin','super_admin'].includes(get('Role','role').toLowerCase())
+          role:              ['staff','spv','admin','super_admin'].includes(get('Role','role').toLowerCase())
                                ? get('Role','role').toLowerCase() : 'staff',
           titik_radius:      get('Titik Radius', 'titik_radius') || null,
           valid,
