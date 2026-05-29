@@ -95,7 +95,7 @@ export async function renderPengajuan(user) {
             Masa kerja ${formatMasaKerja(masaKerja)} · Periode ${periode_mulai || '-'} s/d ${periode_selesai || '-'}
           </div>
           <div style="font-size:.8rem;opacity:.82;margin-top:2px;">
-            ${statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF ? '✅ Jatah cuti aktif dan bisa diajukan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? '⏳ Eligible, menunggu approval HR/admin' : '⚠ Belum eligible cuti tahunan (min. 12 bulan kerja)'}
+            ${statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF ? '✅ Jatah cuti aktif dan bisa diajukan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? '⏳ Eligible, menunggu approval HR/admin' : '⚠ Belum ada kontrak aktif untuk cuti tahunan'}
           </div>
         </div>
         <div style="display:flex;gap:20px;text-align:center;">
@@ -225,7 +225,7 @@ export async function renderPengajuan(user) {
         infoEl.className = 'alert warning'
         msgEl.textContent = statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR
           ? 'Anda sudah eligible, tetapi jatah cuti tahunan masih menunggu approval HR/admin.'
-          : `Anda belum eligible cuti tahunan. Masa kerja ${formatMasaKerja(masaKerja)} (min. 12 bulan).`
+          : `Anda belum memiliki kontrak aktif/periode cuti aktif. Masa kerja ${formatMasaKerja(masaKerja)}.`
       } else if (sisa <= 0) {
         infoEl.style.display = 'flex'
         infoEl.className = 'alert warning'
@@ -261,7 +261,7 @@ export async function renderPengajuan(user) {
     if (!jumlahHari || jumlahHari < 1) { showToast('Jumlah hari tidak valid', 'warning'); return }
 
     if (jenis === 'cuti' && statusCutiTahunan !== STATUS_CUTI_TAHUNAN.AKTIF) {
-      showToast('Cuti tahunan belum aktif. Tunggu approval jatah cuti dari HR/admin.', 'warning')
+      showToast('Cuti tahunan belum aktif atau kontrak tidak aktif. Tunggu approval jatah cuti dari HR/admin.', 'warning')
       return
     }
     if (jenis === 'cuti' && jumlahHari > sisa) {
@@ -329,7 +329,7 @@ function renderCutiTahunanAdminSection(rows) {
           <div>${row.jatah_cuti || 0}</div>
           <div>${row.cuti_terpakai || 0}</div>
           <div>${row.sisa_cuti || 0}</div>
-          <div><span class="badge ${row.status === STATUS_CUTI_TAHUNAN.AKTIF ? 'badge-green' : row.status === STATUS_CUTI_TAHUNAN.HANGUS ? 'badge-red' : row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? 'badge-yellow' : 'badge-gray'}">${row.status}</span></div>
+          <div><span class="badge ${row.status === STATUS_CUTI_TAHUNAN.AKTIF ? 'badge-green' : [STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK].includes(row.status) ? 'badge-red' : row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? 'badge-yellow' : 'badge-gray'}">${row.status}</span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             ${row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? `<button class="btn-primary btn-sm" onclick="approveJatahCutiTahunanUI('${row.id}')"><i class="fa fa-check"></i> Approve Jatah 12 Hari</button>` : ''}
             ${isExpired ? `<button class="btn-danger btn-sm" onclick="prosesHangusCutiTahunanUI('${row.id}')"><i class="fa fa-ban"></i> Proses Hangus</button>` : ''}
@@ -348,6 +348,7 @@ function renderCutiTahunanAdminSection(rows) {
         <div class="card" style="padding:10px;background:#fffbeb;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Menunggu approval</div><strong>${counts[STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR] || 0}</strong></div>
         <div class="card" style="padding:10px;background:#f0fdf4;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Aktif</div><strong>${counts[STATUS_CUTI_TAHUNAN.AKTIF] || 0}</strong></div>
         <div class="card" style="padding:10px;background:#fef2f2;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Hangus</div><strong>${counts[STATUS_CUTI_TAHUNAN.HANGUS] || 0}</strong></div>
+        <div class="card" style="padding:10px;background:#fff1f2;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Expired Kontrak</div><strong>${counts[STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK] || 0}</strong></div>
       </div>
       <div style="overflow:auto;border:1px solid var(--border);border-radius:12px;">
         <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) repeat(4,minmax(70px,.6fr)) minmax(160px,1fr);gap:8px;padding:10px;background:var(--gray-50);font-size:.72rem;font-weight:900;color:var(--text-muted);text-transform:uppercase;min-width:760px;">
@@ -357,7 +358,8 @@ function renderCutiTahunanAdminSection(rows) {
           STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR,
           STATUS_CUTI_TAHUNAN.AKTIF,
           STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE,
-          STATUS_CUTI_TAHUNAN.HANGUS
+          STATUS_CUTI_TAHUNAN.HANGUS,
+          STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK
         ].map(renderRows).join('')}</div>
       </div>
     </div>

@@ -4,7 +4,8 @@ export const STATUS_CUTI_TAHUNAN = {
   BELUM_ELIGIBLE: 'BELUM_ELIGIBLE',
   ELIGIBLE_MENUNGGU_APPROVAL_HR: 'ELIGIBLE_MENUNGGU_APPROVAL_HR',
   AKTIF: 'AKTIF',
-  HANGUS: 'HANGUS'
+  HANGUS: 'HANGUS',
+  EXPIRED_KONTRAK: 'EXPIRED_KONTRAK'
 }
 
 export const JATAH_CUTI_TAHUNAN = 12
@@ -31,25 +32,81 @@ function parseDateLocal(value) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-function addMonthsLocal(value, months) {
+function addDurationLocal(value, duration, unit = 'bulan') {
   const date = parseDateLocal(value)
-  if (!date) return null
-  date.setMonth(date.getMonth() + months)
+  const amount = Number.parseInt(duration, 10)
+  if (!date || !Number.isFinite(amount) || amount < 1) return null
+  if (unit === 'tahun') date.setFullYear(date.getFullYear() + amount)
+  else date.setMonth(date.getMonth() + amount)
+  date.setDate(date.getDate() - 1)
   return date
+}
+
+function todayLocalDate() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
 }
 
 export function getTahunCutiBerjalan() {
   return new Date().getFullYear()
 }
 
-function getPeriodeCuti(profile, tahun = getTahunCutiBerjalan()) {
-  const awalTahun = new Date(tahun, 0, 1)
-  const akhirTahun = new Date(tahun, 11, 31)
-  const tanggalEligible = addMonthsLocal(profile?.tanggal_bergabung, 12)
-  const periodeMulai = tanggalEligible && tanggalEligible > awalTahun ? tanggalEligible : awalTahun
+export function formatMasaKontrak(durasi, satuan = 'bulan') {
+  const amount = Number.parseInt(durasi, 10)
+  if (!Number.isFinite(amount) || amount < 1) return ''
+  return `${amount} ${satuan === 'tahun' ? 'tahun' : 'bulan'}`
+}
+
+export function hitungKontrakBerakhir(kontrakMulai, durasi, satuan = 'bulan') {
+  return toDateStr(addDurationLocal(kontrakMulai, durasi, satuan))
+}
+
+export function getSisaHariKontrak(kontrakBerakhir) {
+  const end = parseDateLocal(kontrakBerakhir)
+  if (!end) return null
+  const diffMs = end.getTime() - todayLocalDate().getTime()
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+}
+
+export function getStatusKontrak(kontrakBerakhir) {
+  const sisaHari = getSisaHariKontrak(kontrakBerakhir)
+  if (sisaHari === null) return 'aktif'
+  if (sisaHari < 0) return 'berakhir'
+  if (sisaHari <= 30) return 'akan_berakhir'
+  return 'aktif'
+}
+
+export function buildKontrakPayload({ jenisKontrak, kontrakMulai, durasiKontrak, satuanDurasiKontrak }) {
+  const durasi = Number.parseInt(durasiKontrak, 10)
+  const satuan = satuanDurasiKontrak === 'tahun' ? 'tahun' : 'bulan'
+  const kontrak_berakhir = hitungKontrakBerakhir(kontrakMulai, durasi, satuan)
   return {
-    periode_mulai: toDateStr(periodeMulai),
-    periode_selesai: toDateStr(akhirTahun)
+    jenis_kontrak: jenisKontrak || 'kontrak',
+    kontrak_mulai: kontrakMulai || null,
+    durasi_kontrak: Number.isFinite(durasi) && durasi > 0 ? durasi : null,
+    satuan_durasi_kontrak: satuan,
+    masa_kontrak: formatMasaKontrak(durasi, satuan),
+    kontrak_berakhir,
+    status_kontrak: getStatusKontrak(kontrak_berakhir)
+  }
+}
+
+export function isKontrakAktif(profileOrContract) {
+  const status = profileOrContract?.status_kontrak || getStatusKontrak(profileOrContract?.kontrak_berakhir)
+  return !!profileOrContract?.kontrak_mulai && !!profileOrContract?.kontrak_berakhir && status !== 'berakhir'
+}
+
+function getKontrakPeriode(profile) {
+  const kontrak_mulai = profile?.kontrak_mulai || null
+  const kontrak_berakhir = profile?.kontrak_berakhir || null
+  if (!kontrak_mulai || !kontrak_berakhir) return null
+  return {
+    kontrak_mulai,
+    kontrak_berakhir,
+    tahun: Number(String(kontrak_mulai).slice(0, 4)) || getTahunCutiBerjalan(),
+    periode_mulai: kontrak_mulai,
+    periode_selesai: kontrak_berakhir,
+    status_kontrak: getStatusKontrak(kontrak_berakhir)
   }
 }
 
@@ -77,28 +134,35 @@ export function formatMasaKerja(bulan) {
 }
 
 /* ================= CEK ELIGIBLE CUTI ================= */
-export function isEligibleCuti(tanggalBergabung) {
+export function isEligibleCuti(tanggalBergabung, profile = null) {
+  if (profile) return isKontrakAktif(profile)
   return hitungMasaKerja(tanggalBergabung) >= 12
 }
 
 /* ================= HITUNG JATAH CUTI TAHUNAN ================= */
-export function hitungJatahCuti(tanggalBergabung) {
+export function hitungJatahCuti(tanggalBergabung, profile = null) {
+  if (profile) return isKontrakAktif(profile) ? JATAH_CUTI_TAHUNAN : 0
   if (!isEligibleCuti(tanggalBergabung)) return 0
   return JATAH_CUTI_TAHUNAN
 }
 
-function buildAnnualLeavePayload(profile, tahun = getTahunCutiBerjalan()) {
-  const { periode_mulai, periode_selesai } = getPeriodeCuti(profile, tahun)
-  const status = isEligibleCuti(profile?.tanggal_bergabung)
+function buildAnnualLeavePayload(profile) {
+  const periode = getKontrakPeriode(profile)
+  const kontrakAktif = periode?.status_kontrak !== 'berakhir' && !!periode?.kontrak_mulai && !!periode?.kontrak_berakhir
+  const status = kontrakAktif
     ? STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR
-    : STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE
+    : periode?.status_kontrak === 'berakhir'
+      ? STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK
+      : STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE
 
   return {
     user_id: profile.id,
     nama: profile.nama_lengkap || profile.email || '-',
-    tahun,
-    periode_mulai,
-    periode_selesai,
+    kontrak_mulai: periode?.kontrak_mulai || null,
+    kontrak_berakhir: periode?.kontrak_berakhir || null,
+    tahun: periode?.tahun || getTahunCutiBerjalan(),
+    periode_mulai: periode?.periode_mulai || null,
+    periode_selesai: periode?.periode_selesai || null,
     jatah_cuti: 0,
     sisa_cuti: 0,
     cuti_terpakai: 0,
@@ -106,42 +170,81 @@ function buildAnnualLeavePayload(profile, tahun = getTahunCutiBerjalan()) {
   }
 }
 
+async function expireCutiRowIfNeeded(row) {
+  if (!row || row.status !== STATUS_CUTI_TAHUNAN.AKTIF || getStatusKontrak(row.kontrak_berakhir) !== 'berakhir') return row
+
+  const sisaHangus = Number(row.sisa_cuti) || 0
+  const { data, error } = await supabase
+    .from('cuti_tahunan')
+    .update({
+      status: STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK,
+      expired_at: new Date().toISOString(),
+      sisa_cuti_hangus: sisaHangus,
+      sisa_cuti: 0
+    })
+    .eq('id', row.id)
+    .select('*')
+    .single()
+
+  if (error) throw error
+
+  await supabase
+    .from('profiles')
+    .update({ sisa_cuti: 0, status_kontrak: 'berakhir' })
+    .eq('id', row.user_id)
+
+  return data
+}
+
 /* ================= AMBIL / DETEKSI CUTI TAHUNAN ================= */
-export async function getOrCreateCutiTahunan(profile, tahun = getTahunCutiBerjalan()) {
+export async function getOrCreateCutiTahunan(profile) {
   if (!profile?.id) return null
 
-  const { data: existing, error: existingError } = await supabase
+  const detected = buildAnnualLeavePayload(profile)
+  const computedStatusKontrak = getStatusKontrak(detected.kontrak_berakhir)
+  if ((profile.status_kontrak || null) !== computedStatusKontrak) {
+    await supabase.from('profiles').update({ status_kontrak: computedStatusKontrak }).eq('id', profile.id)
+  }
+  const query = supabase
     .from('cuti_tahunan')
     .select('*')
     .eq('user_id', profile.id)
-    .eq('tahun', tahun)
-    .maybeSingle()
+
+  if (detected.kontrak_mulai && detected.kontrak_berakhir) {
+    query.eq('kontrak_mulai', detected.kontrak_mulai).eq('kontrak_berakhir', detected.kontrak_berakhir)
+  } else {
+    query.eq('tahun', detected.tahun).is('kontrak_mulai', null).is('kontrak_berakhir', null)
+  }
+
+  const { data: existing, error: existingError } = await query.maybeSingle()
 
   if (existingError) throw existingError
   if (existing) {
-    const detected = buildAnnualLeavePayload(profile, tahun)
-    if (existing.status === STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE && detected.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR) {
+    const expired = await expireCutiRowIfNeeded(existing)
+    if (expired.status === STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE && detected.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR) {
       const { data: updated, error: updateError } = await supabase
         .from('cuti_tahunan')
         .update({
           nama: detected.nama,
+          kontrak_mulai: detected.kontrak_mulai,
+          kontrak_berakhir: detected.kontrak_berakhir,
+          tahun: detected.tahun,
           periode_mulai: detected.periode_mulai,
           periode_selesai: detected.periode_selesai,
           status: detected.status
         })
-        .eq('id', existing.id)
+        .eq('id', expired.id)
         .select('*')
         .single()
       if (updateError) throw updateError
       return updated
     }
-    return existing
+    return expired
   }
 
-  const payload = buildAnnualLeavePayload(profile, tahun)
   const { data, error } = await supabase
     .from('cuti_tahunan')
-    .insert([payload])
+    .insert([detected])
     .select('*')
     .single()
 
@@ -149,40 +252,39 @@ export async function getOrCreateCutiTahunan(profile, tahun = getTahunCutiBerjal
   return data
 }
 
-export async function syncEligibleCutiTahunanForProfiles(profiles, tahun = getTahunCutiBerjalan()) {
+export async function syncEligibleCutiTahunanForProfiles(profiles) {
   const rows = []
   for (const profile of (profiles || [])) {
-    rows.push(await getOrCreateCutiTahunan(profile, tahun))
+    rows.push(await getOrCreateCutiTahunan(profile))
   }
   return rows
 }
 
-export async function getCutiTahunanAktif(userId, tahun = getTahunCutiBerjalan()) {
+export async function getCutiTahunanAktif(userId) {
   const { data, error } = await supabase
     .from('cuti_tahunan')
     .select('*')
     .eq('user_id', userId)
-    .eq('tahun', tahun)
     .eq('status', STATUS_CUTI_TAHUNAN.AKTIF)
+    .order('periode_mulai', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (error) throw error
-  return data
+  return expireCutiRowIfNeeded(data)
 }
 
 /* ================= AMBIL/HITUNG SISA CUTI ================= */
 export async function getSisaCuti(userId, tanggalBergabung) {
-  const tahun = getTahunCutiBerjalan()
-
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, nama_lengkap, email, tanggal_bergabung')
+    .select('id, nama_lengkap, email, tanggal_bergabung, jenis_kontrak, kontrak_mulai, durasi_kontrak, satuan_durasi_kontrak, masa_kontrak, kontrak_berakhir, status_kontrak')
     .eq('id', userId)
     .maybeSingle()
 
   const row = profile
-    ? await getOrCreateCutiTahunan(profile, tahun)
-    : await getCutiTahunanAktif(userId, tahun)
+    ? await getOrCreateCutiTahunan(profile)
+    : await getCutiTahunanAktif(userId)
 
   if (row) {
     return {
@@ -190,6 +292,9 @@ export async function getSisaCuti(userId, tanggalBergabung) {
       terpakai: Number(row.cuti_terpakai) || 0,
       sisa: Number(row.sisa_cuti) || 0,
       status: row.status,
+      kontrak_mulai: row.kontrak_mulai,
+      kontrak_berakhir: row.kontrak_berakhir,
+      status_kontrak: getStatusKontrak(row.kontrak_berakhir),
       periode_mulai: row.periode_mulai,
       periode_selesai: row.periode_selesai,
       row
@@ -198,24 +303,14 @@ export async function getSisaCuti(userId, tanggalBergabung) {
 
   // Fallback untuk database yang belum menjalankan migration cuti_tahunan.
   const jatah = hitungJatahCuti(tanggalBergabung)
-  const { data: pengajuanCuti } = await supabase
-    .from('pengajuan')
-    .select('jumlah_hari, status')
-    .eq('user_id', userId)
-    .eq('jenis', 'cuti')
-    .eq('status', 'approved')
-    .gte('tanggal_pengajuan', `${tahun}-01-01`)
-    .lte('tanggal_pengajuan', `${tahun}-12-31`)
-
-  const terpakai = (pengajuanCuti || []).reduce(
-    (sum, p) => sum + (parseInt(p.jumlah_hari) || 0), 0
-  )
-
   return {
     jatah,
-    terpakai,
-    sisa: Math.max(0, jatah - terpakai),
+    terpakai: 0,
+    sisa: jatah,
     status: jatah > 0 ? STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR : STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE,
+    kontrak_mulai: null,
+    kontrak_berakhir: null,
+    status_kontrak: 'aktif',
     periode_mulai: null,
     periode_selesai: null,
     row: null
@@ -232,11 +327,12 @@ export async function syncSisaCutiProfile(userId, tanggalBergabung) {
   return sisa
 }
 
-export async function approveJatahCutiTahunan(rowOrProfile, approver, tahun = getTahunCutiBerjalan()) {
+export async function approveJatahCutiTahunan(rowOrProfile, approver) {
   if (!canManageCutiTahunan(approver)) throw new Error('Tidak punya akses approve jatah cuti tahunan')
 
-  const row = rowOrProfile?.tahun ? rowOrProfile : await getOrCreateCutiTahunan(rowOrProfile, tahun)
+  const row = rowOrProfile?.periode_mulai ? await expireCutiRowIfNeeded(rowOrProfile) : await getOrCreateCutiTahunan(rowOrProfile)
   if (!row) throw new Error('Data cuti tahunan tidak ditemukan')
+  if (getStatusKontrak(row.kontrak_berakhir) === 'berakhir') throw new Error('Kontrak sudah berakhir. Periode cuti tidak bisa diaktifkan.')
 
   const payload = {
     jatah_cuti: JATAH_CUTI_TAHUNAN,
@@ -264,7 +360,8 @@ export async function approveJatahCutiTahunan(rowOrProfile, approver, tahun = ge
       sisa_cuti: JATAH_CUTI_TAHUNAN,
       jatah_cuti_tahunan: JATAH_CUTI_TAHUNAN,
       jatah_cuti: JATAH_CUTI_TAHUNAN,
-      cuti_terpakai: 0
+      cuti_terpakai: 0,
+      status_kontrak: getStatusKontrak(row.kontrak_berakhir)
     })
     .eq('id', row.user_id)
 
@@ -277,6 +374,7 @@ export async function deductCutiTahunanOnApproval(userId, jumlahHari) {
 
   const row = await getCutiTahunanAktif(userId)
   if (!row) throw new Error('Cuti tahunan belum aktif. HR/admin harus approve jatah cuti terlebih dahulu.')
+  if (row.status !== STATUS_CUTI_TAHUNAN.AKTIF || getStatusKontrak(row.kontrak_berakhir) === 'berakhir') throw new Error('Kontrak/periode cuti sudah berakhir.')
   if ((Number(row.sisa_cuti) || 0) < jumlah) throw new Error(`Saldo cuti tidak cukup. Sisa cuti ${row.sisa_cuti} hari.`)
 
   const nextSisa = (Number(row.sisa_cuti) || 0) - jumlah
@@ -313,10 +411,14 @@ export async function prosesHangusCutiTahunan(rowId, actor) {
 
   const expiredAt = new Date().toISOString()
   const sisaHangus = Number(row.sisa_cuti) || 0
+  const status = getStatusKontrak(row.kontrak_berakhir) === 'berakhir'
+    ? STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK
+    : STATUS_CUTI_TAHUNAN.HANGUS
+
   const { data, error } = await supabase
     .from('cuti_tahunan')
     .update({
-      status: STATUS_CUTI_TAHUNAN.HANGUS,
+      status,
       expired_at: expiredAt,
       sisa_cuti_hangus: sisaHangus,
       sisa_cuti: 0
@@ -329,7 +431,7 @@ export async function prosesHangusCutiTahunan(rowId, actor) {
 
   await supabase
     .from('profiles')
-    .update({ sisa_cuti: 0 })
+    .update({ sisa_cuti: 0, status_kontrak: getStatusKontrak(row.kontrak_berakhir) })
     .eq('id', row.user_id)
 
   return data
