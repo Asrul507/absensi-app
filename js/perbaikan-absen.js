@@ -554,7 +554,8 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
           .from('absensi')
           .update({
             waktu_masuk:     waktuMasukISO,
-            status_absensi:  existingAbsen.waktu_pulang ? 'complete' : 'approved manual',
+            status_absensi:  existingAbsen.waktu_pulang ? 'COMPLETE' : 'OPEN',
+            status_kehadiran: existingAbsen.waktu_pulang ? 'HADIR' : 'MENUNGGU_VERIFIKASI',
             status_masuk:    'Manual'
           })
           .eq('id', existingAbsen.id)
@@ -569,7 +570,8 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
             nama:           req.nama,
             tanggal:        req.tanggal,
             waktu_masuk:    waktuMasukISO,
-            status_absensi: 'approved manual',
+            status_absensi: 'OPEN',
+            status_kehadiran: 'MENUNGGU_VERIFIKASI',
             status_masuk:   'Manual'
           }])
 
@@ -594,7 +596,8 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
           .from('absensi')
           .update({
             waktu_pulang:   waktuPulangISO,
-            status_absensi: 'complete',
+            status_absensi: 'COMPLETE',
+            status_kehadiran: 'HADIR',
             status_pulang:  'Manual'
           })
           .eq('id', existingAbsen.id)
@@ -609,7 +612,8 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
             nama:           req.nama,
             tanggal:        req.tanggal,
             waktu_pulang:   waktuPulangISO,
-            status_absensi: 'approved manual',
+            status_absensi: 'OPEN',
+            status_kehadiran: 'MENUNGGU_VERIFIKASI',
             status_pulang:  'Manual'
           }])
 

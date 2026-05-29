@@ -1,10 +1,11 @@
 import { supabase } from './supabase.js'
 import { toJamLokal, getTodayLokal, getDurasiMenit } from './timezone.js'
 import { showToast } from './feedback.js'
+import { canApproveAttendance, formatAttendanceStatus, RADIUS_STATUS } from './attendance-approval.js'
 
 export async function renderRekapInOut(user) {
   const content = document.getElementById('content')
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  const isAdmin = canApproveAttendance(user)
 
   content.innerHTML = `
     <div class="page-header">
@@ -161,6 +162,7 @@ window.applyRekapInOutFilter = async function (user) {
     let query = supabase
       .from('absensi')
       .select('*')
+      .in('status_absensi', ['COMPLETE', 'OPEN'])
       .order('tanggal', { ascending: false })
 
     if (window._selectedRekapKaryawan) {
@@ -217,8 +219,13 @@ function calculateRekapInOut(absensiData, isAdmin, currentUserName) {
       }
     }
 
+    const approvalStatus = a.status_absensi || 'OPEN'
+    const statusKehadiran = a.status_kehadiran || (approvalStatus === 'COMPLETE' ? 'HADIR' : 'MENUNGGU_VERIFIKASI')
+    const radiusStatus = a.radius_status || 'VALID'
+    const shiftLabel = a.nama_shift || a.shift_code || a.kode_shift || `${a.jam_jadwal_masuk || '-'} - ${a.jam_jadwal_pulang || '-'}`
+
     // Buat keterangan dinamis berdasarkan data menit riil Supabase
-    let keteranganDetail = a.waktu_masuk ? (a.waktu_pulang ? 'Complete' : 'Belum Pulang') : 'Tidak Absen'
+    let keteranganDetail = approvalStatus === 'OPEN' ? 'Menunggu Approval' : (a.waktu_masuk ? (a.waktu_pulang ? 'Complete' : 'Belum Pulang') : 'Tidak Absen')
     
     if (a.status_masuk === 'Terlambat' && a.menit_terlambat > 0) {
       keteranganDetail += ` (Terlambat ${a.menit_terlambat}m)`
@@ -230,15 +237,29 @@ function calculateRekapInOut(absensiData, isAdmin, currentUserName) {
     detail.push({
       nama: a.nama,
       tanggal: a.tanggal,
+      shift: shiftLabel,
       jamMasuk,
       jamPulang,
       totalJam,
-      status: a.waktu_masuk ? (a.waktu_pulang ? 'Complete' : 'Belum Pulang') : 'Tidak Absen',
+      status: approvalStatus === 'COMPLETE' ? 'Complete' : 'Menunggu Approval',
+      approvalStatus,
+      statusKehadiran,
+      radiusStatus,
       keteranganText: keteranganDetail
     })
   })
 
   return { detail, summary }
+}
+
+function approvalBadge(status) {
+  if (status === 'COMPLETE') return '<span style="padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:800;background:#dcfce7;color:#166534;">COMPLETE</span>'
+  return '<span style="padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:800;background:#fffbeb;color:#92400e;">Menunggu Approval</span>'
+}
+
+function radiusBadge(status) {
+  if (status === RADIUS_STATUS.OUT_RADIUS) return '<span style="padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:800;background:#fee2e2;color:#991b1b;">OUT_RADIUS</span>'
+  return '<span style="padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:800;background:#e8f5e9;color:#166534;">VALID</span>'
 }
 
 function renderRekapInOutTable(detail, isAdmin) {
@@ -265,8 +286,12 @@ function renderRekapInOutTable(detail, isAdmin) {
             <tr>
               ${isAdmin ? '<th>Nama</th>' : ''}
               <th>Tanggal</th>
-              <th>Jam Masuk</th>
-              <th>Jam Pulang</th>
+              <th>Shift</th>
+              <th>Jam CI</th>
+              <th>Jam CO</th>
+              <th>Status Approval</th>
+              <th>Status Kehadiran</th>
+              <th>Radius</th>
               <th>Total Jam</th>
               <th>Keterangan</th>
             </tr>
@@ -276,22 +301,14 @@ function renderRekapInOutTable(detail, isAdmin) {
               <tr>
                 ${isAdmin ? `<td style="font-weight: 600;">${d.nama}</td>` : ''}
                 <td>${d.tanggal}</td>
+                <td>${d.shift}</td>
                 <td style="font-weight: 700; color: var(--success);">${d.jamMasuk}</td>
                 <td style="font-weight: 700; color: var(--primary);">${d.jamPulang}</td>
+                <td>${approvalBadge(d.approvalStatus)}</td>
+                <td>${formatAttendanceStatus(d.statusKehadiran)}</td>
+                <td>${radiusBadge(d.radiusStatus)}</td>
                 <td>${d.totalJam}</td>
-                <td>
-                  <span style="
-                    padding: 4px 10px;
-                    border-radius: 20px;
-                    font-size: .75rem;
-                    font-weight: 700;
-                    ${d.status === 'Complete' ? 'background: #dcfce7; color: #166534;' : ''}
-                    ${d.status === 'Belum Pulang' ? 'background: #fef3c7; color: #92400e;' : ''}
-                    ${d.status === 'Tidak Absen' ? 'background: #fee2e2; color: #991b1b;' : ''}
-                  ">
-                    ${d.keteranganText}
-                  </span>
-                </td>
+                <td>${d.keteranganText}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -317,8 +334,12 @@ window.downloadExcelRekapInOut = function () {
   const rows = window._rekapInOutDetail.map(d => ({
     'Nama': d.nama,
     'Tanggal': d.tanggal,
-    'Jam Masuk': d.jamMasuk,
-    'Jam Pulang': d.jamPulang,
+    'Shift': d.shift,
+    'Jam CI': d.jamMasuk,
+    'Jam CO': d.jamPulang,
+    'Status Approval': d.approvalStatus,
+    'Status Kehadiran': formatAttendanceStatus(d.statusKehadiran),
+    'Radius Status': d.radiusStatus,
     'Total Jam': d.totalJam,
     'Keterangan': d.keteranganText
   }))

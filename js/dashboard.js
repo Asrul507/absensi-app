@@ -1,6 +1,8 @@
 import { supabase } from './supabase.js'
 import { getTodayLokal, getDurasiMenit } from './timezone.js'
 import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
+import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
+import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
 
 export async function renderDashboard() {
   const content = document.getElementById('content')
@@ -11,18 +13,15 @@ export async function renderDashboard() {
     return
   }
 
-  // ===== LOGIKA BARU: DETEKSI LUPA ABSEN PULANG (AMAN UNTUK SHIFT MALAM) =====
+  // Attendance approval workflow: jangan mengunci lupa absen pulang menjadi final.
+  // Dashboard hanya memastikan record lama tetap berada di status OPEN/MENUNGGU_VERIFIKASI
+  // agar admin/SPV yang memutuskan final status melalui menu Approval Absensi.
   try {
-    const sekarang = new Date()
-    const jamSekarang = sekarang.getHours()
-
-    // Kemarin dalam waktu lokal (offset dari titik radius)
     const todayStr = getTodayLokal()
     const todayDate = new Date(todayStr + 'T00:00:00Z')
     todayDate.setUTCDate(todayDate.getUTCDate() - 1)
     const tanggalKemarinStr = todayDate.toISOString().split('T')[0]
 
-    // 1. Ambil data absensi user hari kemarin
     const { data: absenKemarin, error: errKemarin } = await supabase
       .from('absensi')
       .select('*')
@@ -30,44 +29,17 @@ export async function renderDashboard() {
       .eq('tanggal', tanggalKemarinStr)
       .maybeSingle()
 
-    // Jika kemarin ada absen masuk, belum absen pulang, dan status masih 'open'
-    if (!errKemarin && absenKemarin && absenKemarin.waktu_masuk && !absenKemarin.waktu_pulang && absenKemarin.status_absensi === 'open') {
-      
-      // Ambil jadwal shift karyawan untuk hari kemarin untuk memeriksa jam jadwalnya
-      const { data: jadwalKemarin } = await supabase
-        .from('jadwal')
-        .select('shift_code')
-        .eq('user_id', user.id)
-        .eq('tanggal', tanggalKemarinStr)
-        .maybeSingle()
-
-      // Jika jadwal kemarin adalah Shift Malam (Code '4' atau jam_jadwal_masuk malam hari)
-      const isShiftMalam = jadwalKemarin?.shift_code === '4' || (absenKemarin.jam_jadwal_masuk && absenKemarin.jam_jadwal_masuk.startsWith('23'))
-
-      if (isShiftMalam) {
-        // KHUSUS SHIFT MALAM: Jangan langsung kunci di pagi hari. 
-        // Berikan toleransi hingga melewati jam 09:00 pagi hari ini (hari esoknya).
-        if (jamSekarang >= 9) {
-          await supabase
-            .from('absensi')
-            .update({ status_absensi: 'lupa absen pulang' })
-            .eq('id', absenKemarin.id)
-          console.log("Absensi shift malam kemarin otomatis dikunci karena melewati batas jam 09:00.");
-        } else {
-          console.log("Karyawan dalam shift malam, belum melewati batas toleransi pulang pagi ini.");
-        }
-      } else {
-        // UNTUK SHIFT NON-MALAM (Pagi/Sore): Langsung kunci otomatis tanpa syarat jam
-        await supabase
-          .from('absensi')
-          .update({ status_absensi: 'lupa absen pulang' })
-          .eq('id', absenKemarin.id)
-        console.log("Absensi shift reguler kemarin otomatis dikunci.");
-      }
+    if (!errKemarin && absenKemarin?.waktu_masuk && !absenKemarin?.waktu_pulang) {
+      await supabase
+        .from('absensi')
+        .update({ status_absensi: 'OPEN', status_kehadiran: 'MENUNGGU_VERIFIKASI' })
+        .eq('id', absenKemarin.id)
     }
   } catch (e) {
-    console.error("Gagal menjalankan otomatisasi lupa absen:", e)
+    console.error('Gagal sinkronisasi status OPEN absensi:', e)
   }
+
+  const dashboardServerIso = await getServerTimeIso()
 
   // Get profile terbaru
   const { data: profile } = await supabase
@@ -98,12 +70,13 @@ export async function renderDashboard() {
   const dateFrom = firstDay.toISOString().split('T')[0]
   const dateTo   = lastDay.toISOString().split('T')[0]
 
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  const isAdmin = canApproveAttendance(user)
 
   // Get total jam kerja (personal user login)
   const { data: absensiMonth } = await supabase
     .from('absensi')
-    .select('waktu_masuk, waktu_pulang, status_masuk, status_absensi')
+    .select('waktu_masuk, waktu_pulang, status_masuk, status_absensi, status_kehadiran')
+    .eq('status_absensi', 'COMPLETE')
     .eq('nama', fullName)
     .gte('tanggal', dateFrom)
     .lte('tanggal', dateTo)
@@ -163,10 +136,13 @@ export async function renderDashboard() {
       const { data: absenHariIni } = await supabase.from('absensi').select('*').eq('tanggal', hariIniStr)
       const { data: jadwalHariIni } = await supabase.from('jadwal').select('*').eq('tanggal', hariIniStr)
       
-      let tepatWaktu = 0, terlambat = 0, sedangKerja = 0, liburAtauCuti = 0
+      let tepatWaktu = 0, terlambat = 0, sedangKerja = 0, liburAtauCuti = 0, openApproval = 0, outRadius = 0, lupaAbsen = 0
       
       absenHariIni?.forEach(a => {
-        if (a.waktu_masuk && a.waktu_pulang) {
+        if (a.status_absensi === 'OPEN') openApproval++
+        if (a.radius_status === RADIUS_STATUS.OUT_RADIUS) outRadius++
+        if (a.approval_flag === 'LATE_CHECKIN_MISSING' || (a.waktu_masuk && !a.waktu_pulang)) lupaAbsen++
+        if (a.waktu_masuk && a.waktu_pulang && a.status_absensi === 'COMPLETE') {
           if (a.status_masuk === 'Terlambat') terlambat++
           else tepatWaktu++
         } else if (a.waktu_masuk && !a.waktu_pulang) {
@@ -185,6 +161,7 @@ export async function renderDashboard() {
           <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">
             <i class="fa fa-chart-line" style="color: var(--primary);"></i> Live Monitoring Kehadiran Hari Ini
           </div>
+          ${openApproval > 0 ? `<button onclick="window.navigate('approval-absensi')" style="width:100%;margin-bottom:10px;border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:10px;padding:9px;font-weight:900;cursor:pointer;"><i class="fa fa-bell"></i> Absensi Menunggu Approval (${openApproval})</button>` : ''}
           <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center;">
             <div style="background: #dcfce7; padding: 10px 4px; border-radius: 10px;">
               <div style="font-size: 1.2rem; font-weight: 900; color: #166534;">${tepatWaktu}</div>
@@ -203,6 +180,12 @@ export async function renderDashboard() {
               <div style="font-size: .6rem; color: #475569; font-weight: 700;">Off / Cuti</div>
             </div>
           </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;margin-top:8px;">
+            <div style="background:#fffbeb;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#b45309;">${openApproval}</div><div style="font-size:.6rem;color:#b45309;font-weight:700;">Menunggu Approval</div></div>
+            <div style="background:#fee2e2;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#991b1b;">${outRadius}</div><div style="font-size:.6rem;color:#991b1b;font-weight:700;">Out Radius</div></div>
+            <div style="background:#fef3c7;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#92400e;">${lupaAbsen}</div><div style="font-size:.6rem;color:#92400e;font-weight:700;">Lupa Absen</div></div>
+            <div style="background:#dbeafe;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#1d4ed8;">${sedangKerja}</div><div style="font-size:.6rem;color:#1d4ed8;font-weight:700;">Shift Aktif</div></div>
+          </div>
         </div>
       `
     } catch (err) {
@@ -213,7 +196,7 @@ export async function renderDashboard() {
   // ===== DASHBOARD PERSONAL STAFF =====
   const { data: absensiHariIni } = await supabase
     .from('absensi')
-    .select('waktu_masuk, waktu_pulang, status_absensi')
+    .select('waktu_masuk, waktu_pulang, status_absensi, status_kehadiran')
     .eq('nama', fullName)
     .eq('tanggal', todayLocal)
     .maybeSingle()
@@ -225,13 +208,13 @@ export async function renderDashboard() {
     .eq('tanggal', todayLocal)
     .maybeSingle()
 
-  const totalHadirBulanIni = absensiMonth?.filter(a => a.waktu_masuk).length || 0
+  const totalHadirBulanIni = absensiMonth?.filter(a => a.waktu_masuk && a.status_absensi === 'COMPLETE').length || 0
   const totalTerlambatBulanIni = absensiMonth?.filter(a => a.status_masuk === 'Terlambat').length || 0
-  const totalLupaPulangBulanIni = absensiMonth?.filter(a => a.status_absensi === 'lupa absen pulang').length || 0
+  const totalLupaPulangBulanIni = absensiMonth?.filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG').length || 0
 
   const { data: riwayatTerbaru } = await supabase
     .from('absensi')
-    .select('tanggal, waktu_masuk, waktu_pulang, status_absensi')
+    .select('tanggal, waktu_masuk, waktu_pulang, status_absensi, status_kehadiran')
     .eq('nama', fullName)
     .order('tanggal', { ascending: false })
     .limit(5)
@@ -260,13 +243,14 @@ export async function renderDashboard() {
   if (isAdmin) {
     const { data: globalAbsensi } = await supabase
       .from('absensi')
-      .select('nama, status_masuk, status_absensi, waktu_masuk, waktu_pulang')
+      .select('nama, status_masuk, status_absensi, status_kehadiran, waktu_masuk, waktu_pulang')
+      .eq('status_absensi', 'COMPLETE')
       .gte('tanggal', dateFrom)
       .lte('tanggal', dateTo)
 
     const hadirGlobal = globalAbsensi?.filter(a => a.waktu_masuk).length || 0
     const terlambatGlobal = globalAbsensi?.filter(a => a.status_masuk === 'Terlambat').length || 0
-    const lupaPulangGlobal = globalAbsensi?.filter(a => a.status_absensi === 'lupa absen pulang').length || 0
+    const lupaPulangGlobal = globalAbsensi?.filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG').length || 0
 
     const rankMap = {}
     ;(globalAbsensi || []).forEach(a => {
@@ -299,6 +283,12 @@ export async function renderDashboard() {
   content.innerHTML = `
     <div class="page-header" style="margin-bottom: 20px;">
       <h2 style="margin: 0;"><i class="fa fa-tachometer-alt"></i> Dashboard</h2>
+    </div>
+
+    <div class="card fade-up" style="padding: 16px; margin-bottom: 16px; text-align:center;">
+      <div style="font-size:.7rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;margin-bottom:4px;">Waktu Server</div>
+      <div id="dashboardLiveClock" style="font-family:monospace;font-size:1.8rem;font-weight:900;color:var(--primary);">--:--:--</div>
+      <div id="dashboardLiveDate" style="font-size:.8rem;color:var(--text-muted);margin-top:2px;">Memuat waktu server...</div>
     </div>
 
     <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white; border: none;">
@@ -399,6 +389,8 @@ export async function renderDashboard() {
     </style>
   `
 
+  startServerDigitalClock({ key: 'dashboard', timeElementId: 'dashboardLiveClock', dateElementId: 'dashboardLiveDate', serverIso: dashboardServerIso || new Date().toISOString() })
+
   if (typeof Chart === 'undefined') {
     const script = document.createElement('script')
     script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
@@ -414,7 +406,7 @@ async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
     createTotalJamKerjaChart('jamKerjaChart', totalJamKerja)
     createAktivitasChart('aktivitasChart', userId, dateFrom, dateTo)
     createAbsensiChart('absensiChartKehadiran', 'absensiChartMasuk', 'absensiChartPulang', userId, dateFrom, dateTo)
-    if ((window.currentUser?.role === 'admin' || window.currentUser?.role === 'super_admin') && document.getElementById('adminGlobalChart')) {
+    if (canApproveAttendance(window.currentUser) && document.getElementById('adminGlobalChart')) {
       const ctx = document.getElementById('adminGlobalChart')
       const statsEl = document.getElementById('adminGlobalStats')
       const hadir = Number(statsEl?.dataset?.hadir || 0)

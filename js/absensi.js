@@ -13,6 +13,21 @@ export const ATTENDANCE_CONFIG = {
   CHECKOUT_GRACE_HOURS: 3,        // Grace period lupa pulang setelah jam pulang shift
 }
 
+
+export function getMakassarMinutes(dateValue = new Date()) {
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue)
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Makassar',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    hourCycle: 'h23'
+  }).formatToParts(date)
+  const h = Number(parts.find(p => p.type === 'hour')?.value || 0)
+  const m = Number(parts.find(p => p.type === 'minute')?.value || 0)
+  return (h * 60) + m
+}
+
 /* ===============================================================
    CHECK STATUS MASUK
    Compare waktu masuk dengan jam shift + grace period
@@ -23,9 +38,8 @@ export const ATTENDANCE_CONFIG = {
      message: string
    }
 =============================================================== */
-export function checkStatus(jamMasuk) {
-  const now = new Date()
-  const current = now.getHours() * 60 + now.getMinutes()
+export function checkStatus(jamMasuk, nowDate = new Date()) {
+  const current = getMakassarMinutes(nowDate)
 
   const [h, m] = jamMasuk.split(':').map(Number)
   const targetTime = h * 60 + m
@@ -64,14 +78,13 @@ export function checkStatus(jamMasuk) {
      minutesEarly: number
    }
 =============================================================== */
-export function checkStatusPulang(jamPulangJadwal) {
+export function checkStatusPulang(jamPulangJadwal, nowDate = new Date()) {
   // Jika tidak ada jadwal pulang atau shift spesial (OFF/CUTI/dll)
   if (!jamPulangJadwal || jamPulangJadwal === '-') {
     return { status: 'Selesai', minutesEarly: 0 }
   }
 
-  const now = new Date()
-  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const currentMinutes = getMakassarMinutes(nowDate)
 
   const [h, m] = jamPulangJadwal.split(':').map(Number)
   const targetMinutes = h * 60 + m
@@ -154,8 +167,8 @@ function isOvernightShiftStillActive(shiftKemarin, nowDate = new Date()) {
    fallback ke getShiftDetailByJamMasuk(jam_jadwal_masuk) agar
    shift malam tetap terdeteksi dengan benar.
 =============================================================== */
-export async function getTodayAbsen(nama) {
-  const today = getTodayLokal()
+export async function getTodayAbsen(nama, todayOverride = null, nowDate = new Date()) {
+  const today = todayOverride || getTodayLokal()
 
   // ── FIX SHIFT MALAM: Prioritaskan absensi terbuka dari kemarin ──────────
   const kemarin = new Date(`${today}T00:00:00+08:00`)
@@ -184,7 +197,7 @@ export async function getTodayAbsen(nama) {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    if (isOvernightShiftStillActive(shiftKemarin)) {
+    if (isOvernightShiftStillActive(shiftKemarin, nowDate)) {
       console.log('[SHIFT AKTIF] Melanjutkan absensi terbuka dari kemarin:', kemarinStr)
       return dataKemarin
     }
@@ -223,17 +236,14 @@ export async function getTodayAbsen(nama) {
      jam_pulang: string (HH:MM)
    }
 =============================================================== */
-export async function getTodayShift(user_id) {
-  const today = getTodayLokal()
+export async function getTodayShift(user_id, todayOverride = null, nowDate = new Date()) {
+  const today = todayOverride || getTodayLokal()
 
   // ── FIX SHIFT MALAM: Cek kemarin berdasarkan cutOff dinamis ─────────────
   // (tidak lagi hardcode jamSekarang < 8)
-  const kemarin = new Date()
-  kemarin.setDate(kemarin.getDate() - 1)
-  const yyyy = kemarin.getFullYear()
-  const mm   = String(kemarin.getMonth() + 1).padStart(2, '0')
-  const dd   = String(kemarin.getDate()).padStart(2, '0')
-  const kemarinStr = `${yyyy}-${mm}-${dd}`
+  const kemarin = new Date(`${today}T00:00:00+08:00`)
+  kemarin.setUTCDate(kemarin.getUTCDate() - 1)
+  const kemarinStr = kemarin.toISOString().slice(0, 10)
 
   const { data: dataKemarin } = await supabase
     .from('jadwal')
@@ -244,7 +254,7 @@ export async function getTodayShift(user_id) {
 
   if (dataKemarin?.shift_code) {
     const shiftKemarin = await getShiftDetailByCode(dataKemarin.shift_code)
-    if (isOvernightShiftStillActive(shiftKemarin)) {
+    if (isOvernightShiftStillActive(shiftKemarin, nowDate)) {
       console.log('[SHIFT MALAM] Masih dalam window shift lintas hari kemarin:', kemarinStr)
       return shiftKemarin
     }

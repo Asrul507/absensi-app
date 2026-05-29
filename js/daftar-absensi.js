@@ -65,17 +65,28 @@ async function muatLogAbsensi(user) {
       .from('absensi')
       .select('*')
       .eq('nama', user.nama_lengkap)
+      .eq('status_absensi', 'COMPLETE')
       .gte('tanggal', tglMulai)
       .lte('tanggal', tglSelesai)
       .order('tanggal', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      if (String(error.message || '').includes('status_absensi')) {
+        listContainer.innerHTML = `
+          <div style="text-align:center; padding:32px 20px; background:#fff; border-radius:12px; border:1px dashed #fbbf24;">
+            <i class="fa fa-database" style="font-size:1.8rem; color:#d97706; margin-bottom:8px; display:block;"></i>
+            <p style="font-size:.85rem; color:#92400e; font-weight:700; margin:0;">Kolom status_absensi belum tersedia. Jalankan migration Attendance Approval terlebih dahulu.</p>
+          </div>`
+        return
+      }
+      throw error
+    }
 
     if (!listAbsen || listAbsen.length === 0) {
       listContainer.innerHTML = `
         <div style="text-align:center; padding:40px 20px; background:#fff; border-radius:12px; border:1px dashed #e2e8f0;">
           <i class="fa fa-calendar-xmark" style="font-size:2rem; color:#cbd5e1; margin-bottom:8px; display:block;"></i>
-          <p style="font-size:.85rem; color:var(--text-muted); font-weight:600; margin:0;">Tidak ada riwayat absensi pada rentang tanggal ini.</p>
+          <p style="font-size:.85rem; color:var(--text-muted); font-weight:600; margin:0;">Belum ada absensi COMPLETE pada rentang tanggal ini.</p>
         </div>
       `
       return
@@ -110,7 +121,7 @@ async function muatLogAbsensi(user) {
         const isLuarRadius = (absen.lokasi_masuk || '').includes('Luar Radius') || (absen.lokasi_masuk || '').includes('Testing')
         const isSalahTitik = user.titik_radius && absen.lokasi_masuk !== user.titik_radius
 
-        if (isLuarRadius || isSalahTitik || absen.status_absensi === 'salah absen') {
+        if (absen.radius_status === 'OUT_RADIUS' || isLuarRadius || isSalahTitik || absen.status_absensi === 'salah absen') {
           badgeMasuk = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;">Out Radius</span>`
         } else {
           badgeMasuk = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;">Hadir (In Radius)</span>`
@@ -123,7 +134,7 @@ async function muatLogAbsensi(user) {
         const isLuarPulang = (absen.lokasi_pulang || '').includes('Luar Radius') || (absen.lokasi_pulang || '').includes('Testing')
         const isSalahTitikPulang = user.titik_radius && absen.lokasi_pulang !== user.titik_radius
 
-        if (isLuarPulang || isSalahTitikPulang || absen.status_absensi === 'salah absen') {
+        if (absen.radius_status === 'OUT_RADIUS' || isLuarPulang || isSalahTitikPulang || absen.status_absensi === 'salah absen') {
           badgePulang = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;">Out Radius</span>`
         } else {
           badgePulang = `<span style="padding:4px 10px; font-size:.7rem; font-weight:800; border-radius:999px; background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;">Out (In Radius)</span>`
@@ -132,6 +143,13 @@ async function muatLogAbsensi(user) {
 
       const jamMasuk = absen.waktu_masuk ? toJamLokal(absen.waktu_masuk) : '-'
       const jamPulang = absen.waktu_pulang ? toJamLokal(absen.waktu_pulang) : '-'
+      const approvalBadge = absen.status_absensi === 'OPEN'
+        ? '<span style="padding:4px 10px;border-radius:999px;background:#fffbeb;color:#b45309;font-size:.68rem;font-weight:900;">MENUNGGU APPROVAL</span>'
+        : absen.status_absensi === 'COMPLETE'
+          ? '<span style="padding:4px 10px;border-radius:999px;background:#dcfce7;color:#166534;font-size:.68rem;font-weight:900;">COMPLETE</span>'
+          : absen.status_absensi === 'REJECTED'
+            ? '<span style="padding:4px 10px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:.68rem;font-weight:900;">REJECTED</span>'
+            : ''
 
       return `
         <div style="margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid #f1f5f9;">
@@ -143,7 +161,7 @@ async function muatLogAbsensi(user) {
                 Shift: ${jamJadwalMasuk} - ${jamJadwalPulang}
               </div>
             </div>
-            <div>${teksJamKerja}</div>
+            <div style="text-align:right;display:flex;flex-direction:column;gap:5px;align-items:flex-end;">${approvalBadge}${teksJamKerja}</div>
           </div>
 
           <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:${absen.waktu_masuk ? '#f8fafc' : '#f1f5f9'}; border-radius:10px; margin-bottom:8px; opacity:${absen.waktu_masuk ? '1' : '0.65'}">
