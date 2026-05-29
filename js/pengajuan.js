@@ -1,7 +1,18 @@
 import { supabase } from './supabase.js'
 import { getTodayLokal } from './timezone.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
-import { isEligibleCuti, getSisaCuti, hitungMasaKerja, syncSisaCutiProfile } from './cuti.js'
+import {
+  STATUS_CUTI_TAHUNAN,
+  approveJatahCutiTahunan,
+  canManageCutiTahunan,
+  deductCutiTahunanOnApproval,
+  formatMasaKerja,
+  getOrCreateCutiTahunan,
+  getSisaCuti,
+  hitungMasaKerja,
+  prosesHangusCutiTahunan,
+  syncEligibleCutiTahunanForProfiles
+} from './cuti.js'
 import { showToast, setButtonLoading } from './feedback.js'
 
 function toDateStr(value) {
@@ -31,20 +42,43 @@ function hitungTanggalSelesai(startDate, hari) {
 
 export async function renderPengajuan(user) {
   const content = document.getElementById('content')
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  const isAdmin = canManageCutiTahunan(user)
 
   let query = supabase.from('pengajuan').select('*').order('created_at', { ascending: false })
+  if (!isAdmin) query = query.eq('user_id', user.id)
   const { data: list, error } = await query
   if (error) {
     content.innerHTML = `<div class="card"><p class="text-danger">❌ Gagal load data</p></div>`
     return
   }
 
-  const myList = isAdmin ? list : list.filter(i => i.user_id === user.id)
+  const myList = list || []
 
   const masaKerja = hitungMasaKerja(user.tanggal_bergabung)
-  const eligible = isEligibleCuti(user.tanggal_bergabung)
-  const { jatah, terpakai, sisa } = await getSisaCuti(user.id, user.tanggal_bergabung)
+  let saldoCuti = { jatah: 0, terpakai: 0, sisa: 0, status: STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE, periode_mulai: null, periode_selesai: null }
+  try {
+    saldoCuti = await getSisaCuti(user.id, user.tanggal_bergabung)
+  } catch (err) {
+    console.error('Gagal memuat saldo cuti tahunan:', err)
+    showToast('Gagal memuat saldo cuti tahunan. Pastikan migration Cuti Tahunan V1 sudah dijalankan.', 'warning')
+  }
+  const { jatah, terpakai, sisa, status: statusCutiTahunan, periode_mulai, periode_selesai } = saldoCuti
+  const eligible = statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF
+  let adminCutiTahunanRows = []
+  if (isAdmin) {
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, nama_lengkap, email, tanggal_bergabung, role, status_akun')
+      .order('nama_lengkap')
+    if (!profilesError) {
+      try {
+        adminCutiTahunanRows = await syncEligibleCutiTahunanForProfiles(profiles || [])
+      } catch (err) {
+        console.error('Gagal memuat cuti tahunan:', err)
+        showToast('Gagal memuat cuti tahunan. Pastikan migration Cuti Tahunan V1 sudah dijalankan.', 'warning')
+      }
+    }
+  }
 
   content.innerHTML = `
     <div class="page-header">
@@ -56,9 +90,12 @@ export async function renderPengajuan(user) {
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
         <div>
           <div style="font-size:.7rem;opacity:.75;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;">Status Cuti Anda</div>
-          <div style="font-size:1rem;font-weight:800;">Masa Kerja: ${masaKerja} bulan</div>
+          <div style="font-size:1rem;font-weight:800;">Status: ${statusCutiTahunan || STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE}</div>
           <div style="font-size:.85rem;opacity:.85;margin-top:2px;">
-            ${!eligible ? '⚠ Belum eligible cuti (min. 6 bulan kerja)' : '✅ Eligible mengajukan cuti'}
+            Masa kerja ${formatMasaKerja(masaKerja)} · Periode ${periode_mulai || '-'} s/d ${periode_selesai || '-'}
+          </div>
+          <div style="font-size:.8rem;opacity:.82;margin-top:2px;">
+            ${statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF ? '✅ Jatah cuti aktif dan bisa diajukan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? '⏳ Eligible, menunggu approval HR/admin' : '⚠ Belum ada kontrak aktif untuk cuti tahunan'}
           </div>
         </div>
         <div style="display:flex;gap:20px;text-align:center;">
@@ -78,6 +115,8 @@ export async function renderPengajuan(user) {
       </div>
     </div>
     ` : ''}
+
+    ${isAdmin ? renderCutiTahunanAdminSection(adminCutiTahunanRows) : ''}
 
     <div class="card fade-up-1">
       <h3 style="font-size:.9rem;font-weight:800;margin-bottom:16px;">
@@ -181,18 +220,16 @@ export async function renderPengajuan(user) {
     const msgEl = document.getElementById('infoEligibleMsg')
 
     if (jenis === 'cuti') {
-      if (!eligible) {
+      if (statusCutiTahunan !== STATUS_CUTI_TAHUNAN.AKTIF) {
         infoEl.style.display = 'flex'
         infoEl.className = 'alert warning'
-        msgEl.textContent = `Anda belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`
-      } else if (masaKerja < 12) {
-        infoEl.style.display = 'flex'
-        infoEl.className = 'alert info'
-        msgEl.textContent = `Anda eligible cuti izin (masa kerja 6-11 bulan). Jatah 12 hari/tahun didapat setelah 12 bulan kerja.`
+        msgEl.textContent = statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR
+          ? 'Anda sudah eligible, tetapi jatah cuti tahunan masih menunggu approval HR/admin.'
+          : `Anda belum memiliki kontrak aktif/periode cuti aktif. Masa kerja ${formatMasaKerja(masaKerja)}.`
       } else if (sisa <= 0) {
         infoEl.style.display = 'flex'
         infoEl.className = 'alert warning'
-        msgEl.textContent = `Sisa cuti Anda ${sisa} hari. Pengajuan akan mencatat minus.`
+        msgEl.textContent = `Sisa cuti Anda ${sisa} hari. Pengajuan cuti tidak bisa dikirim.`
       } else {
         infoEl.style.display = 'none'
       }
@@ -223,8 +260,12 @@ export async function renderPengajuan(user) {
     if (!tanggalMulai) { showToast('Tanggal mulai wajib diisi', 'warning'); return }
     if (!jumlahHari || jumlahHari < 1) { showToast('Jumlah hari tidak valid', 'warning'); return }
 
-    if (jenis === 'cuti' && !eligible) {
-      showToast(`Belum eligible cuti. Masa kerja ${masaKerja} bulan (min. 6 bulan).`, 'warning')
+    if (jenis === 'cuti' && statusCutiTahunan !== STATUS_CUTI_TAHUNAN.AKTIF) {
+      showToast('Cuti tahunan belum aktif atau kontrak tidak aktif. Tunggu approval jatah cuti dari HR/admin.', 'warning')
+      return
+    }
+    if (jenis === 'cuti' && jumlahHari > sisa) {
+      showToast(`Saldo cuti tidak cukup. Sisa cuti Anda ${sisa} hari.`, 'warning')
       return
     }
 
@@ -267,6 +308,84 @@ export async function renderPengajuan(user) {
     await logAuditEvent({ action: 'create', entityType: 'pengajuan', entityId: insertedRows?.[0]?.id, after: payload })
     showToast('Pengajuan berhasil dikirim', 'success')
     renderPengajuan(user)
+  }
+}
+
+
+function renderCutiTahunanAdminSection(rows) {
+  const today = new Date().toISOString().split('T')[0]
+  const counts = rows.reduce((acc, row) => {
+    acc[row.status] = (acc[row.status] || 0) + 1
+    return acc
+  }, {})
+
+  const renderRows = (status) => rows
+    .filter(row => row.status === status)
+    .map(row => {
+      const isExpired = row.periode_selesai && row.periode_selesai < today && row.status === STATUS_CUTI_TAHUNAN.AKTIF
+      return `
+        <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) repeat(4,minmax(70px,.6fr)) minmax(160px,1fr);gap:8px;align-items:center;padding:10px;border-bottom:1px solid var(--border);font-size:.8rem;">
+          <div><strong>${row.nama || '-'}</strong><div style="color:var(--text-muted);font-size:.72rem;">${row.periode_mulai || '-'} s/d ${row.periode_selesai || '-'}</div></div>
+          <div>${row.jatah_cuti || 0}</div>
+          <div>${row.cuti_terpakai || 0}</div>
+          <div>${row.sisa_cuti || 0}</div>
+          <div><span class="badge ${row.status === STATUS_CUTI_TAHUNAN.AKTIF ? 'badge-green' : [STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK].includes(row.status) ? 'badge-red' : row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? 'badge-yellow' : 'badge-gray'}">${row.status}</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? `<button class="btn-primary btn-sm" onclick="approveJatahCutiTahunanUI('${row.id}')"><i class="fa fa-check"></i> Approve Jatah 12 Hari</button>` : ''}
+            ${isExpired ? `<button class="btn-danger btn-sm" onclick="prosesHangusCutiTahunanUI('${row.id}')"><i class="fa fa-ban"></i> Proses Hangus</button>` : ''}
+            ${row.approved_at ? `<span style="color:var(--text-muted);font-size:.72rem;">Approve: ${new Date(row.approved_at).toLocaleDateString('id-ID')}</span>` : ''}
+            ${row.expired_at ? `<span style="color:var(--danger);font-size:.72rem;">Hangus: ${row.sisa_cuti_hangus || 0} hari</span>` : ''}
+          </div>
+        </div>
+      `
+    }).join('') || `<div style="padding:12px;color:var(--text-muted);font-size:.82rem;">Tidak ada data.</div>`
+
+  return `
+    <div class="card fade-up" style="margin-bottom:16px;">
+      <h3 style="font-size:.95rem;font-weight:900;margin-bottom:12px;"><i class="fa fa-umbrella-beach" style="color:var(--primary);"></i> Cuti Tahunan</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px;">
+        <div class="card" style="padding:10px;background:#f8fafc;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Belum eligible</div><strong>${counts[STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE] || 0}</strong></div>
+        <div class="card" style="padding:10px;background:#fffbeb;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Menunggu approval</div><strong>${counts[STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR] || 0}</strong></div>
+        <div class="card" style="padding:10px;background:#f0fdf4;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Aktif</div><strong>${counts[STATUS_CUTI_TAHUNAN.AKTIF] || 0}</strong></div>
+        <div class="card" style="padding:10px;background:#fef2f2;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Hangus</div><strong>${counts[STATUS_CUTI_TAHUNAN.HANGUS] || 0}</strong></div>
+        <div class="card" style="padding:10px;background:#fff1f2;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Expired Kontrak</div><strong>${counts[STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK] || 0}</strong></div>
+      </div>
+      <div style="overflow:auto;border:1px solid var(--border);border-radius:12px;">
+        <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) repeat(4,minmax(70px,.6fr)) minmax(160px,1fr);gap:8px;padding:10px;background:var(--gray-50);font-size:.72rem;font-weight:900;color:var(--text-muted);text-transform:uppercase;min-width:760px;">
+          <div>Karyawan / Periode</div><div>Jatah</div><div>Terpakai</div><div>Sisa</div><div>Status</div><div>Aksi / Riwayat</div>
+        </div>
+        <div style="min-width:760px;">${[
+          STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR,
+          STATUS_CUTI_TAHUNAN.AKTIF,
+          STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE,
+          STATUS_CUTI_TAHUNAN.HANGUS,
+          STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK
+        ].map(renderRows).join('')}</div>
+      </div>
+    </div>
+  `
+}
+
+window.approveJatahCutiTahunanUI = async function(rowId) {
+  try {
+    const { data: row, error } = await supabase.from('cuti_tahunan').select('*').eq('id', rowId).single()
+    if (error) throw error
+    await approveJatahCutiTahunan(row, window.currentUser)
+    showToast('Jatah cuti tahunan 12 hari berhasil diaktifkan', 'success')
+    renderPengajuan(window.currentUser)
+  } catch (err) {
+    showToast('Gagal approve jatah cuti: ' + err.message, 'error')
+  }
+}
+
+window.prosesHangusCutiTahunanUI = async function(rowId) {
+  if (!confirm('Proses hangus sisa cuti periode ini? Saldo lama akan dicatat sebagai hangus.')) return
+  try {
+    await prosesHangusCutiTahunan(rowId, window.currentUser)
+    showToast('Sisa cuti lama berhasil diproses hangus', 'success')
+    renderPengajuan(window.currentUser)
+  } catch (err) {
+    showToast('Gagal proses hangus: ' + err.message, 'error')
   }
 }
 
@@ -344,6 +463,12 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
 
       const { user_id, jenis, tanggal_mulai, jumlah_hari } = pengajuan
 
+      if (jenis === 'cuti') {
+        const saldo = await getSisaCuti(user_id)
+        if (saldo.status !== STATUS_CUTI_TAHUNAN.AKTIF) throw new Error('Cuti tahunan belum aktif untuk karyawan ini.')
+        if ((Number(saldo.sisa) || 0) < (Number(jumlah_hari) || 0)) throw new Error(`Saldo cuti tidak cukup. Sisa cuti ${saldo.sisa} hari.`)
+      }
+
       const beforeState = { ...pengajuan }
       await supabase.from('pengajuan').update({
         status: 'approved',
@@ -380,12 +505,9 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
       }
       // ─────────────────────────────────────────────────────────────────────
 
-      // Jika jenisnya cuti, sinkronisasi sisa cuti
+      // Jika jenisnya cuti, kurangi saldo dari sumber utama cuti_tahunan.
       if (jenis === 'cuti') {
-        const { data: prof } = await supabase.from('profiles').select('tanggal_bergabung').eq('id', user_id).single()
-        if (prof) {
-          await syncSisaCutiProfile(user_id, prof.tanggal_bergabung)
-        }
+        await deductCutiTahunanOnApproval(user_id, jumlah_hari)
       }
 
       await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })

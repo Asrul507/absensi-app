@@ -21,12 +21,13 @@ import { renderDaftarAbsensi } from './daftar-absensi.js'
 import { renderPerbaikanAbsen } from './perbaikan-absen.js'
 import { renderPengajuan } from './pengajuan.js'
 import { renderKalenderHR } from './kalender.js'
-import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
+import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan, syncEligibleCutiTahunanForProfiles, buildKontrakPayload, canManageCutiTahunan, formatMasaKontrak, getSisaHariKontrak, getStatusKontrak, hitungKontrakBerakhir, prosesHangusCutiTahunan } from './cuti.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
 import { initTimezone, resetTimezoneCache, getTodayLokal } from './timezone.js'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 import { showToast, confirmAction } from './feedback.js'
+import { logAuditEvent } from './audit-trail.js'
 import { renderAttendanceApproval, canApproveAttendance } from './attendance-approval.js'
 
 /* ================= GLOBAL VARIABLES ================= */
@@ -205,7 +206,7 @@ function renderMenu(role) {
       <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-days"></i> Kalender HRD</a>
 
       <div class="sidebar-section-title">APPROVAL & MANAJEMEN</div>
-      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-inbox"></i> Persetujuan Cuti <span class="sidebar-badge-info">Staff</span></a>
+      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-umbrella-beach"></i> Cuti Tahunan & Pengajuan <span class="sidebar-badge-info">HR</span></a>
       <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen <span class="sidebar-badge-info">Staff</span></a>
       <a href="#" id="menu-approval-absensi" onclick="navigate('approval-absensi'); closeSidebar(); return false;"><i class="fa fa-clipboard-check"></i> Approval Absensi <span class="sidebar-badge-info">OPEN</span></a>
       <a href="#" id="menu-jadwal" onclick="navigate('jadwal'); closeSidebar(); return false;"><i class="fa fa-calendar-week"></i> Atur Jadwal Kerja</a>
@@ -213,6 +214,7 @@ function renderMenu(role) {
 
       <div class="sidebar-section-title">KARYAWAN & OPERASIONAL</div>
       <a href="#" id="menu-users" onclick="navigate('users'); closeSidebar(); return false;"><i class="fa fa-users"></i> Data Karyawan</a>
+      <a href="#" id="menu-personalia" onclick="navigate('personalia'); closeSidebar(); return false;"><i class="fa fa-id-card-clip"></i> HR Personalia / Kontrak</a>
       <a href="#" id="menu-admin-lokasi" onclick="navigate('admin-lokasi'); closeSidebar(); return false;"><i class="fa fa-map-location-dot"></i> Titik Radius GPS</a>
 
       <div class="sidebar-section-title">LAPORAN REKAPITULASI</div>
@@ -407,6 +409,7 @@ window.navigate = async function (page) {
     case 'shift':      renderShiftManagement(); break
     case 'jadwal':     renderJadwalManagement(); break
     case 'pengajuan': renderPengajuan(window.currentUser); break
+    case 'personalia': await renderPersonalia(); break
     case 'rekap':      renderRekap(window.currentUser); break
     case 'kalender':  renderKalenderHR(); break
     case 'profile':   renderProfile(); break
@@ -458,6 +461,10 @@ function renderProfile() {
         <div class="card-title"><i class="fa fa-briefcase"></i> Info Kerja</div>
         ${infoRow('Bergabung', u.tanggal_bergabung || '-')}
         ${infoRow('Masa Kerja', formatMasaKerja(masaKerja))}
+        ${infoRow('Jenis Kontrak', u.jenis_kontrak || '-')}
+        ${infoRow('Periode Kontrak', `${u.kontrak_mulai || '-'} s/d ${u.kontrak_berakhir || '-'}`)}
+        ${infoRow('Masa Kontrak', u.masa_kontrak || '-')}
+        ${infoRow('Status Kontrak', `<span class="badge ${getStatusKontrak(u.kontrak_berakhir)==='berakhir'?'badge-red':getStatusKontrak(u.kontrak_berakhir)==='akan_berakhir'?'badge-yellow':'badge-green'}">${u.status_kontrak || getStatusKontrak(u.kontrak_berakhir)}</span>`)}
       </div>
 
       <div class="card fade-up-3">
@@ -627,12 +634,14 @@ async function renderUsers() {
   const { data: users }   = await supabase.from('profiles').select('*').order('nama_lengkap')
   const { data: pending } = await supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap')
 
-  const tahunIni = new Date().getFullYear()
-  const { data: cutiData } = await supabase.from('pengajuan').select('user_id, jumlah_hari')
-    .eq('jenis','cuti').eq('status','approved').gte('tanggal_pengajuan',`${tahunIni}-01-01`)
-
-  window._cutiMap = {}
-  ;(cutiData||[]).forEach(c => { window._cutiMap[c.user_id] = (window._cutiMap[c.user_id]||0) + (parseInt(c.jumlah_hari)||0) })
+  let cutiTahunanRows = []
+  try {
+    cutiTahunanRows = await syncEligibleCutiTahunanForProfiles(users || [])
+  } catch (err) {
+    console.error('Gagal memuat cuti tahunan karyawan:', err)
+  }
+  window._cutiTahunanMap = {}
+  ;(cutiTahunanRows || []).forEach(c => { window._cutiTahunanMap[c.user_id] = c })
 
   window._allUsers    = users    || []
   window._pendingList = pending  || []
@@ -662,6 +671,203 @@ async function renderUsers() {
         (p.nama_lengkap||'').toLowerCase().includes(q)
       ))
     }
+  }
+}
+
+
+function getKontrakFormHtml(prefix, data = {}, disabled = false) {
+  const disabledAttr = disabled ? 'disabled' : ''
+  const jenis = data.jenis_kontrak || 'kontrak'
+  const mulai = data.kontrak_mulai || data.tanggal_bergabung || getTodayLokal()
+  const durasi = data.durasi_kontrak || 12
+  const satuan = data.satuan_durasi_kontrak || 'bulan'
+  const berakhir = data.kontrak_berakhir || hitungKontrakBerakhir(mulai, durasi, satuan) || ''
+  const masa = data.masa_kontrak || formatMasaKontrak(durasi, satuan)
+  return `
+    <div class="field full" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:10px;margin-top:4px;">
+      <label style="color:var(--primary);font-weight:900;"><i class="fa fa-file-contract"></i> Data Kontrak Aktif</label>
+    </div>
+    <div class="field">
+      <label>Jenis Kontrak <span class="req">*</span></label>
+      <select id="${prefix}JenisKontrak" onchange="updateKontrakPreview('${prefix}')" ${disabledAttr}>
+        ${['kontrak','tetap','probation','freelance','harian'].map(v => `<option value="${v}" ${jenis === v ? 'selected' : ''}>${v}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field"><label>Mulai Kontrak <span class="req">*</span></label><input type="date" id="${prefix}KontrakMulai" value="${mulai}" onchange="updateKontrakPreview('${prefix}')" ${disabledAttr}></div>
+    <div class="field"><label>Durasi <span class="req">*</span></label><input type="number" min="1" id="${prefix}DurasiKontrak" value="${durasi}" oninput="updateKontrakPreview('${prefix}')" ${disabledAttr}></div>
+    <div class="field">
+      <label>Satuan Durasi <span class="req">*</span></label>
+      <select id="${prefix}SatuanDurasiKontrak" onchange="updateKontrakPreview('${prefix}')" ${disabledAttr}>
+        <option value="bulan" ${satuan !== 'tahun' ? 'selected' : ''}>bulan</option>
+        <option value="tahun" ${satuan === 'tahun' ? 'selected' : ''}>tahun</option>
+      </select>
+    </div>
+    <div class="field"><label>Kontrak Berakhir</label><input type="date" id="${prefix}KontrakBerakhir" value="${berakhir}" disabled style="background:var(--gray-100);"></div>
+    <div class="field"><label>Masa Kontrak</label><input id="${prefix}MasaKontrak" value="${masa}" disabled style="background:var(--gray-100);"></div>
+  `
+}
+
+function readKontrakForm(prefix) {
+  return buildKontrakPayload({
+    jenisKontrak: document.getElementById(`${prefix}JenisKontrak`)?.value || 'kontrak',
+    kontrakMulai: document.getElementById(`${prefix}KontrakMulai`)?.value || null,
+    durasiKontrak: document.getElementById(`${prefix}DurasiKontrak`)?.value || null,
+    satuanDurasiKontrak: document.getElementById(`${prefix}SatuanDurasiKontrak`)?.value || 'bulan'
+  })
+}
+
+window.updateKontrakPreview = function(prefix) {
+  const payload = readKontrakForm(prefix)
+  const akhir = document.getElementById(`${prefix}KontrakBerakhir`)
+  const masa = document.getElementById(`${prefix}MasaKontrak`)
+  if (akhir) akhir.value = payload.kontrak_berakhir || ''
+  if (masa) masa.value = payload.masa_kontrak || ''
+}
+
+function validateKontrakPayload(payload) {
+  if (!payload.jenis_kontrak || !payload.kontrak_mulai || !payload.durasi_kontrak || !payload.kontrak_berakhir) {
+    showToast('Data kontrak wajib lengkap: jenis, tanggal mulai, durasi, dan satuan durasi.', 'warning')
+    return false
+  }
+  return true
+}
+
+
+
+async function closeActiveCutiRowsForUser(userId) {
+  const { data: activeRows } = await supabase
+    .from('cuti_tahunan')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'AKTIF')
+  for (const row of (activeRows || [])) {
+    await prosesHangusCutiTahunan(row.id, window.currentUser)
+  }
+}
+
+function kontrakBerubah(before, after) {
+  if (!before) return false
+  return (before.kontrak_mulai || null) !== (after.kontrak_mulai || null) ||
+    (before.kontrak_berakhir || null) !== (after.kontrak_berakhir || null)
+}
+
+async function renderPersonalia() {
+  const content = document.getElementById('content')
+  if (!canManageCutiTahunan(window.currentUser)) {
+    content.innerHTML = `<div class="card"><p class="text-danger">Akses HR Personalia hanya untuk admin/HR.</p></div>`
+    return
+  }
+
+  const { data: users, error } = await supabase.from('profiles').select('*').order('nama_lengkap')
+  if (error) {
+    content.innerHTML = `<div class="card"><p class="text-danger">Gagal memuat data kontrak: ${error.message}</p></div>`
+    return
+  }
+
+  let cutiRows = []
+  try {
+    cutiRows = await syncEligibleCutiTahunanForProfiles(users || [])
+  } catch (err) {
+    console.error('Gagal sinkron cuti tahunan personalia:', err)
+  }
+  const cutiMap = {}
+  ;(cutiRows || []).forEach(row => { cutiMap[row.user_id] = row })
+
+  content.innerHTML = `
+    <div class="page-header">
+      <h2><i class="fa fa-id-card-clip"></i> HR Personalia / Kontrak Karyawan</h2>
+    </div>
+    <div class="card fade-up" style="padding:14px;margin-bottom:14px;">
+      <div style="font-size:.82rem;color:var(--text-muted);">Kelola kontrak aktif karyawan. Perpanjang kontrak akan membuat periode cuti baru yang tetap menunggu approval HR/admin.</div>
+    </div>
+    <div class="card fade-up" style="overflow:auto;padding:0;">
+      <table style="width:100%;border-collapse:collapse;font-size:.8rem;min-width:980px;">
+        <thead>
+          <tr style="background:var(--gray-50);color:var(--text-muted);text-transform:uppercase;font-size:.7rem;">
+            <th style="padding:10px;text-align:left;">Karyawan</th>
+            <th style="padding:10px;text-align:left;">Jenis</th>
+            <th style="padding:10px;text-align:left;">Mulai</th>
+            <th style="padding:10px;text-align:left;">Berakhir</th>
+            <th style="padding:10px;text-align:left;">Sisa Hari</th>
+            <th style="padding:10px;text-align:left;">Status Kontrak</th>
+            <th style="padding:10px;text-align:left;">Status Cuti</th>
+            <th style="padding:10px;text-align:left;">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(users || []).map(u => {
+            const sisaHari = getSisaHariKontrak(u.kontrak_berakhir)
+            const statusKontrak = getStatusKontrak(u.kontrak_berakhir)
+            const cuti = cutiMap[u.id]
+            return `
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px;"><strong>${u.nama_lengkap || '-'}</strong><div style="color:var(--text-muted);font-size:.72rem;">${u.jabatan || '-'} · ${u.departemen || '-'}</div></td>
+                <td style="padding:10px;">${u.jenis_kontrak || '-'}</td>
+                <td style="padding:10px;">${u.kontrak_mulai || '-'}</td>
+                <td style="padding:10px;">${u.kontrak_berakhir || '-'}</td>
+                <td style="padding:10px;">${sisaHari === null ? '-' : sisaHari < 0 ? 'Lewat' : `${sisaHari} hari`}</td>
+                <td style="padding:10px;"><span class="badge ${statusKontrak === 'berakhir' ? 'badge-red' : statusKontrak === 'akan_berakhir' ? 'badge-yellow' : 'badge-green'}">${statusKontrak}</span></td>
+                <td style="padding:10px;"><span class="badge ${cuti?.status === 'AKTIF' ? 'badge-green' : cuti?.status === 'ELIGIBLE_MENUNGGU_APPROVAL_HR' ? 'badge-yellow' : 'badge-gray'}">${cuti?.status || 'BELUM_ELIGIBLE'}</span></td>
+                <td style="padding:10px;display:flex;gap:6px;flex-wrap:wrap;">
+                  <button class="btn-secondary btn-sm" onclick="openKontrakKaryawan('${u.id}', false)"><i class="fa fa-edit"></i> Edit Kontrak</button>
+                  <button class="btn-primary btn-sm" onclick="openKontrakKaryawan('${u.id}', true)"><i class="fa fa-forward"></i> Perpanjang</button>
+                </td>
+              </tr>
+            `
+          }).join('') || `<tr><td colspan="8" style="padding:18px;text-align:center;color:var(--text-muted);">Belum ada karyawan.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `
+  window._personaliaUsers = users || []
+}
+
+window.openKontrakKaryawan = function(id, isExtend = false) {
+  const target = (window._personaliaUsers || window._allUsers || []).find(u => u.id === id)
+  if (!target) return
+  const data = isExtend ? { ...target, kontrak_mulai: getTodayLokal(), durasi_kontrak: target.durasi_kontrak || 12, satuan_durasi_kontrak: target.satuan_durasi_kontrak || 'bulan', kontrak_berakhir: '', masa_kontrak: '' } : target
+  window.showUserModal(`
+    <div class="modal-header">
+      <h3><i class="fa fa-file-contract" style="color:var(--primary);"></i> ${isExtend ? 'Perpanjang' : 'Edit'} Kontrak: ${target.nama_lengkap}</h3>
+      <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:10px;">
+      ${getKontrakFormHtml('kontrak', data, false)}
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
+      <button class="btn-primary" onclick="saveKontrakKaryawan('${target.id}', ${isExtend})"><i class="fa fa-save"></i> Simpan Kontrak</button>
+    </div>
+  `)
+  window.updateKontrakPreview('kontrak')
+}
+
+window.saveKontrakKaryawan = async function(id, isExtend = false) {
+  const payload = readKontrakForm('kontrak')
+  if (!validateKontrakPayload(payload)) return
+  try {
+    const before = (window._personaliaUsers || window._allUsers || []).find(u => u.id === id) || null
+    if (isExtend || kontrakBerubah(before, payload)) {
+      await closeActiveCutiRowsForUser(id)
+    }
+
+    const { error } = await supabase.from('profiles').update(payload).eq('id', id)
+    if (error) throw error
+
+    await logAuditEvent({
+      action: isExtend ? 'extend_contract' : 'update_contract',
+      entityType: 'profiles',
+      entityId: id,
+      before,
+      after: { ...(before || {}), ...payload }
+    })
+
+    window.closeUserModal()
+    showToast(isExtend ? 'Kontrak diperpanjang. Periode cuti baru menunggu approval HR.' : 'Kontrak karyawan diperbarui.', 'success')
+    await renderPersonalia()
+  } catch (err) {
+    console.error('saveKontrakKaryawan error:', err)
+    showToast('Gagal menyimpan kontrak: ' + err.message, 'error')
   }
 }
 
@@ -700,7 +906,7 @@ window.openFormTambah = async function() {
       <div class="field"><label>Role Hak Akses</label>
         <select id="pRole">
           <option value="staff">Staff Karyawan</option>
-          ${currentViewerRole === 'super_admin' ? `<option value="admin">Admin</option><option value="super_admin">Super Admin</option>` : ''}
+          ${currentViewerRole === 'super_admin' ? `<option value="admin">Admin</option><option value="hr">HR</option><option value="super_admin">Super Admin</option>` : ''}
         </select>
       </div>
       <div class="field">
@@ -710,6 +916,7 @@ window.openFormTambah = async function() {
           ${opsiLokasi}
         </select>
       </div>
+      ${getKontrakFormHtml('p', { tanggal_bergabung: getTodayLokal() })}
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
@@ -721,6 +928,8 @@ window.openFormTambah = async function() {
 window.savePendingKaryawan = async function() {
   const nama = document.getElementById('pNama').value.trim()
   if (!nama) { showToast('Nama wajib diisi', 'warning'); return }
+  const kontrakPayload = readKontrakForm('p')
+  if (!validateKontrakPayload(kontrakPayload)) return
 
   const { error } = await supabase.from('pending_profiles').insert([{
     nama_lengkap:      nama,
@@ -731,6 +940,7 @@ window.savePendingKaryawan = async function() {
     tanggal_lahir:     document.getElementById('pLahir').value || null,
     role:              document.getElementById('pRole').value,
     titik_radius:      document.getElementById('pTitikRadius').value || null,
+    ...kontrakPayload,
     created_by:        window.currentUser?.id || null
   }])
 
@@ -781,6 +991,7 @@ function renderUserList(users) {
               <span>⏳ ${formatMasaKerja(masaKerja)}</span>
               ${u.jabatan?`<span>💼 ${u.jabatan}</span>`:''}
               <span>📍 ${u.titik_radius || 'Bebas Area'}</span>
+              <span>🌴 ${window._cutiTahunanMap?.[u.id]?.status || 'BELUM_ELIGIBLE'} · Sisa ${window._cutiTahunanMap?.[u.id]?.sisa_cuti || 0} hari</span>
             </div>
           </div>
         </div>
@@ -834,7 +1045,11 @@ window.openDetailKaryawan = function(id) {
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${target.tanggal_lahir || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Plot Titik Absen:</span><strong style="color:var(--primary);">📍 ${target.titik_radius || 'Bebas Radius'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${target.status_akun || 'Aktif'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Sisa Cuti Tahunan:</span><strong>🌴 ${target.sisa_cuti || 0} Hari</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Jenis Kontrak:</span><strong>${target.jenis_kontrak || '-'}</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Periode Kontrak:</span><strong>${target.kontrak_mulai || '-'} s/d ${target.kontrak_berakhir || '-'}</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Masa / Status Kontrak:</span><strong>${target.masa_kontrak || '-'} · ${target.status_kontrak || getStatusKontrak(target.kontrak_berakhir)}</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Cuti Tahunan:</span><strong>${window._cutiTahunanMap?.[target.id]?.status || 'BELUM_ELIGIBLE'}</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Sisa Cuti Tahunan:</span><strong>🌴 ${window._cutiTahunanMap?.[target.id]?.sisa_cuti || target.sisa_cuti || 0} Hari</strong></div>
     </div>
     <div class="modal-actions" style="margin-top:20px;">
       <button class="btn-secondary" style="width:100%;" onclick="window.closeUserModal()">Tutup Detail</button>
@@ -849,7 +1064,7 @@ window.openEditKaryawan = async function(id) {
 
   const me = window.currentUser
   const isMe = me.id === target.id
-  const canEditAllFields = (me.role === 'super_admin') || (me.role === 'admin' && target.role === 'staff')
+  const canEditAllFields = (me.role === 'super_admin') || (['admin', 'hr'].includes(me.role) && target.role === 'staff')
 
   let opsiLokasi = ''
   try {
@@ -922,6 +1137,8 @@ window.openEditKaryawan = async function(id) {
         </select>
       </div>
 
+      ${getKontrakFormHtml('edit', target, !canEditAllFields)}
+
       <div class="field full" style="grid-column:1/-1; border-top:1px solid var(--border); padding-top:10px; margin-top:5px;">
         <label style="color:var(--primary); font-weight:800;"><i class="fa fa-key"></i> ${isMe ? 'Ganti Password Anda' : 'Reset Password Karyawan'}</label>
         <input type="password" id="editPassword" placeholder="Masukkan password baru jika ingin diubah">
@@ -946,13 +1163,21 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
 
   try {
     if (canEditAll) {
+      const kontrakPayload = readKontrakForm('edit')
+      if (!validateKontrakPayload(kontrakPayload)) return
       const updatePayload = {
         nama_lengkap:  document.getElementById('editNama')?.value.trim()    || '',
         jabatan:       document.getElementById('editJabatan')?.value.trim() || '',
         departemen:    document.getElementById('editDept')?.value.trim()    || '',
         no_hp:         document.getElementById('editHp')?.value.trim()      || '',
         tanggal_lahir: document.getElementById('editLahir')?.value          || null,
-        titik_radius:  titikRadiusBaru
+        titik_radius:  titikRadiusBaru,
+        ...kontrakPayload
+      }
+
+      const beforeProfile = (window._allUsers || []).find(u => u.id === id) || null
+      if (kontrakBerubah(beforeProfile, kontrakPayload)) {
+        await closeActiveCutiRowsForUser(id)
       }
 
       const { error: profileErr } = await supabase
@@ -985,6 +1210,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       window._allUsers[userIndex].no_hp         = document.getElementById('editHp')?.value.trim()      || ''
       window._allUsers[userIndex].tanggal_lahir = document.getElementById('editLahir')?.value          || null
       window._allUsers[userIndex].titik_radius  = titikRadiusBaru
+      Object.assign(window._allUsers[userIndex], readKontrakForm('edit'))
     }
 
     if (isMe && window.currentUser) {
@@ -994,6 +1220,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         window.currentUser.departemen    = document.getElementById('editDept')?.value.trim()    || ''
         window.currentUser.no_hp         = document.getElementById('editHp')?.value.trim()      || ''
         window.currentUser.tanggal_lahir = document.getElementById('editLahir')?.value          || null
+        Object.assign(window.currentUser, readKontrakForm('edit'))
       }
       window.currentUser.titik_radius = titikRadiusBaru
     }
@@ -1084,7 +1311,7 @@ function renderPendingList(list) {
           <div class="ui-name">${p.nama_lengkap}</div>
           <div class="ui-email">${p.jabatan||'-'} ${p.departemen?'· '+p.departemen:''}</div>
           <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;">
-            📅 Input: ${p.tanggal_bergabung||'-'} · Akses Target: ${p.role}
+            📅 Input: ${p.tanggal_bergabung||'-'} · Kontrak: ${p.kontrak_mulai || '-'} s/d ${p.kontrak_berakhir || '-'} · Akses Target: ${p.role}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
@@ -1115,9 +1342,9 @@ window.deletePending = async function(id, nama) {
 window.downloadTemplateKaryawan = function() {
   if (typeof XLSX === 'undefined') { showToast('Library XLSX belum siap. Coba lagi sebentar.', 'warning'); return }
   const ws = XLSX.utils.aoa_to_sheet([
-    ['Nama Lengkap','Jabatan','Departemen','No HP','Tanggal Bergabung','Tanggal Lahir','Role','Titik Radius'],
-    ['Budi Santoso','Staff','IT','081234567890','2025-01-01','1995-06-15','staff',''],
-    ['Siti Rahayu','Supervisor','HR','081298765432','2025-01-01','1990-03-20','staff',''],
+    ['Nama Lengkap','Jabatan','Departemen','No HP','Tanggal Bergabung','Tanggal Lahir','Role','Titik Radius','Jenis Kontrak','Kontrak Mulai','Durasi Kontrak','Satuan Durasi Kontrak'],
+    ['Budi Santoso','Staff','IT','081234567890','2025-01-01','1995-06-15','staff','','kontrak','2026-01-01','12','bulan'],
+    ['Siti Rahayu','Supervisor','HR','081298765432','2025-01-01','1990-03-20','staff','','probation','2026-01-01','3','bulan'],
   ])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Template Karyawan')
@@ -1149,7 +1376,13 @@ window.handleUploadKaryawanExcel = function(input) {
           return ''
         }
         const nama = get('Nama Lengkap', 'Nama', 'nama_lengkap', 'name')
-        const valid = !!nama
+        const kontrakPayload = buildKontrakPayload({
+          jenisKontrak: get('Jenis Kontrak', 'jenis_kontrak') || 'kontrak',
+          kontrakMulai: get('Kontrak Mulai', 'kontrak_mulai', 'Tanggal Mulai Kontrak') || get('Tanggal Bergabung', 'tanggal_bergabung') || null,
+          durasiKontrak: get('Durasi Kontrak', 'durasi_kontrak') || 12,
+          satuanDurasiKontrak: get('Satuan Durasi Kontrak', 'satuan_durasi_kontrak') || 'bulan'
+        })
+        const valid = !!nama && !!kontrakPayload.kontrak_mulai && !!kontrakPayload.durasi_kontrak
         return {
           _index: i + 2, // baris Excel (header = 1)
           nama_lengkap:      nama,
@@ -1158,11 +1391,12 @@ window.handleUploadKaryawanExcel = function(input) {
           no_hp:             get('No HP', 'no_hp', 'hp', 'phone'),
           tanggal_bergabung: get('Tanggal Bergabung', 'tanggal_bergabung') || null,
           tanggal_lahir:     get('Tanggal Lahir', 'tanggal_lahir') || null,
-          role:              ['staff','spv','admin','super_admin'].includes(get('Role','role').toLowerCase())
+          role:              ['staff','spv','admin','hr','super_admin'].includes(get('Role','role').toLowerCase())
                                ? get('Role','role').toLowerCase() : 'staff',
           titik_radius:      get('Titik Radius', 'titik_radius') || null,
+          ...kontrakPayload,
           valid,
-          errMsg: !valid ? 'Kolom "Nama Lengkap" kosong' : ''
+          errMsg: !nama ? 'Kolom "Nama Lengkap" kosong' : !kontrakPayload.kontrak_mulai ? 'Kontrak Mulai wajib diisi' : !kontrakPayload.durasi_kontrak ? 'Durasi Kontrak wajib diisi' : ''
         }
       })
 
@@ -1260,6 +1494,13 @@ window.konfirmasiUploadKaryawan = async function() {
     tanggal_lahir:     r.tanggal_lahir || null,
     role:              r.role || 'staff',
     titik_radius:      r.titik_radius || null,
+    jenis_kontrak:     r.jenis_kontrak || null,
+    kontrak_mulai:     r.kontrak_mulai || null,
+    durasi_kontrak:    r.durasi_kontrak || null,
+    satuan_durasi_kontrak: r.satuan_durasi_kontrak || 'bulan',
+    masa_kontrak:      r.masa_kontrak || null,
+    kontrak_berakhir:  r.kontrak_berakhir || null,
+    status_kontrak:    r.status_kontrak || 'aktif',
     status:            'waiting',
     created_by:        window.currentUser?.id || null
   }))

@@ -3,6 +3,7 @@ import { getTodayLokal, getDurasiMenit } from './timezone.js'
 import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
 import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
 import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
+import { getSisaCuti } from './cuti.js'
 
 export async function renderDashboard() {
   const content = document.getElementById('content')
@@ -49,7 +50,13 @@ export async function renderDashboard() {
     .maybeSingle()
 
   const fullName = profile?.nama_lengkap || user.email
-  const sisaCuti = profile?.sisa_cuti || 0
+  let saldoCutiTahunan = { sisa: profile?.sisa_cuti || 0, status: '-', periode_mulai: null, periode_selesai: null }
+  try {
+    saldoCutiTahunan = await getSisaCuti(user.id, profile?.tanggal_bergabung || user.tanggal_bergabung)
+  } catch (err) {
+    console.error('Gagal memuat saldo cuti tahunan:', err)
+  }
+  const sisaCuti = saldoCutiTahunan.sisa || 0
 
   if (profile?.foto_url && profile.foto_url !== window.currentUser.foto_url) {
     window.currentUser.foto_url = profile.foto_url
@@ -295,7 +302,7 @@ export async function renderDashboard() {
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
           <div style="font-weight: 800; font-size: 1.1rem;">${fullName}</div>
-          <div style="font-size: .8rem; color: rgba(255,255,255,0.8); margin-top: 6px;">Saldo Cuti: <strong>${sisaCuti} hari</strong></div>
+          <div style="font-size: .8rem; color: rgba(255,255,255,0.8); margin-top: 6px;">Saldo Cuti: <strong>${sisaCuti} hari</strong> · ${saldoCutiTahunan.status || '-'} (${saldoCutiTahunan.periode_mulai || '-'} s/d ${saldoCutiTahunan.periode_selesai || '-'})</div>
         </div>
         <div style="text-align: right; font-size: 2.2rem; opacity: 0.2;"><i class="fa fa-id-badge"></i></div>
       </div>
