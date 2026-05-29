@@ -748,7 +748,8 @@ async function closeActiveCutiRowsForUser(userId) {
 function kontrakBerubah(before, after) {
   if (!before) return false
   return (before.kontrak_mulai || null) !== (after.kontrak_mulai || null) ||
-    (before.kontrak_berakhir || null) !== (after.kontrak_berakhir || null)
+    (before.kontrak_berakhir || null) !== (after.kontrak_berakhir || null) ||
+    (before.jenis_kontrak || null) !== (after.jenis_kontrak || null)
 }
 
 async function renderPersonalia() {

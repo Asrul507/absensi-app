@@ -2,6 +2,7 @@ import { supabase } from './supabase.js'
 
 export const STATUS_CUTI_TAHUNAN = {
   BELUM_ELIGIBLE: 'BELUM_ELIGIBLE',
+  TIDAK_ELIGIBLE: 'TIDAK_ELIGIBLE',
   ELIGIBLE_MENUNGGU_APPROVAL_HR: 'ELIGIBLE_MENUNGGU_APPROVAL_HR',
   AKTIF: 'AKTIF',
   HANGUS: 'HANGUS',
@@ -9,6 +10,7 @@ export const STATUS_CUTI_TAHUNAN = {
 }
 
 export const JATAH_CUTI_TAHUNAN = 12
+export const JENIS_KONTRAK_CUTI_ELIGIBLE = ['kontrak', 'tetap']
 
 export function canManageCutiTahunan(userOrRole) {
   const role = typeof userOrRole === 'string' ? userOrRole : userOrRole?.role
@@ -39,6 +41,14 @@ function addDurationLocal(value, duration, unit = 'bulan') {
   if (unit === 'tahun') date.setFullYear(date.getFullYear() + amount)
   else date.setMonth(date.getMonth() + amount)
   date.setDate(date.getDate() - 1)
+  return date
+}
+
+function addMonthsForExtend(value, months) {
+  const date = parseDateLocal(value)
+  const amount = Number.parseInt(months, 10)
+  if (!date || !Number.isFinite(amount) || amount < 1) return null
+  date.setMonth(date.getMonth() + amount)
   return date
 }
 
@@ -91,6 +101,16 @@ export function buildKontrakPayload({ jenisKontrak, kontrakMulai, durasiKontrak,
   }
 }
 
+export function isJenisKontrakEligibleCuti(jenisKontrak) {
+  return JENIS_KONTRAK_CUTI_ELIGIBLE.includes(String(jenisKontrak || '').toLowerCase())
+}
+
+export function getJenisKontrakCutiMessage(jenisKontrak) {
+  return isJenisKontrakEligibleCuti(jenisKontrak)
+    ? 'Jenis kontrak ini mendapatkan cuti tahunan.'
+    : 'Jenis kontrak ini tidak mendapatkan cuti tahunan.'
+}
+
 export function isKontrakAktif(profileOrContract) {
   const status = profileOrContract?.status_kontrak || getStatusKontrak(profileOrContract?.kontrak_berakhir)
   return !!profileOrContract?.kontrak_mulai && !!profileOrContract?.kontrak_berakhir && status !== 'berakhir'
@@ -135,13 +155,13 @@ export function formatMasaKerja(bulan) {
 
 /* ================= CEK ELIGIBLE CUTI ================= */
 export function isEligibleCuti(tanggalBergabung, profile = null) {
-  if (profile) return isKontrakAktif(profile)
+  if (profile) return isKontrakAktif(profile) && isJenisKontrakEligibleCuti(profile.jenis_kontrak)
   return hitungMasaKerja(tanggalBergabung) >= 12
 }
 
 /* ================= HITUNG JATAH CUTI TAHUNAN ================= */
 export function hitungJatahCuti(tanggalBergabung, profile = null) {
-  if (profile) return isKontrakAktif(profile) ? JATAH_CUTI_TAHUNAN : 0
+  if (profile) return isKontrakAktif(profile) && isJenisKontrakEligibleCuti(profile.jenis_kontrak) ? JATAH_CUTI_TAHUNAN : 0
   if (!isEligibleCuti(tanggalBergabung)) return 0
   return JATAH_CUTI_TAHUNAN
 }
@@ -149,11 +169,14 @@ export function hitungJatahCuti(tanggalBergabung, profile = null) {
 function buildAnnualLeavePayload(profile) {
   const periode = getKontrakPeriode(profile)
   const kontrakAktif = periode?.status_kontrak !== 'berakhir' && !!periode?.kontrak_mulai && !!periode?.kontrak_berakhir
-  const status = kontrakAktif
+  const jenisEligible = isJenisKontrakEligibleCuti(profile?.jenis_kontrak)
+  const status = kontrakAktif && jenisEligible
     ? STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR
-    : periode?.status_kontrak === 'berakhir'
-      ? STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK
-      : STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE
+    : kontrakAktif && !jenisEligible
+      ? STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE
+      : periode?.status_kontrak === 'berakhir'
+        ? STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK
+        : STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE
 
   return {
     user_id: profile.id,
@@ -221,7 +244,12 @@ export async function getOrCreateCutiTahunan(profile) {
   if (existingError) throw existingError
   if (existing) {
     const expired = await expireCutiRowIfNeeded(existing)
-    if (expired.status === STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE && detected.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR) {
+    const canRefreshDetection = [
+      STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE,
+      STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE,
+      STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR
+    ].includes(expired.status)
+    if (canRefreshDetection && expired.status !== detected.status) {
       const { data: updated, error: updateError } = await supabase
         .from('cuti_tahunan')
         .update({
@@ -292,6 +320,8 @@ export async function getSisaCuti(userId, tanggalBergabung) {
       terpakai: Number(row.cuti_terpakai) || 0,
       sisa: Number(row.sisa_cuti) || 0,
       status: row.status,
+      jenis_kontrak: profile?.jenis_kontrak || null,
+      cuti_message: row.status === STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE ? getJenisKontrakCutiMessage(profile?.jenis_kontrak) : null,
       kontrak_mulai: row.kontrak_mulai,
       kontrak_berakhir: row.kontrak_berakhir,
       status_kontrak: getStatusKontrak(row.kontrak_berakhir),
@@ -308,6 +338,8 @@ export async function getSisaCuti(userId, tanggalBergabung) {
     terpakai: 0,
     sisa: jatah,
     status: jatah > 0 ? STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR : STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE,
+    jenis_kontrak: null,
+    cuti_message: null,
     kontrak_mulai: null,
     kontrak_berakhir: null,
     status_kontrak: 'aktif',
@@ -332,6 +364,8 @@ export async function approveJatahCutiTahunan(rowOrProfile, approver) {
 
   const row = rowOrProfile?.periode_mulai ? await expireCutiRowIfNeeded(rowOrProfile) : await getOrCreateCutiTahunan(rowOrProfile)
   if (!row) throw new Error('Data cuti tahunan tidak ditemukan')
+  if (row.status === STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE) throw new Error('Jenis kontrak ini tidak mendapatkan cuti tahunan.')
+  if (row.status !== STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR && row.status !== STATUS_CUTI_TAHUNAN.AKTIF) throw new Error('Periode cuti belum eligible untuk approval.')
   if (getStatusKontrak(row.kontrak_berakhir) === 'berakhir') throw new Error('Kontrak sudah berakhir. Periode cuti tidak bisa diaktifkan.')
 
   const payload = {
@@ -433,6 +467,57 @@ export async function prosesHangusCutiTahunan(rowId, actor) {
     .from('profiles')
     .update({ sisa_cuti: 0, status_kontrak: getStatusKontrak(row.kontrak_berakhir) })
     .eq('id', row.user_id)
+
+  return data
+}
+
+
+export async function extendCutiTahunan(rowId, { months, reason }, actor) {
+  if (!canManageCutiTahunan(actor)) throw new Error('Tidak punya akses extend cuti tahunan')
+
+  const jumlahBulan = Number.parseInt(months, 10)
+  const alasan = String(reason || '').trim()
+  if (!Number.isFinite(jumlahBulan) || jumlahBulan < 1) throw new Error('Jumlah bulan extend tidak valid')
+  if (!alasan) throw new Error('Alasan extend wajib diisi')
+
+  const { data: row, error: rowError } = await supabase
+    .from('cuti_tahunan')
+    .select('*')
+    .eq('id', rowId)
+    .single()
+
+  if (rowError) throw rowError
+  if (!row) throw new Error('Data cuti tahunan tidak ditemukan')
+  if ([STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK].includes(row.status)) {
+    throw new Error('Periode cuti sudah expired/hangus dan tidak bisa di-extend.')
+  }
+  if (row.status !== STATUS_CUTI_TAHUNAN.AKTIF || getStatusKontrak(row.periode_selesai) === 'berakhir') {
+    throw new Error('Periode cuti sudah expired/hangus dan tidak bisa di-extend.')
+  }
+
+  const oldPeriodeSelesai = row.periode_selesai
+  const newPeriodeSelesai = toDateStr(addMonthsForExtend(oldPeriodeSelesai, jumlahBulan))
+  if (!newPeriodeSelesai) throw new Error('Tanggal periode selesai tidak valid')
+
+  const { data, error } = await supabase
+    .from('cuti_tahunan')
+    .update({ periode_selesai: newPeriodeSelesai })
+    .eq('id', row.id)
+    .select('*')
+    .single()
+
+  if (error) throw error
+
+  const { error: historyError } = await supabase.from('cuti_extend_history').insert([{
+    cuti_tahunan_id: row.id,
+    user_id: row.user_id,
+    extended_months: jumlahBulan,
+    old_periode_selesai: oldPeriodeSelesai,
+    new_periode_selesai: newPeriodeSelesai,
+    reason: alasan,
+    extended_by: actor.id
+  }])
+  if (historyError) throw historyError
 
   return data
 }

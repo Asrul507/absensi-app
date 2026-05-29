@@ -6,6 +6,7 @@ import {
   approveJatahCutiTahunan,
   canManageCutiTahunan,
   deductCutiTahunanOnApproval,
+  extendCutiTahunan,
   formatMasaKerja,
   getOrCreateCutiTahunan,
   getSisaCuti,
@@ -95,7 +96,7 @@ export async function renderPengajuan(user) {
             Masa kerja ${formatMasaKerja(masaKerja)} · Periode ${periode_mulai || '-'} s/d ${periode_selesai || '-'}
           </div>
           <div style="font-size:.8rem;opacity:.82;margin-top:2px;">
-            ${statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF ? '✅ Jatah cuti aktif dan bisa diajukan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? '⏳ Eligible, menunggu approval HR/admin' : '⚠ Belum ada kontrak aktif untuk cuti tahunan'}
+            ${statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF ? '✅ Jatah cuti aktif dan bisa diajukan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE ? '⚠ Jenis kontrak ini tidak mendapatkan cuti tahunan.' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? '⏳ Eligible, menunggu approval HR/admin' : '⚠ Belum ada kontrak aktif untuk cuti tahunan'}
           </div>
         </div>
         <div style="display:flex;gap:20px;text-align:center;">
@@ -223,9 +224,11 @@ export async function renderPengajuan(user) {
       if (statusCutiTahunan !== STATUS_CUTI_TAHUNAN.AKTIF) {
         infoEl.style.display = 'flex'
         infoEl.className = 'alert warning'
-        msgEl.textContent = statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR
-          ? 'Anda sudah eligible, tetapi jatah cuti tahunan masih menunggu approval HR/admin.'
-          : `Anda belum memiliki kontrak aktif/periode cuti aktif. Masa kerja ${formatMasaKerja(masaKerja)}.`
+        msgEl.textContent = statusCutiTahunan === STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE
+          ? 'Jenis kontrak ini tidak mendapatkan cuti tahunan.'
+          : statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR
+            ? 'Anda sudah eligible, tetapi jatah cuti tahunan masih menunggu approval HR/admin.'
+            : `Anda belum memiliki kontrak aktif/periode cuti aktif. Masa kerja ${formatMasaKerja(masaKerja)}.`
       } else if (sisa <= 0) {
         infoEl.style.display = 'flex'
         infoEl.className = 'alert warning'
@@ -261,7 +264,7 @@ export async function renderPengajuan(user) {
     if (!jumlahHari || jumlahHari < 1) { showToast('Jumlah hari tidak valid', 'warning'); return }
 
     if (jenis === 'cuti' && statusCutiTahunan !== STATUS_CUTI_TAHUNAN.AKTIF) {
-      showToast('Cuti tahunan belum aktif atau kontrak tidak aktif. Tunggu approval jatah cuti dari HR/admin.', 'warning')
+      showToast('Cuti tahunan belum aktif, kontrak tidak aktif, atau jenis kontrak tidak mendapat cuti tahunan.', 'warning')
       return
     }
     if (jenis === 'cuti' && jumlahHari > sisa) {
@@ -329,10 +332,12 @@ function renderCutiTahunanAdminSection(rows) {
           <div>${row.jatah_cuti || 0}</div>
           <div>${row.cuti_terpakai || 0}</div>
           <div>${row.sisa_cuti || 0}</div>
-          <div><span class="badge ${row.status === STATUS_CUTI_TAHUNAN.AKTIF ? 'badge-green' : [STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK].includes(row.status) ? 'badge-red' : row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? 'badge-yellow' : 'badge-gray'}">${row.status}</span></div>
+          <div><span class="badge ${row.status === STATUS_CUTI_TAHUNAN.AKTIF ? 'badge-green' : [STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK, STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE].includes(row.status) ? 'badge-red' : row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? 'badge-yellow' : 'badge-gray'}">${row.status}</span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             ${row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? `<button class="btn-primary btn-sm" onclick="approveJatahCutiTahunanUI('${row.id}')"><i class="fa fa-check"></i> Approve Jatah 12 Hari</button>` : ''}
             ${isExpired ? `<button class="btn-danger btn-sm" onclick="prosesHangusCutiTahunanUI('${row.id}')"><i class="fa fa-ban"></i> Proses Hangus</button>` : ''}
+            ${row.status === STATUS_CUTI_TAHUNAN.AKTIF && !isExpired ? `<button class="btn-secondary btn-sm" onclick="showExtendCutiModal('${row.id}')"><i class="fa fa-calendar-plus"></i> Extend Cuti</button>` : ''}
+            ${[STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK].includes(row.status) ? `<button class="btn-secondary btn-sm" onclick="showExtendCutiModal('${row.id}')"><i class="fa fa-calendar-plus"></i> Extend Cuti</button>` : ''}
             ${row.approved_at ? `<span style="color:var(--text-muted);font-size:.72rem;">Approve: ${new Date(row.approved_at).toLocaleDateString('id-ID')}</span>` : ''}
             ${row.expired_at ? `<span style="color:var(--danger);font-size:.72rem;">Hangus: ${row.sisa_cuti_hangus || 0} hari</span>` : ''}
           </div>
@@ -346,6 +351,7 @@ function renderCutiTahunanAdminSection(rows) {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px;">
         <div class="card" style="padding:10px;background:#f8fafc;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Belum eligible</div><strong>${counts[STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE] || 0}</strong></div>
         <div class="card" style="padding:10px;background:#fffbeb;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Menunggu approval</div><strong>${counts[STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR] || 0}</strong></div>
+        <div class="card" style="padding:10px;background:#fef2f2;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Tidak eligible</div><strong>${counts[STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE] || 0}</strong></div>
         <div class="card" style="padding:10px;background:#f0fdf4;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Aktif</div><strong>${counts[STATUS_CUTI_TAHUNAN.AKTIF] || 0}</strong></div>
         <div class="card" style="padding:10px;background:#fef2f2;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Hangus</div><strong>${counts[STATUS_CUTI_TAHUNAN.HANGUS] || 0}</strong></div>
         <div class="card" style="padding:10px;background:#fff1f2;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Expired Kontrak</div><strong>${counts[STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK] || 0}</strong></div>
@@ -358,6 +364,7 @@ function renderCutiTahunanAdminSection(rows) {
           STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR,
           STATUS_CUTI_TAHUNAN.AKTIF,
           STATUS_CUTI_TAHUNAN.BELUM_ELIGIBLE,
+          STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE,
           STATUS_CUTI_TAHUNAN.HANGUS,
           STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK
         ].map(renderRows).join('')}</div>
@@ -386,6 +393,58 @@ window.prosesHangusCutiTahunanUI = async function(rowId) {
     renderPengajuan(window.currentUser)
   } catch (err) {
     showToast('Gagal proses hangus: ' + err.message, 'error')
+  }
+}
+
+
+window.showExtendCutiModal = async function(rowId) {
+  try {
+    const { data: row, error } = await supabase.from('cuti_tahunan').select('*').eq('id', rowId).single()
+    if (error) throw error
+    if ([STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK].includes(row.status)) {
+      showToast('Periode cuti sudah expired/hangus dan tidak bisa di-extend.', 'warning')
+      return
+    }
+    if (row.status !== STATUS_CUTI_TAHUNAN.AKTIF) {
+      showToast('Extend hanya bisa dilakukan untuk periode cuti yang masih AKTIF.', 'warning')
+      return
+    }
+
+    const modal = document.createElement('div')
+    modal.className = 'modal-overlay'
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;'
+    modal.innerHTML = `
+      <div class="card" style="width:100%;max-width:420px;padding:18px;">
+        <h3 style="font-size:1rem;font-weight:900;margin-bottom:12px;"><i class="fa fa-calendar-plus" style="color:var(--primary);"></i> Extend Cuti</h3>
+        <div class="field"><label>Extend berapa bulan <span class="req">*</span></label><input type="number" min="1" id="extendCutiBulan" value="1"></div>
+        <div class="field"><label>Keterangan/alasan extend <span class="req">*</span></label><textarea id="extendCutiReason" placeholder="Tuliskan alasan extend..." style="min-height:90px;"></textarea></div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn-secondary" style="flex:1;" onclick="this.closest('.modal-overlay').remove()">Batal</button>
+          <button class="btn-primary" style="flex:1;" onclick="submitExtendCuti('${rowId}', document.getElementById('extendCutiBulan').value, document.getElementById('extendCutiReason').value, this)">Simpan Extend</button>
+        </div>
+      </div>
+    `
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove() })
+    document.body.appendChild(modal)
+  } catch (err) {
+    showToast('Gagal membuka extend cuti: ' + err.message, 'error')
+  }
+}
+
+window.submitExtendCuti = async function(rowId, months, reason, btn) {
+  try {
+    if (!String(reason || '').trim()) {
+      showToast('Alasan extend wajib diisi', 'warning')
+      return
+    }
+    setButtonLoading(btn, true, '<i class="fa fa-spinner fa-spin"></i> Menyimpan...')
+    await extendCutiTahunan(rowId, { months, reason }, window.currentUser)
+    btn.closest('.modal-overlay')?.remove()
+    showToast('Periode cuti berhasil diperpanjang. Sisa cuti tidak berubah.', 'success')
+    renderPengajuan(window.currentUser)
+  } catch (err) {
+    setButtonLoading(btn, false, 'Simpan Extend')
+    showToast(err.message, 'error')
   }
 }
 
