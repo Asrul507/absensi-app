@@ -21,7 +21,7 @@ import { renderDaftarAbsensi } from './daftar-absensi.js'
 import { renderPerbaikanAbsen } from './perbaikan-absen.js'
 import { renderPengajuan } from './pengajuan.js'
 import { renderKalenderHR } from './kalender.js'
-import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan } from './cuti.js'
+import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan, syncEligibleCutiTahunanForProfiles } from './cuti.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
 import { initTimezone, resetTimezoneCache, getTodayLokal } from './timezone.js'
@@ -205,7 +205,7 @@ function renderMenu(role) {
       <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-days"></i> Kalender HRD</a>
 
       <div class="sidebar-section-title">APPROVAL & MANAJEMEN</div>
-      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-inbox"></i> Persetujuan Cuti <span class="sidebar-badge-info">Staff</span></a>
+      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-umbrella-beach"></i> Cuti Tahunan & Pengajuan <span class="sidebar-badge-info">HR</span></a>
       <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen <span class="sidebar-badge-info">Staff</span></a>
       <a href="#" id="menu-approval-absensi" onclick="navigate('approval-absensi'); closeSidebar(); return false;"><i class="fa fa-clipboard-check"></i> Approval Absensi <span class="sidebar-badge-info">OPEN</span></a>
       <a href="#" id="menu-jadwal" onclick="navigate('jadwal'); closeSidebar(); return false;"><i class="fa fa-calendar-week"></i> Atur Jadwal Kerja</a>
@@ -627,12 +627,14 @@ async function renderUsers() {
   const { data: users }   = await supabase.from('profiles').select('*').order('nama_lengkap')
   const { data: pending } = await supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap')
 
-  const tahunIni = new Date().getFullYear()
-  const { data: cutiData } = await supabase.from('pengajuan').select('user_id, jumlah_hari')
-    .eq('jenis','cuti').eq('status','approved').gte('tanggal_pengajuan',`${tahunIni}-01-01`)
-
-  window._cutiMap = {}
-  ;(cutiData||[]).forEach(c => { window._cutiMap[c.user_id] = (window._cutiMap[c.user_id]||0) + (parseInt(c.jumlah_hari)||0) })
+  let cutiTahunanRows = []
+  try {
+    cutiTahunanRows = await syncEligibleCutiTahunanForProfiles(users || [])
+  } catch (err) {
+    console.error('Gagal memuat cuti tahunan karyawan:', err)
+  }
+  window._cutiTahunanMap = {}
+  ;(cutiTahunanRows || []).forEach(c => { window._cutiTahunanMap[c.user_id] = c })
 
   window._allUsers    = users    || []
   window._pendingList = pending  || []
@@ -781,6 +783,7 @@ function renderUserList(users) {
               <span>⏳ ${formatMasaKerja(masaKerja)}</span>
               ${u.jabatan?`<span>💼 ${u.jabatan}</span>`:''}
               <span>📍 ${u.titik_radius || 'Bebas Area'}</span>
+              <span>🌴 ${window._cutiTahunanMap?.[u.id]?.status || 'BELUM_ELIGIBLE'} · Sisa ${window._cutiTahunanMap?.[u.id]?.sisa_cuti || 0} hari</span>
             </div>
           </div>
         </div>
@@ -834,7 +837,8 @@ window.openDetailKaryawan = function(id) {
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${target.tanggal_lahir || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Plot Titik Absen:</span><strong style="color:var(--primary);">📍 ${target.titik_radius || 'Bebas Radius'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${target.status_akun || 'Aktif'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Sisa Cuti Tahunan:</span><strong>🌴 ${target.sisa_cuti || 0} Hari</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Cuti Tahunan:</span><strong>${window._cutiTahunanMap?.[target.id]?.status || 'BELUM_ELIGIBLE'}</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Sisa Cuti Tahunan:</span><strong>🌴 ${window._cutiTahunanMap?.[target.id]?.sisa_cuti || target.sisa_cuti || 0} Hari</strong></div>
     </div>
     <div class="modal-actions" style="margin-top:20px;">
       <button class="btn-secondary" style="width:100%;" onclick="window.closeUserModal()">Tutup Detail</button>
