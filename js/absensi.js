@@ -110,20 +110,73 @@ export function checkStatusPulang(jamPulangJadwal) {
 }
 
 /* ===============================================================
+   HELPER: Cek apakah shift lintas_hari kemarin masih dalam
+   window aktif (belum melewati jam_pulang + CHECKOUT_GRACE_HOURS).
+
+   Dipakai oleh getTodayShift() dan getTodayAbsen() agar
+   keduanya menggunakan logika yang sama persis.
+
+   Return: true jika shift kemarin masih harus diutamakan.
+=============================================================== */
+function isOvernightShiftStillActive(shiftKemarin, nowDate = new Date()) {
+  if (!shiftKemarin?.lintas_hari) return false
+
+  const jamPulang = shiftKemarin.jam_pulang
+  if (!jamPulang || jamPulang === '-') return false
+
+  // Jam pulang shift malam jatuh di tanggal hari ini (hari H)
+  // Susun cutOff = jam_pulang hari ini + CHECKOUT_GRACE_HOURS
+  const todayStr = getTodayLokal()                         // "YYYY-MM-DD" hari ini
+  const dueISO   = buildTimestampLokal(todayStr, jamPulang)
+  const dueAt    = parseAbsensiTimestamp(dueISO)
+  if (!dueAt) return false
+
+  const graceMs = ATTENDANCE_CONFIG.CHECKOUT_GRACE_HOURS * 60 * 60 * 1000
+  const cutOff  = new Date(dueAt.getTime() + graceMs)
+
+  // Shift masih aktif selama sekarang belum melewati cutOff
+  return nowDate.getTime() < cutOff.getTime()
+}
+
+/* ===============================================================
    GET TODAY ABSEN
    Ambil record absensi hari ini untuk karyawan tertentu.
 
    FIX SHIFT MALAM:
-   Jika tidak ada absensi hari ini, cek kemarin.
-   Kasus: karyawan absen masuk jam 23:00 (tanggal kemarin),
-   pulang jam 07:00 (tanggal hari ini) → data tersimpan di tanggal kemarin.
-   Jika data kemarin ada waktu_masuk tapi belum ada waktu_pulang,
-   artinya karyawan masih dalam shift malam → kembalikan data kemarin
-   agar tombol "Absen Pulang" bisa muncul.
+   Sebelum memutuskan data hari ini, cek dulu apakah kemarin ada
+   absensi terbuka (waktu_masuk ada, waktu_pulang null) dengan
+   shift lintas_hari yang masih dalam window aktif.
+   Jika ya → return data kemarin agar tombol "Absen Pulang" muncul.
 =============================================================== */
 export async function getTodayAbsen(nama) {
   const today = getTodayLokal()
 
+  // ── FIX SHIFT MALAM: Prioritaskan absensi terbuka dari kemarin ──────────
+  const kemarin = new Date(`${today}T00:00:00+08:00`)
+  kemarin.setUTCDate(kemarin.getUTCDate() - 1)
+  const kemarinStr = kemarin.toISOString().slice(0, 10)
+
+  const { data: dataKemarin } = await supabase
+    .from('absensi')
+    .select('*')
+    .eq('nama', nama)
+    .eq('tanggal', kemarinStr)
+    .maybeSingle()
+
+  if (dataKemarin?.waktu_masuk && !dataKemarin?.waktu_pulang) {
+    // Ada absensi terbuka kemarin → cek apakah shift-nya masih aktif sekarang
+    const shiftKemarin = await getShiftDetailByCode(
+      dataKemarin.shift_code || dataKemarin.kode_shift
+    )
+
+    if (isOvernightShiftStillActive(shiftKemarin)) {
+      console.log('[SHIFT AKTIF] Melanjutkan absensi terbuka dari kemarin:', kemarinStr)
+      return dataKemarin
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Tidak ada shift lintas_hari aktif dari kemarin → ambil data hari ini
   const { data, error } = await supabase
     .from('absensi')
     .select('*')
@@ -136,33 +189,6 @@ export async function getTodayAbsen(nama) {
     return null
   }
 
-  if (data?.waktu_masuk && !data?.waktu_pulang) return data
-  if (data?.waktu_masuk && data?.waktu_pulang) return data
-
-  const kemarin = new Date(`${today}T00:00:00+08:00`)
-  kemarin.setUTCDate(kemarin.getUTCDate() - 1)
-  const kemarinStr = kemarin.toISOString().slice(0, 10)
-
-  const { data: dataKemarin } = await supabase
-    .from('absensi')
-    .select('*')
-    .eq('nama', nama)
-    .eq('tanggal', kemarinStr)
-    .maybeSingle()
-
-  if (!dataKemarin?.waktu_masuk || dataKemarin?.waktu_pulang) return data || null
-
-  const reminder = getStatusPulangReminder(dataKemarin, {
-    jam_masuk: dataKemarin.jam_jadwal_masuk,
-    jam_pulang: dataKemarin.jam_jadwal_pulang,
-    lintas_hari: true
-  })
-
-  if (reminder.status !== 'Lupa Absen Pulang') {
-    console.log('[SHIFT AKTIF] Melanjutkan absensi terbuka dari kemarin:', kemarinStr)
-    return dataKemarin
-  }
-
   return data || null
 }
 
@@ -171,10 +197,10 @@ export async function getTodayAbsen(nama) {
    Ambil jadwal shift hari ini untuk user tertentu.
 
    FIX SHIFT MALAM:
-   Jika sekarang masih dini hari (00:00 – 08:00) dan kemarin
-   karyawan punya shift malam (kode 4), kembalikan shift malam
-   kemarin agar UI tidak berpindah ke shift hari ini sebelum
-   karyawan sempat absen pulang.
+   Jika shift kemarin adalah lintas_hari dan masih dalam window
+   aktif (jam_pulang + CHECKOUT_GRACE_HOURS belum lewat),
+   kembalikan shift kemarin agar UI tidak berpindah ke shift hari
+   ini sebelum karyawan sempat absen pulang.
    
    Return: {
      nama_shift: string,
@@ -185,30 +211,27 @@ export async function getTodayAbsen(nama) {
 export async function getTodayShift(user_id) {
   const today = getTodayLokal()
 
-  // ── FIX SHIFT MALAM: Cek kemarin jika masih dini hari ───────────────────
-  const jamSekarang = new Date().getHours()
-  if (jamSekarang < 8) {
-    // Hitung tanggal kemarin
-    const kemarin = new Date()
-    kemarin.setDate(kemarin.getDate() - 1)
-    const yyyy = kemarin.getFullYear()
-    const mm   = String(kemarin.getMonth() + 1).padStart(2, '0')
-    const dd   = String(kemarin.getDate()).padStart(2, '0')
-    const kemarinStr = `${yyyy}-${mm}-${dd}`
+  // ── FIX SHIFT MALAM: Cek kemarin berdasarkan cutOff dinamis ─────────────
+  // (tidak lagi hardcode jamSekarang < 8)
+  const kemarin = new Date()
+  kemarin.setDate(kemarin.getDate() - 1)
+  const yyyy = kemarin.getFullYear()
+  const mm   = String(kemarin.getMonth() + 1).padStart(2, '0')
+  const dd   = String(kemarin.getDate()).padStart(2, '0')
+  const kemarinStr = `${yyyy}-${mm}-${dd}`
 
-    const { data: dataKemarin } = await supabase
-      .from('jadwal')
-      .select('*')
-      .eq('user_id', user_id)
-      .eq('tanggal', kemarinStr)
-      .maybeSingle()
+  const { data: dataKemarin } = await supabase
+    .from('jadwal')
+    .select('*')
+    .eq('user_id', user_id)
+    .eq('tanggal', kemarinStr)
+    .maybeSingle()
 
-    if (dataKemarin?.shift_code) {
-      const shiftKemarin = await getShiftDetailByCode(dataKemarin.shift_code)
-      if (shiftKemarin?.lintas_hari) {
-        console.log('[SHIFT MALAM] Masih dalam window shift lintas hari kemarin:', kemarinStr)
-        return shiftKemarin
-      }
+  if (dataKemarin?.shift_code) {
+    const shiftKemarin = await getShiftDetailByCode(dataKemarin.shift_code)
+    if (isOvernightShiftStillActive(shiftKemarin)) {
+      console.log('[SHIFT MALAM] Masih dalam window shift lintas hari kemarin:', kemarinStr)
+      return shiftKemarin
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
