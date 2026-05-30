@@ -10,7 +10,7 @@ import { getShiftDetailByCode, getShiftDetailByJamMasuk } from './shift-resolver
 export const ATTENDANCE_CONFIG = {
   GRACE_PERIOD_MINUTES: 5,        // Toleransi keterlambatan (menit)
   MAX_ALLOWED_LATE_MINUTES: 30,   // Jika > 30 menit = consider as "tidak masuk"
-  CHECKOUT_GRACE_HOURS: 3,        // Grace period lupa pulang setelah jam pulang shift
+  CHECKOUT_GRACE_HOURS: 20,        // Grace period lupa pulang setelah jam pulang shift
 }
 
 
