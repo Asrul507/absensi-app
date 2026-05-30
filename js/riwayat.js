@@ -162,7 +162,7 @@ window.loadRiwayat = async function (user) {
             </thead>
             <tbody>
               ${data.map(r => {
-                const tanggalAbsensi = toTanggalAbsensiLokal(r?.tanggal)
+                const tanggalAbsensi = toTanggalAbsensiLokal(r?.tanggal, r?.waktu_masuk || r?.waktu_pulang)
 
                 // FIX AUDIT 1: Tampilkan durasi menit keterlambatan riil jika ada datanya
                 let statusMasukHtml = '-'
@@ -257,7 +257,7 @@ window.downloadExcelRiwayat = function () {
     else if (keterangan === 'approved manual') keterangan = 'Approved Manual'
 
     return {
-      'Tanggal':           toTanggalAbsensiLokal(r?.tanggal),
+      'Tanggal':           toTanggalAbsensiLokal(r?.tanggal, r?.waktu_masuk || r?.waktu_pulang),
       'Nama':              r.nama || '-',
       'Waktu Masuk':       r.waktu_masuk  ? toJamLokal(r.waktu_masuk)  : '-',
       'Waktu Pulang':      r.waktu_pulang ? toJamLokal(r.waktu_pulang) : '-',

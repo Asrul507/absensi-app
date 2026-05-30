@@ -141,9 +141,30 @@ export function toTanggalPanjangLokal(isoStr) {
   }
 }
 
-export function toTanggalAbsensiLokal(tanggal) {
-  const formatted = toTanggalPanjangLokal(tanggal)
-  return formatted && formatted !== '-' ? formatted : 'Tanggal tidak tersedia'
+export function toTanggalAbsensiLokal(tanggal, fallbackTimestamp = null) {
+  const rawTanggal = String(tanggal ?? '').trim()
+
+  if (rawTanggal && rawTanggal !== 'undefined' && rawTanggal !== 'null') {
+    const dateOnly = rawTanggal.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (dateOnly) {
+      const d = parseAbsensiTimestamp(`${dateOnly[1]}-${dateOnly[2]}-${dateOnly[3]}T00:00:00+08:00`)
+      if (d) {
+        return new Intl.DateTimeFormat(LOCALE_ID, {
+          timeZone: TZ_NAME,
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        }).format(d)
+      }
+    }
+
+    const formatted = toTanggalPanjangLokal(rawTanggal)
+    if (formatted && formatted !== '-') return formatted
+  }
+
+  const fallback = toTanggalPanjangLokal(fallbackTimestamp)
+  return fallback && fallback !== '-' ? fallback : 'Tanggal tidak tersedia'
 }
 
 export function toBulanTahunLokal(isoStr) {
