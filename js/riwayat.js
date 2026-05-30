@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { toJamLokal, getTodayLokal } from './timezone.js'
+import { toJamLokal, getTodayLokal, toTanggalAbsensiLokal } from './timezone.js'
 import { showToast, promptAction } from './feedback.js'
 import { getStatusPulangReminder } from './absensi.js'
 
@@ -162,6 +162,8 @@ window.loadRiwayat = async function (user) {
             </thead>
             <tbody>
               ${data.map(r => {
+                const tanggalAbsensi = toTanggalAbsensiLokal(r?.tanggal)
+
                 // FIX AUDIT 1: Tampilkan durasi menit keterlambatan riil jika ada datanya
                 let statusMasukHtml = '-'
                 if (r.status_masuk === 'Terlambat') {
@@ -175,7 +177,7 @@ window.loadRiwayat = async function (user) {
 
                 return `
                 <tr>
-                  <td>${r.tanggal || '-'}</td>
+                  <td>${tanggalAbsensi}</td>
                   ${isAdmin ? `<td style="font-weight:600;">${r.nama || '-'}</td>` : ''}
                   <td style="font-weight:700;color:var(--success);">
                     ${r.waktu_masuk
@@ -255,7 +257,7 @@ window.downloadExcelRiwayat = function () {
     else if (keterangan === 'approved manual') keterangan = 'Approved Manual'
 
     return {
-      'Tanggal':           r.tanggal || '-',
+      'Tanggal':           toTanggalAbsensiLokal(r?.tanggal),
       'Nama':              r.nama || '-',
       'Waktu Masuk':       r.waktu_masuk  ? toJamLokal(r.waktu_masuk)  : '-',
       'Waktu Pulang':      r.waktu_pulang ? toJamLokal(r.waktu_pulang) : '-',
