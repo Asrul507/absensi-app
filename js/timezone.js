@@ -19,6 +19,12 @@ export function parseAbsensiTimestamp(value) {
   if (!value) return null
   const raw = String(value).trim()
 
+  if (/^\d{4}-\d{2}-\d{2}[ T].*[+-]\d{2}$/.test(raw)) {
+    const norm = raw.replace(' ', 'T') + ':00'
+    const d = new Date(norm)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+
   if (/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(raw)) {
     const d = new Date(raw)
     return Number.isNaN(d.getTime()) ? null : d
@@ -34,6 +40,38 @@ export function parseAbsensiTimestamp(value) {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+function getMakassarDateTimeParts(value, includeTime = false) {
+  const d = parseAbsensiTimestamp(value)
+  if (!d) return null
+
+  const options = {
+    timeZone: TZ_NAME,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }
+
+  if (includeTime) {
+    options.hour = '2-digit'
+    options.minute = '2-digit'
+    options.hour12 = false
+    options.hourCycle = 'h23'
+  }
+
+  const parts = new Intl.DateTimeFormat(LOCALE_ID, options).formatToParts(d)
+  const part = (type) => parts.find(p => p.type === type)?.value
+  const hourPart = includeTime ? part('hour') : null
+  const minutePart = includeTime ? part('minute') : null
+
+  return {
+    year: part('year'),
+    month: part('month'),
+    day: part('day'),
+    hour: includeTime && hourPart ? String(Number(hourPart) % 24).padStart(2, '0') : null,
+    minute: includeTime && minutePart ? String(Number(minutePart)).padStart(2, '0') : null
+  }
+}
+
 export function toJamLokal(isoStr) {
   if (!isoStr) return '-'
   try {
@@ -44,24 +82,9 @@ export function toJamLokal(isoStr) {
       return `${hh}:${m[2]}`
     }
 
-    const d = parseAbsensiTimestamp(isoStr)
-    if (!d) return '-'
-
-    const parts = new Intl.DateTimeFormat(LOCALE_ID, {
-      timeZone: TZ_NAME,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      hourCycle: 'h23'
-    }).formatToParts(d)
-
-    const hourPart = parts.find(p => p.type === 'hour')?.value
-    const minutePart = parts.find(p => p.type === 'minute')?.value
-    if (!hourPart || !minutePart) return '-'
-
-    const hour = String(Number(hourPart) % 24).padStart(2, '0')
-    const minute = String(Number(minutePart)).padStart(2, '0')
-    return `${hour}:${minute}`
+    const parts = getMakassarDateTimeParts(isoStr, true)
+    if (!parts?.hour || !parts?.minute) return '-'
+    return `${parts.hour}:${parts.minute}`
   } catch {
     return '-'
   }
@@ -70,12 +93,62 @@ export function toJamLokal(isoStr) {
 export function toTanggalLokal(isoStr) {
   if (!isoStr) return '-'
   try {
+    const parts = getMakassarDateTimeParts(isoStr, false)
+    if (!parts?.day || !parts?.month || !parts?.year) return '-'
+    return `${parts.day}/${parts.month}/${parts.year}`
+  } catch {
+    return '-'
+  }
+}
+
+export function toTanggalJamLokal(isoStr) {
+  if (!isoStr) return '-'
+  try {
+    const parts = getMakassarDateTimeParts(isoStr, true)
+    if (!parts?.day || !parts?.month || !parts?.year || !parts?.hour || !parts?.minute) return '-'
+    return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`
+  } catch {
+    return '-'
+  }
+}
+
+export function toDatetimeLocalLokal(isoStr) {
+  if (!isoStr) return ''
+  try {
+    const parts = getMakassarDateTimeParts(isoStr, true)
+    if (!parts?.day || !parts?.month || !parts?.year || !parts?.hour || !parts?.minute) return ''
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`
+  } catch {
+    return ''
+  }
+}
+
+export function toTanggalPanjangLokal(isoStr) {
+  if (!isoStr) return '-'
+  try {
+    const d = parseAbsensiTimestamp(isoStr)
+    if (!d) return '-'
+
+    const parts = new Intl.DateTimeFormat(LOCALE_ID, {
+      timeZone: TZ_NAME,
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(d)
+  } catch {
+    return '-'
+  }
+}
+
+export function toBulanTahunLokal(isoStr) {
+  if (!isoStr) return '-'
+  try {
     const d = parseAbsensiTimestamp(isoStr)
     if (!d) return '-'
     return new Intl.DateTimeFormat(LOCALE_ID, {
       timeZone: TZ_NAME,
-      day: '2-digit',
-      month: '2-digit',
+      month: 'long',
       year: 'numeric'
     }).format(d)
   } catch {

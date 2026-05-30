@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { toJamLokal, getDurasiMenit, buildTimestampLokal } from './timezone.js'
+import { toJamLokal, getDurasiMenit, buildTimestampLokal, toTanggalJamLokal } from './timezone.js'
 import { getServerTimeIso } from './server-time.js'
 
 export const STATUS_ABSENSI = {
@@ -86,9 +86,18 @@ export function getTotalJamKerja(row) {
 
 function localInputToMakassarIso(value) {
   if (!value) return null
-  const [tanggal, jamRaw] = String(value).split('T')
-  const jam = jamRaw?.slice(0, 5)
-  return buildTimestampLokal(tanggal, jam)
+  const raw = String(value).trim()
+
+  const isoLike = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/)
+  if (isoLike) return buildTimestampLokal(isoLike[1], isoLike[2])
+
+  const localLike = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})$/)
+  if (localLike) {
+    const [, day, month, year, jam] = localLike
+    return buildTimestampLokal(`${year}-${month}-${day}`, jam)
+  }
+
+  return null
 }
 
 function escapeHtml(value) {
@@ -184,8 +193,8 @@ window.loadAttendanceApproval = async function () {
           <div><div style="font-size:.65rem;font-weight:800;color:var(--text-muted);">Foto Pulang</div>${imageThumb(row.foto_pulang, 'Foto pulang')}</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
-          <input id="editMasuk-${row.id}" type="datetime-local" value="${row.waktu_masuk ? row.waktu_masuk.slice(0,16) : ''}" style="padding:9px;border:1px solid var(--border);border-radius:10px;">
-          <input id="editPulang-${row.id}" type="datetime-local" value="${row.waktu_pulang ? row.waktu_pulang.slice(0,16) : ''}" style="padding:9px;border:1px solid var(--border);border-radius:10px;">
+          <input id="editMasuk-${row.id}" type="text" value="${row.waktu_masuk ? toTanggalJamLokal(row.waktu_masuk) : ''}" placeholder="DD/MM/YYYY HH:mm" inputmode="numeric" style="padding:9px;border:1px solid var(--border);border-radius:10px;">
+          <input id="editPulang-${row.id}" type="text" value="${row.waktu_pulang ? toTanggalJamLokal(row.waktu_pulang) : ''}" placeholder="DD/MM/YYYY HH:mm" inputmode="numeric" style="padding:9px;border:1px solid var(--border);border-radius:10px;">
         </div>
         <textarea id="note-${row.id}" placeholder="Catatan approval (opsional)" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;min-height:58px;"></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">

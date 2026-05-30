@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { getTodayLokal, getDurasiMenit, toJamLokal } from './timezone.js'
+import { getTodayLokal, getDurasiMenit, toJamLokal, toTanggalLokal } from './timezone.js'
 import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
 import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
 import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
@@ -345,7 +345,7 @@ export async function renderDashboard() {
     <div class="card fade-up" style="padding: 18px; margin-bottom: 20px;">
       <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Aktivitas Saya (Jam Datang & Pulang)</div>
       <div style="font-size: .75rem; color: var(--text-muted); margin-bottom: 12px;">
-        ${firstDay.toLocaleDateString('id-ID')} - ${lastDay.toLocaleDateString('id-ID')}
+        ${toTanggalLokal(firstDay.toISOString())} - ${toTanggalLokal(lastDay.toISOString())}
       </div>
       <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
         <div style="position: relative; width: 100%; min-width: 600px; height: 300px;">
