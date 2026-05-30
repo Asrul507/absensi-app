@@ -19,7 +19,7 @@
  */
 
 import { supabase } from './supabase.js'
-import { buildTimestampLokal, toJamLokal } from './timezone.js'
+import { buildTimestampLokal, toJamLokal, toTanggalJamLokal } from './timezone.js'
 import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
@@ -567,6 +567,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
         const { error: insErr } = await supabase
           .from('absensi')
           .insert([{
+            user_id:        req.user_id || null,
             nama:           req.nama,
             tanggal:        req.tanggal,
             waktu_masuk:    waktuMasukISO,
@@ -609,6 +610,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
         const { error: insErr } = await supabase
           .from('absensi')
           .insert([{
+            user_id:        req.user_id || null,
             nama:           req.nama,
             tanggal:        req.tanggal,
             waktu_pulang:   waktuPulangISO,
@@ -722,7 +724,7 @@ window.showPerbaikanTimeline = async function(id) {
   try {
     const rows = await fetchAuditTimeline('perbaikan_absen', id)
     if (!rows.length) return showToast('Belum ada audit trail untuk request ini', 'info')
-    const text = rows.map(r => `• ${new Date(r.created_at).toLocaleString('id-ID')} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
+    const text = rows.map(r => `• ${toTanggalJamLokal(r.created_at)} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
     console.log('Timeline Perbaikan Absen\n\n' + text)
     showToast('Timeline ditampilkan di console browser', 'info')
   } catch (err) {

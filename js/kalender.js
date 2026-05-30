@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { getTodayLokal } from './timezone.js'
+import { getTodayLokal, toBulanTahunLokal, toTanggalPanjangLokal } from './timezone.js'
 
 export async function renderKalenderHR() {
   const user    = window.currentUser
@@ -19,7 +19,7 @@ async function buildKalender(isAdmin, user) {
   const start       = firstDay.toISOString().split('T')[0]
   const end         = lastDay.toISOString().split('T')[0]
   const daysInMonth = lastDay.getDate()
-  const monthName   = firstDay.toLocaleString('id-ID', { month:'long', year:'numeric' })
+  const monthName   = toBulanTahunLokal(`${year}-${String(month + 1).padStart(2, '0')}-01`)
 
   let query = supabase.from('jadwal').select('*').gte('tanggal', start).lte('tanggal', end)
   if (!isAdmin) query = query.eq('user_id', user.id)
@@ -108,7 +108,7 @@ async function buildKalender(isAdmin, user) {
     if (!isAdmin) q = q.eq('user_id', user.id)
     const { data } = await q
 
-    const label = new Date(tanggal+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
+    const label = toTanggalPanjangLokal(tanggal)
 
     let body = data?.length ?
       data.map(j => `

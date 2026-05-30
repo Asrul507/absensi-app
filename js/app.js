@@ -24,7 +24,7 @@ import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan, syncEligibleCutiTahunanForProfiles, buildKontrakPayload, canManageCutiTahunan, formatMasaKontrak, getSisaHariKontrak, getStatusKontrak, hitungKontrakBerakhir, prosesHangusCutiTahunan } from './cuti.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
-import { initTimezone, resetTimezoneCache, getTodayLokal } from './timezone.js'
+import { initTimezone, resetTimezoneCache, getTodayLokal, toTanggalJamLokal } from './timezone.js'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 import { showToast, confirmAction } from './feedback.js'
 import { logAuditEvent } from './audit-trail.js'
@@ -346,7 +346,7 @@ window.openNotificationCenter = async function () {
     ${items.map(it => `
       <button onclick="navigate('${it.route}'); closeNotificationCenter();" style="width:100%;text-align:left;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--gray-50,#f8fafc);margin-bottom:8px;cursor:pointer;">
         <div style="font-weight:700;color:var(--text);">${it.title}</div>
-        <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px;">${new Date(it.created_at).toLocaleString('id-ID')}</div>
+        <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px;">${toTanggalJamLokal(it.created_at)}</div>
       </button>
     `).join('')}
   `
