@@ -19,7 +19,7 @@
  */
 
 import { supabase } from './supabase.js'
-import { buildTimestampLokal, toJamLokal } from './timezone.js'
+import { buildTimestampLokal, toJamLokal, toTanggalJamLokal } from './timezone.js'
 import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
@@ -500,12 +500,12 @@ window.showApprovePerbaikanModal = function (id) {
 
    Alur untuk lupa_masuk:
      1. Cari baris absensi di tanggal tersebut (by nama + tanggal)
-     2a. Jika SUDAH ADA → update waktu_masuk, status_absensi = 'approved manual'
+     2a. Jika SUDAH ADA → update waktu_masuk, status_absensi = 'COMPLETE' jika sudah lengkap, selain itu 'OPEN'
      2b. Jika BELUM ADA → INSERT baris baru dengan waktu_masuk
 
    Alur untuk lupa_pulang:
      1. Cari baris absensi di tanggal tersebut
-     2. Update waktu_pulang, status_absensi = 'complete'
+     2. Update waktu_pulang, status_absensi = 'COMPLETE'
 
    Format waktu: jam dari request (HH:MM) digabung dengan
    tanggal absensi menjadi ISO string dengan offset dari titik radius
@@ -567,6 +567,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
         const { error: insErr } = await supabase
           .from('absensi')
           .insert([{
+            user_id:        req.user_id || null,
             nama:           req.nama,
             tanggal:        req.tanggal,
             waktu_masuk:    waktuMasukISO,
@@ -609,6 +610,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
         const { error: insErr } = await supabase
           .from('absensi')
           .insert([{
+            user_id:        req.user_id || null,
             nama:           req.nama,
             tanggal:        req.tanggal,
             waktu_pulang:   waktuPulangISO,
@@ -722,7 +724,7 @@ window.showPerbaikanTimeline = async function(id) {
   try {
     const rows = await fetchAuditTimeline('perbaikan_absen', id)
     if (!rows.length) return showToast('Belum ada audit trail untuk request ini', 'info')
-    const text = rows.map(r => `• ${new Date(r.created_at).toLocaleString('id-ID')} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
+    const text = rows.map(r => `• ${toTanggalJamLokal(r.created_at)} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
     console.log('Timeline Perbaikan Absen\n\n' + text)
     showToast('Timeline ditampilkan di console browser', 'info')
   } catch (err) {

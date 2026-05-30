@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { toJamLokal, getDurasiMenit, buildTimestampLokal } from './timezone.js'
+import { toJamLokal, getDurasiMenit, buildTimestampLokal, toTanggalJamLokal } from './timezone.js'
 import { getServerTimeIso } from './server-time.js'
 
 export const STATUS_ABSENSI = {
@@ -86,9 +86,18 @@ export function getTotalJamKerja(row) {
 
 function localInputToMakassarIso(value) {
   if (!value) return null
-  const [tanggal, jamRaw] = String(value).split('T')
-  const jam = jamRaw?.slice(0, 5)
-  return buildTimestampLokal(tanggal, jam)
+  const raw = String(value).trim()
+
+  const isoLike = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/)
+  if (isoLike) return buildTimestampLokal(isoLike[1], isoLike[2])
+
+  const localLike = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})$/)
+  if (localLike) {
+    const [, day, month, year, jam] = localLike
+    return buildTimestampLokal(`${year}-${month}-${day}`, jam)
+  }
+
+  return null
 }
 
 function escapeHtml(value) {
@@ -184,8 +193,8 @@ window.loadAttendanceApproval = async function () {
           <div><div style="font-size:.65rem;font-weight:800;color:var(--text-muted);">Foto Pulang</div>${imageThumb(row.foto_pulang, 'Foto pulang')}</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
-          <input id="editMasuk-${row.id}" type="datetime-local" value="${row.waktu_masuk ? row.waktu_masuk.slice(0,16) : ''}" style="padding:9px;border:1px solid var(--border);border-radius:10px;">
-          <input id="editPulang-${row.id}" type="datetime-local" value="${row.waktu_pulang ? row.waktu_pulang.slice(0,16) : ''}" style="padding:9px;border:1px solid var(--border);border-radius:10px;">
+          <input id="editMasuk-${row.id}" type="text" value="${row.waktu_masuk ? toTanggalJamLokal(row.waktu_masuk) : ''}" placeholder="DD/MM/YYYY HH:mm" inputmode="numeric" style="padding:9px;border:1px solid var(--border);border-radius:10px;">
+          <input id="editPulang-${row.id}" type="text" value="${row.waktu_pulang ? toTanggalJamLokal(row.waktu_pulang) : ''}" placeholder="DD/MM/YYYY HH:mm" inputmode="numeric" style="padding:9px;border:1px solid var(--border);border-radius:10px;">
         </div>
         <textarea id="note-${row.id}" placeholder="Catatan approval (opsional)" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;min-height:58px;"></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
@@ -213,8 +222,31 @@ window.approveAttendance = async function (id, finalStatus) {
   if (masuk) payload.waktu_masuk = localInputToMakassarIso(masuk)
   if (pulang) payload.waktu_pulang = localInputToMakassarIso(pulang)
 
-  const { error } = await supabase.from('absensi').update(payload).eq('id', id)
-  if (error) { alert('Gagal approve: ' + error.message); return }
+  console.log('[APPROVAL ABSENSI] before approve update', { id, payload })
+  const updateResult = await supabase
+    .from('absensi')
+    .update(payload)
+    .eq('id', id)
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang')
+    .maybeSingle()
+  console.log('[APPROVAL ABSENSI] approve update response', updateResult)
+
+  if (updateResult.error) { alert('Gagal approve: ' + updateResult.error.message); return }
+  if (!updateResult.data) { alert('Gagal approve: record absensi tidak ditemukan / tidak ter-update.'); return }
+
+  const verifyResult = await supabase
+    .from('absensi')
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang')
+    .eq('id', id)
+    .maybeSingle()
+  console.log('[APPROVAL ABSENSI] approve verify from DB', verifyResult)
+
+  if (verifyResult.error) { alert('Gagal cek ulang approval: ' + verifyResult.error.message); return }
+  if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.COMPLETE) {
+    alert('Approval belum tersimpan sebagai COMPLETE. Silakan coba lagi.')
+    return
+  }
+
   await window.loadAttendanceApproval()
 }
 
@@ -222,12 +254,37 @@ window.rejectAttendance = async function (id) {
   if (!canApproveAttendance()) return
   const note = document.getElementById(`note-${id}`)?.value || ''
   const serverIso = await getServerTimeIso()
-  const { error } = await supabase.from('absensi').update({
+  const payload = {
     status_absensi: STATUS_ABSENSI.REJECTED,
     approved_by: window.currentUser?.id || null,
     approved_at: serverIso,
     approval_note: note || null
-  }).eq('id', id)
-  if (error) { alert('Gagal reject: ' + error.message); return }
+  }
+
+  console.log('[APPROVAL ABSENSI] before reject update', { id, payload })
+  const updateResult = await supabase
+    .from('absensi')
+    .update(payload)
+    .eq('id', id)
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
+    .maybeSingle()
+  console.log('[APPROVAL ABSENSI] reject update response', updateResult)
+
+  if (updateResult.error) { alert('Gagal reject: ' + updateResult.error.message); return }
+  if (!updateResult.data) { alert('Gagal reject: record absensi tidak ditemukan / tidak ter-update.'); return }
+
+  const verifyResult = await supabase
+    .from('absensi')
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
+    .eq('id', id)
+    .maybeSingle()
+  console.log('[APPROVAL ABSENSI] reject verify from DB', verifyResult)
+
+  if (verifyResult.error) { alert('Gagal cek ulang reject: ' + verifyResult.error.message); return }
+  if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.REJECTED) {
+    alert('Reject belum tersimpan sebagai REJECTED. Silakan coba lagi.')
+    return
+  }
+
   await window.loadAttendanceApproval()
 }

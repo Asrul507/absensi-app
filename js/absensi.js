@@ -14,6 +14,15 @@ export const ATTENDANCE_CONFIG = {
 }
 
 
+export function addDaysYmd(ymd, days) {
+  const [year, month, day] = String(ymd || '').split('-').map(Number)
+  if (!year || !month || !day || !Number.isFinite(days)) return ymd
+
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
 export function getMakassarMinutes(dateValue = new Date()) {
   const date = dateValue instanceof Date ? dateValue : new Date(dateValue)
   const parts = new Intl.DateTimeFormat('en-GB', {
@@ -132,7 +141,7 @@ export function checkStatusPulang(jamPulangJadwal, nowDate = new Date()) {
 
    Return: true jika shift kemarin masih harus diutamakan.
 =============================================================== */
-function isOvernightShiftStillActive(shiftKemarin, nowDate = new Date()) {
+function isOvernightShiftStillActive(shiftKemarin, nowDate = new Date(), todayOverride = null) {
   if (!shiftKemarin?.lintas_hari) return false
 
   const jamPulang = shiftKemarin.jam_pulang
@@ -140,7 +149,7 @@ function isOvernightShiftStillActive(shiftKemarin, nowDate = new Date()) {
 
   // Jam pulang shift malam jatuh di tanggal hari ini (hari H)
   // Susun cutOff = jam_pulang hari ini + CHECKOUT_GRACE_HOURS
-  const todayStr = getTodayLokal()                         // "YYYY-MM-DD" hari ini
+  const todayStr = todayOverride || getTodayLokal()          // "YYYY-MM-DD" hari ini
   const dueISO   = buildTimestampLokal(todayStr, jamPulang)
   const dueAt    = parseAbsensiTimestamp(dueISO)
   if (!dueAt) return false
@@ -171,9 +180,7 @@ export async function getTodayAbsen(nama, todayOverride = null, nowDate = new Da
   const today = todayOverride || getTodayLokal()
 
   // ── FIX SHIFT MALAM: Prioritaskan absensi terbuka dari kemarin ──────────
-  const kemarin = new Date(`${today}T00:00:00+08:00`)
-  kemarin.setUTCDate(kemarin.getUTCDate() - 1)
-  const kemarinStr = kemarin.toISOString().slice(0, 10)
+  const kemarinStr = addDaysYmd(today, -1)
 
   const { data: dataKemarin } = await supabase
     .from('absensi')
@@ -197,7 +204,7 @@ export async function getTodayAbsen(nama, todayOverride = null, nowDate = new Da
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    if (isOvernightShiftStillActive(shiftKemarin, nowDate)) {
+    if (isOvernightShiftStillActive(shiftKemarin, nowDate, today)) {
       console.log('[SHIFT AKTIF] Melanjutkan absensi terbuka dari kemarin:', kemarinStr)
       return dataKemarin
     }
@@ -241,9 +248,7 @@ export async function getTodayShift(user_id, todayOverride = null, nowDate = new
 
   // ── FIX SHIFT MALAM: Cek kemarin berdasarkan cutOff dinamis ─────────────
   // (tidak lagi hardcode jamSekarang < 8)
-  const kemarin = new Date(`${today}T00:00:00+08:00`)
-  kemarin.setUTCDate(kemarin.getUTCDate() - 1)
-  const kemarinStr = kemarin.toISOString().slice(0, 10)
+  const kemarinStr = addDaysYmd(today, -1)
 
   const { data: dataKemarin } = await supabase
     .from('jadwal')
@@ -254,7 +259,7 @@ export async function getTodayShift(user_id, todayOverride = null, nowDate = new
 
   if (dataKemarin?.shift_code) {
     const shiftKemarin = await getShiftDetailByCode(dataKemarin.shift_code)
-    if (isOvernightShiftStillActive(shiftKemarin, nowDate)) {
+    if (isOvernightShiftStillActive(shiftKemarin, nowDate, today)) {
       console.log('[SHIFT MALAM] Masih dalam window shift lintas hari kemarin:', kemarinStr)
       return shiftKemarin
     }
@@ -361,9 +366,7 @@ export function getStatusPulangReminder(absen, shiftInfo, nowDate = new Date()) 
     if (pulangMin <= masukMin) lintasHari = true
 
     if (lintasHari) {
-      const d = new Date(`${dueDate}T00:00:00+08:00`)
-      d.setUTCDate(d.getUTCDate() + 1)
-      dueDate = d.toISOString().slice(0, 10)
+      dueDate = addDaysYmd(dueDate, 1)
     }
   }
 
