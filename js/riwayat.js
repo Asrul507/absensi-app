@@ -4,10 +4,19 @@ import { showToast, promptAction } from './feedback.js'
 import { getStatusPulangReminder } from './absensi.js'
 
 /* ================= HELPER BADGE KETERANGAN ================= */
+function normalizeStatusAbsensiLabel(status) {
+  return String(status || '').trim().toUpperCase()
+}
+
 function badgeKeterangan(status_absensi, waktu_masuk, waktu_pulang, row = null) {
-  // complete / approved manual → hijau
-  if (status_absensi === 'complete' || status_absensi === 'approved manual') {
-    return `<span class="badge badge-green"><i class="fa fa-circle-check"></i> ${status_absensi === 'complete' ? 'Complete' : 'Approved Manual'}</span>`
+  const status = normalizeStatusAbsensiLabel(status_absensi)
+
+  if (status === 'COMPLETE') {
+    return `<span class="badge badge-green"><i class="fa fa-circle-check"></i> Complete</span>`
+  }
+
+  if (status === 'REJECTED') {
+    return `<span class="badge badge-red"><i class="fa fa-circle-xmark"></i> Rejected</span>`
   }
 
   // salah absen, tidak absen, lupa → merah
@@ -24,7 +33,7 @@ function badgeKeterangan(status_absensi, waktu_masuk, waktu_pulang, row = null) 
   }
 
   // open → kuning
-  if (status_absensi === 'open' || !status_absensi) {
+  if (status === 'OPEN' || !status_absensi) {
     return `<span class="badge badge-yellow"><i class="fa fa-clock"></i> Open</span>`
   }
 
@@ -77,12 +86,9 @@ export async function renderRiwayat(user) {
             style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);
               font-size:.85rem;outline:none;font-family:inherit;color:var(--text);background:var(--white);">
             <option value="">Semua</option>
-            <option value="complete">Complete</option>
-            <option value="open">Open</option>
-            <option value="salah absen">Salah Absen</option>
-            <option value="lupa absen pulang">Lupa Absen Pulang</option>
-            <option value="lupa absen datang">Lupa Absen Datang</option>
-            <option value="approved manual">Approved Manual</option>
+            <option value="COMPLETE">Complete</option>
+            <option value="OPEN">Open</option>
+            <option value="REJECTED">Rejected</option>
           </select>
         </div>
         <button class="btn-primary btn-sm" onclick="loadRiwayat(window.currentUser)" style="align-self:flex-end;white-space:nowrap;">
@@ -230,15 +236,36 @@ window.loadRiwayat = async function (user) {
 /* ================= APPROVE ================= */
 window.approveAbsen = async function (id) {
   const note = (await promptAction('Keterangan approval (opsional):', 'Tambahkan catatan jika diperlukan', 'Approve')) ?? ''
-  const { error } = await supabase.from('absensi').update({
-    approve_manual:  true,
-    approve_note:    note,
-    status_absensi:  'approved manual'
-  }).eq('id', id)
+  const payload = {
+    status_absensi: 'COMPLETE',
+    status_kehadiran: 'HADIR',
+    approval_note: note || null
+  }
 
-  if (error) { showToast('Gagal approve: ' + error.message, 'error'); return }
+  console.log('[RIWAYAT APPROVE] before update', { id, payload })
+  const updateResult = await supabase
+    .from('absensi')
+    .update(payload)
+    .eq('id', id)
+    .select('id,status_absensi,status_kehadiran,approval_note')
+    .maybeSingle()
+  console.log('[RIWAYAT APPROVE] update response', updateResult)
+
+  if (updateResult.error) { showToast('Gagal approve: ' + updateResult.error.message, 'error'); return }
+  if (!updateResult.data) { showToast('Gagal approve: record tidak ditemukan / tidak ter-update.', 'error'); return }
+
+  const verifyResult = await supabase
+    .from('absensi')
+    .select('id,status_absensi,status_kehadiran,approval_note')
+    .eq('id', id)
+    .maybeSingle()
+  console.log('[RIWAYAT APPROVE] verify from DB', verifyResult)
+
+  if (verifyResult.error) { showToast('Gagal cek ulang approve: ' + verifyResult.error.message, 'error'); return }
+  if (verifyResult.data?.status_absensi !== 'COMPLETE') { showToast('Approval belum tersimpan sebagai COMPLETE.', 'error'); return }
+
   showToast('Approval berhasil', 'success')
-  loadRiwayat(window.currentUser)
+  await loadRiwayat(window.currentUser)
 }
 
 /* ================= DOWNLOAD EXCEL ================= */
@@ -248,13 +275,10 @@ window.downloadExcelRiwayat = function () {
   if (typeof XLSX === 'undefined') { showToast('Library XLSX belum dimuat', 'warning'); return }
 
   const rows = data.map(r => {
-    let keterangan = r.status_absensi || 'open'
-    if (keterangan === 'complete') keterangan = 'Complete'
-    else if (keterangan === 'open') keterangan = 'Open'
-    else if (keterangan === 'salah absen') keterangan = 'Salah Absen'
-    else if (keterangan === 'lupa absen pulang') keterangan = 'Belum Pulang'
-    else if (keterangan === 'lupa absen datang') keterangan = 'Tidak Absen Masuk'
-    else if (keterangan === 'approved manual') keterangan = 'Approved Manual'
+    let keterangan = normalizeStatusAbsensiLabel(r.status_absensi || 'OPEN')
+    if (keterangan === 'COMPLETE') keterangan = 'Complete'
+    else if (keterangan === 'OPEN') keterangan = 'Open'
+    else if (keterangan === 'REJECTED') keterangan = 'Rejected'
 
     return {
       'Tanggal':           toTanggalAbsensiLokal(r?.tanggal, r?.waktu_masuk || r?.waktu_pulang),
@@ -265,8 +289,8 @@ window.downloadExcelRiwayat = function () {
       // FIX AUDIT 2: Ekspor data total menit terlambat ke Excel laporan riwayat
       'Menit Terlambat':   r.status_masuk === 'Terlambat' ? (r.menit_terlambat || 0) : 0, 
       'Keterangan':        keterangan,
-      'Approve Manual':    r.approve_manual ? 'Ya' : 'Tidak',
-      'Catatan Approve':   r.approve_note   || '-',
+      'Approve Manual':    r.status_absensi === 'COMPLETE' ? 'Ya' : 'Tidak',
+      'Catatan Approve':   r.approval_note || r.approve_note || '-',
     }
   })
 

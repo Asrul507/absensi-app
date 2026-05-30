@@ -500,12 +500,12 @@ window.showApprovePerbaikanModal = function (id) {
 
    Alur untuk lupa_masuk:
      1. Cari baris absensi di tanggal tersebut (by nama + tanggal)
-     2a. Jika SUDAH ADA → update waktu_masuk, status_absensi = 'approved manual'
+     2a. Jika SUDAH ADA → update waktu_masuk, status_absensi = 'COMPLETE' jika sudah lengkap, selain itu 'OPEN'
      2b. Jika BELUM ADA → INSERT baris baru dengan waktu_masuk
 
    Alur untuk lupa_pulang:
      1. Cari baris absensi di tanggal tersebut
-     2. Update waktu_pulang, status_absensi = 'complete'
+     2. Update waktu_pulang, status_absensi = 'COMPLETE'
 
    Format waktu: jam dari request (HH:MM) digabung dengan
    tanggal absensi menjadi ISO string dengan offset dari titik radius

@@ -222,8 +222,31 @@ window.approveAttendance = async function (id, finalStatus) {
   if (masuk) payload.waktu_masuk = localInputToMakassarIso(masuk)
   if (pulang) payload.waktu_pulang = localInputToMakassarIso(pulang)
 
-  const { error } = await supabase.from('absensi').update(payload).eq('id', id)
-  if (error) { alert('Gagal approve: ' + error.message); return }
+  console.log('[APPROVAL ABSENSI] before approve update', { id, payload })
+  const updateResult = await supabase
+    .from('absensi')
+    .update(payload)
+    .eq('id', id)
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang')
+    .maybeSingle()
+  console.log('[APPROVAL ABSENSI] approve update response', updateResult)
+
+  if (updateResult.error) { alert('Gagal approve: ' + updateResult.error.message); return }
+  if (!updateResult.data) { alert('Gagal approve: record absensi tidak ditemukan / tidak ter-update.'); return }
+
+  const verifyResult = await supabase
+    .from('absensi')
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang')
+    .eq('id', id)
+    .maybeSingle()
+  console.log('[APPROVAL ABSENSI] approve verify from DB', verifyResult)
+
+  if (verifyResult.error) { alert('Gagal cek ulang approval: ' + verifyResult.error.message); return }
+  if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.COMPLETE) {
+    alert('Approval belum tersimpan sebagai COMPLETE. Silakan coba lagi.')
+    return
+  }
+
   await window.loadAttendanceApproval()
 }
 
@@ -231,12 +254,37 @@ window.rejectAttendance = async function (id) {
   if (!canApproveAttendance()) return
   const note = document.getElementById(`note-${id}`)?.value || ''
   const serverIso = await getServerTimeIso()
-  const { error } = await supabase.from('absensi').update({
+  const payload = {
     status_absensi: STATUS_ABSENSI.REJECTED,
     approved_by: window.currentUser?.id || null,
     approved_at: serverIso,
     approval_note: note || null
-  }).eq('id', id)
-  if (error) { alert('Gagal reject: ' + error.message); return }
+  }
+
+  console.log('[APPROVAL ABSENSI] before reject update', { id, payload })
+  const updateResult = await supabase
+    .from('absensi')
+    .update(payload)
+    .eq('id', id)
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
+    .maybeSingle()
+  console.log('[APPROVAL ABSENSI] reject update response', updateResult)
+
+  if (updateResult.error) { alert('Gagal reject: ' + updateResult.error.message); return }
+  if (!updateResult.data) { alert('Gagal reject: record absensi tidak ditemukan / tidak ter-update.'); return }
+
+  const verifyResult = await supabase
+    .from('absensi')
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
+    .eq('id', id)
+    .maybeSingle()
+  console.log('[APPROVAL ABSENSI] reject verify from DB', verifyResult)
+
+  if (verifyResult.error) { alert('Gagal cek ulang reject: ' + verifyResult.error.message); return }
+  if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.REJECTED) {
+    alert('Reject belum tersimpan sebagai REJECTED. Silakan coba lagi.')
+    return
+  }
+
   await window.loadAttendanceApproval()
 }

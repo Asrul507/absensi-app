@@ -171,16 +171,6 @@ function hitungKeterangan(absen, shift) {
     }
   }
 
-  if (absen?.status_absensi === 'approved manual') {
-    return {
-      label: 'Approved Manual',
-      color: '#16a34a',
-      bg:    '#f0fdf4',
-      border:'#86efac',
-      icon:  'fa-circle-check'
-    }
-  }
-
   if (!absen && shift) {
     return {
       label: 'Tidak Absen',
