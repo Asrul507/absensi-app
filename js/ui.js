@@ -444,6 +444,7 @@ export async function renderAbsensi(user) {
         const tanggalServer = getTanggalLokalFromIso(serverIso) || todayServer
 
         await submitAbsen({
+          user_id:            user.id,
           nama:               user.nama_lengkap,
           tanggal:            tanggalServer,
           waktu_masuk:        null,
@@ -520,6 +521,7 @@ export async function renderAbsensi(user) {
       // getTodayAbsen() dapat mendeteksi shift lintas hari dengan benar
       // ketika karyawan absen pulang di hari berikutnya.
       await submitAbsen({
+        user_id:          user.id,
         nama:             user.nama_lengkap,
         tanggal:          tanggalServer,
         // waktu_masuk   ← DIHAPUS: diisi oleh DB DEFAULT now()
