@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { getTodayLokal } from './timezone.js'
+import { getTodayLokal, toTanggalLokal, toTanggalJamLokal } from './timezone.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import {
   STATUS_CUTI_TAHUNAN,
@@ -338,7 +338,7 @@ function renderCutiTahunanAdminSection(rows) {
             ${isExpired ? `<button class="btn-danger btn-sm" onclick="prosesHangusCutiTahunanUI('${row.id}')"><i class="fa fa-ban"></i> Proses Hangus</button>` : ''}
             ${row.status === STATUS_CUTI_TAHUNAN.AKTIF && !isExpired ? `<button class="btn-secondary btn-sm" onclick="showExtendCutiModal('${row.id}')"><i class="fa fa-calendar-plus"></i> Extend Cuti</button>` : ''}
             ${[STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK].includes(row.status) ? `<button class="btn-secondary btn-sm" onclick="showExtendCutiModal('${row.id}')"><i class="fa fa-calendar-plus"></i> Extend Cuti</button>` : ''}
-            ${row.approved_at ? `<span style="color:var(--text-muted);font-size:.72rem;">Approve: ${new Date(row.approved_at).toLocaleDateString('id-ID')}</span>` : ''}
+            ${row.approved_at ? `<span style="color:var(--text-muted);font-size:.72rem;">Approve: ${toTanggalLokal(row.approved_at)}</span>` : ''}
             ${row.expired_at ? `<span style="color:var(--danger);font-size:.72rem;">Hangus: ${row.sisa_cuti_hangus || 0} hari</span>` : ''}
           </div>
         </div>
@@ -603,7 +603,7 @@ window.showPengajuanTimeline = async function(id) {
   try {
     const rows = await fetchAuditTimeline('pengajuan', id)
     if (!rows.length) return showToast('Belum ada audit trail untuk pengajuan ini', 'info')
-    const text = rows.map(r => `• ${new Date(r.created_at).toLocaleString('id-ID')} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
+    const text = rows.map(r => `• ${toTanggalJamLokal(r.created_at)} | ${r.actor_name || '-'} (${r.actor_role || '-'}) → ${r.action}`).join('\n')
     console.log('Timeline Pengajuan\n\n' + text)
     showToast('Timeline ditampilkan di console browser', 'info')
   } catch (err) {
