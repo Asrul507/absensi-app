@@ -61,6 +61,22 @@ function isLateCheckinMissingWindow(shift, nowDate = new Date()) {
   return currentMinutes >= threshold
 }
 
+function formatTanggalShiftLabel(tanggal) {
+  if (!tanggal) return '-'
+  try {
+    const d = new Date(`${tanggal}T00:00:00+08:00`)
+    if (Number.isNaN(d.getTime())) return tanggal
+    return new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Makassar',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(d)
+  } catch {
+    return tanggal
+  }
+}
+
 function hitungKeterangan(absen, shift) {
   const reminder = getStatusPulangReminder(absen, shift)
   const shiftSpecial = ['OFF', 'CUTI', 'SAKIT', 'IZIN'].includes(shift?.nama_shift)
@@ -222,6 +238,7 @@ export async function renderAbsensi(user) {
   const todayShift = await getTodayShift(user.id, todayServer, serverNowInitial)
 
   const shiftSpecial = ['CUTI', 'SAKIT', 'IZIN', 'OFF'].includes(todayShift?.nama_shift)
+  const isPreviousShiftAttendance = Boolean(absen?.tanggal && todayServer && absen.tanggal !== todayServer && absen?.waktu_masuk && !absen?.waktu_pulang)
   const ket          = hitungKeterangan(absen, todayShift)
 
   let statusLabel = 'Belum Absen'
@@ -261,6 +278,15 @@ export async function renderAbsensi(user) {
           <div id="absensiLiveClock" style="font-size:1.45rem;font-weight:900;font-family:monospace;color:var(--text);">--:--:--</div>
           <div id="absensiLiveDate" style="font-size:.8rem;color:var(--text-muted);margin-top:2px;">Memuat waktu server...</div>
         </div>
+
+        ${isPreviousShiftAttendance ? `
+          <div style="margin:14px auto 0;max-width:360px;text-align:left;border:1.5px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:14px;padding:12px 14px;box-shadow:0 4px 12px rgba(245,158,11,.12);">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:#f59e0b;color:white;border-radius:999px;padding:5px 10px;font-size:.68rem;font-weight:900;letter-spacing:.35px;">
+              <i class="fa fa-moon"></i> SHIFT MALAM DARI TANGGAL SEBELUMNYA
+            </div>
+            <div style="margin-top:8px;font-size:.86rem;font-weight:900;color:#78350f;">Tanggal Shift: ${formatTanggalShiftLabel(absen.tanggal)}</div>
+            <div style="margin-top:4px;font-size:.74rem;line-height:1.35;color:#92400e;">Anda sedang melanjutkan absensi shift malam kemarin. Gunakan tombol Absen Pulang untuk menutup record tanggal shift tersebut.</div>
+          </div>` : ''}
 
         <div style="margin-top:14px;display:inline-flex;align-items:center;gap:8px; padding:8px 16px;border-radius:999px; background:${ket.bg};border:1.5px solid ${ket.border};">
           <i class="fa ${ket.icon}" style="color:${ket.color};font-size:.9rem;"></i>
