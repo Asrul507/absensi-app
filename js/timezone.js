@@ -128,7 +128,8 @@ export function toTanggalPanjangLokal(isoStr) {
   try {
     const d = parseAbsensiTimestamp(isoStr)
     if (!d) return '-'
-    return new Intl.DateTimeFormat(LOCALE_ID, {
+
+    const parts = new Intl.DateTimeFormat(LOCALE_ID, {
       timeZone: TZ_NAME,
       weekday: 'long',
       day: 'numeric',
