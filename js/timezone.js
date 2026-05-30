@@ -141,6 +141,11 @@ export function toTanggalPanjangLokal(isoStr) {
   }
 }
 
+export function toTanggalAbsensiLokal(tanggal) {
+  const formatted = toTanggalPanjangLokal(tanggal)
+  return formatted && formatted !== '-' ? formatted : 'Tanggal tidak tersedia'
+}
+
 export function toBulanTahunLokal(isoStr) {
   if (!isoStr) return '-'
   try {

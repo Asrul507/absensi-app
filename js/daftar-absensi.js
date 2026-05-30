@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { toJamLokal, getDurasiMenit, toTanggalPanjangLokal } from './timezone.js'
+import { toJamLokal, getDurasiMenit, toTanggalAbsensiLokal } from './timezone.js'
 import { getShiftDetailByCode, getShiftDetailByJamMasuk } from './shift-resolver.js'
 import { getStatusPulangReminder } from './absensi.js'
 
@@ -103,7 +103,7 @@ async function muatLogAbsensi(user) {
     }))
 
     listContainer.innerHTML = rowsWithShift.map(({ absen, jamJadwalMasuk, jamJadwalPulang, shiftRef }) => {
-      const formatHari = toTanggalPanjangLokal(absen.tanggal)
+      const formatHari = toTanggalAbsensiLokal(absen?.tanggal)
 
       let teksJamKerja = ''
       if (absen.waktu_masuk && CorelJamLengkap(absen)) {
