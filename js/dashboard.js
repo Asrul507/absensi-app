@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { getTodayLokal, getDurasiMenit } from './timezone.js'
+import { getTodayLokal, getDurasiMenit, toJamLokal } from './timezone.js'
 import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
 import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
 import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
@@ -241,7 +241,7 @@ export async function renderDashboard() {
 
     <div class="card fade-up" style="padding: 16px; margin-bottom: 20px;">
       <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Riwayat Absensi Terbaru</div>
-      ${(riwayatTerbaru || []).map(r => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>${r.tanggal}</span><span>${r.waktu_masuk || '-'} → ${r.waktu_pulang || '-'}</span><strong>${r.status_absensi || '-'}</strong></div>`).join('') || '<div style="font-size:.82rem;color:var(--text-muted)">Belum ada riwayat absensi.</div>'}
+      ${(riwayatTerbaru || []).map(r => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>${r.tanggal}</span><span>${r.waktu_masuk ? toJamLokal(r.waktu_masuk) : '-'} → ${r.waktu_pulang ? toJamLokal(r.waktu_pulang) : '-'}</span><strong>${r.status_absensi || '-'}</strong></div>`).join('') || '<div style="font-size:.82rem;color:var(--text-muted)">Belum ada riwayat absensi.</div>'}
     </div>
   `
 

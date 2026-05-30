@@ -46,13 +46,22 @@ export function toJamLokal(isoStr) {
 
     const d = parseAbsensiTimestamp(isoStr)
     if (!d) return '-'
-    return new Intl.DateTimeFormat(LOCALE_ID, {
+
+    const parts = new Intl.DateTimeFormat(LOCALE_ID, {
       timeZone: TZ_NAME,
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
       hourCycle: 'h23'
-    }).format(d)
+    }).formatToParts(d)
+
+    const hourPart = parts.find(p => p.type === 'hour')?.value
+    const minutePart = parts.find(p => p.type === 'minute')?.value
+    if (!hourPart || !minutePart) return '-'
+
+    const hour = String(Number(hourPart) % 24).padStart(2, '0')
+    const minute = String(Number(minutePart)).padStart(2, '0')
+    return `${hour}:${minute}`
   } catch {
     return '-'
   }
