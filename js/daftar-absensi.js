@@ -103,7 +103,8 @@ async function muatLogAbsensi(user) {
     }))
 
     listContainer.innerHTML = rowsWithShift.map(({ absen, jamJadwalMasuk, jamJadwalPulang, shiftRef }) => {
-      const formatHari = toTanggalAbsensiLokal(absen?.tanggal)
+      const tanggalAbsensi = absen?.tanggal || null
+      const formatHari = toTanggalAbsensiLokal(tanggalAbsensi)
 
       let teksJamKerja = ''
       if (absen.waktu_masuk && CorelJamLengkap(absen)) {

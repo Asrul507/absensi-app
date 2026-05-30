@@ -162,6 +162,8 @@ window.loadRiwayat = async function (user) {
             </thead>
             <tbody>
               ${data.map(r => {
+                const tanggalAbsensi = toTanggalAbsensiLokal(r?.tanggal)
+
                 // FIX AUDIT 1: Tampilkan durasi menit keterlambatan riil jika ada datanya
                 let statusMasukHtml = '-'
                 if (r.status_masuk === 'Terlambat') {
@@ -175,7 +177,7 @@ window.loadRiwayat = async function (user) {
 
                 return `
                 <tr>
-                  <td>${toTanggalAbsensiLokal(r?.tanggal)}</td>
+                  <td>${tanggalAbsensi}</td>
                   ${isAdmin ? `<td style="font-weight:600;">${r.nama || '-'}</td>` : ''}
                   <td style="font-weight:700;color:var(--success);">
                     ${r.waktu_masuk
