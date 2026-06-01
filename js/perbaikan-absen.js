@@ -117,10 +117,6 @@ export async function renderPerbaikanAbsen(user) {
               style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
                 font-size: .85rem; font-family: inherit; outline: none;">
               <option value="">-- Pilih Shift --</option>
-              <option value="2" id="optShiftPagi">Shift Pagi</option>
-              <option value="3" id="optShiftSore">Shift Sore</option>
-              <option value="4" id="optShiftMalam">Shift Malam</option>
-              <option value="8" id="optShiftOff">OFF</option>
             </select>
           </div>
         </div>
@@ -174,21 +170,18 @@ async function hydrateShiftOptionsUI() {
   if (!select) return
 
   const options = await getAllShiftOptions()
-  const labels = {
-    '2': document.getElementById('optShiftPagi'),
-    '3': document.getElementById('optShiftSore'),
-    '4': document.getElementById('optShiftMalam'),
-    '8': document.getElementById('optShiftOff')
-  }
+  window._perbaikanShiftLabels = {}
+  select.innerHTML = '<option value="">-- Pilih Shift --</option>'
 
   options.forEach((s) => {
-    const el = labels[String(s.code)]
-    if (!el) return
-    if (s.code === '8' || s.jam_masuk === '-' || s.jam_pulang === '-') {
-      el.textContent = `${s.nama_shift}`
-      return
-    }
-    el.textContent = `${s.nama_shift} (${s.jam_masuk} - ${s.jam_pulang})`
+    const code = String(s.code)
+    const opt = document.createElement('option')
+    opt.value = code
+    opt.textContent = (s.jam_masuk === '-' || s.jam_pulang === '-')
+      ? s.nama_shift
+      : `${s.nama_shift} (${s.jam_masuk} - ${s.jam_pulang})`
+    select.appendChild(opt)
+    window._perbaikanShiftLabels[code] = opt.textContent
   })
 }
 
@@ -198,18 +191,16 @@ window.updatePerbaikanForm = function () {
   document.getElementById('formJamShouldBe').style.display      = (jenis === 'lupa_masuk' || jenis === 'lupa_pulang') ? 'block' : 'none'
   document.getElementById('formPerubahanShift').style.display   = jenis === 'perubahan_shift' ? 'block' : 'none'
 
-  if (jenis === 'perubahan_shift' && window._currentShiftCodeHariIni) {
-    const code = String(window._currentShiftCodeHariIni)
-    document.getElementById('optShiftPagi').style.display  = (code === '2') ? 'none' : 'block'
-    document.getElementById('optShiftSore').style.display  = (code === '3') ? 'none' : 'block'
-    document.getElementById('optShiftMalam').style.display = (code === '4') ? 'none' : 'block'
-    document.getElementById('optShiftOff').style.display   = (code === '8') ? 'none' : 'block'
-  } else {
-    document.getElementById('optShiftPagi').style.display  = 'block'
-    document.getElementById('optShiftSore').style.display  = 'block'
-    document.getElementById('optShiftMalam').style.display = 'block'
-    document.getElementById('optShiftOff').style.display   = 'block'
-  }
+  const select = document.getElementById('inputShiftBaru')
+  if (!select) return
+
+  const currentCode = jenis === 'perubahan_shift' && window._currentShiftCodeHariIni
+    ? String(window._currentShiftCodeHariIni)
+    : null
+  Array.from(select.options).forEach(opt => {
+    if (!opt.value) return
+    opt.hidden = currentCode ? opt.value === currentCode : false
+  })
 }
 
 window.loadJadwalForDate = async function (user) {
@@ -225,14 +216,14 @@ window.loadJadwalForDate = async function (user) {
       .eq('tanggal', tanggal)
       .maybeSingle()
 
-    window._currentShiftCodeHariIni = jadwal?.shift_code || '2'
+    window._currentShiftCodeHariIni = jadwal?.shift_code || null
 
     const shiftData = await getShiftDetailByCode(window._currentShiftCodeHariIni)
     const shiftLabel = shiftData
       ? (shiftData.jam_masuk === '-' || shiftData.jam_pulang === '-'
         ? `${shiftData.nama_shift} / Libur`
         : `${shiftData.nama_shift} (${shiftData.jam_masuk} - ${shiftData.jam_pulang})`)
-      : 'Regular Pagi'
+      : 'Belum ada jadwal'
 
     infoEl.textContent = `Jadwal Anda saat ini di tanggal tersebut: ${shiftLabel}`
 
@@ -356,7 +347,7 @@ async function loadDaftarRequest(user) {
       return
     }
 
-    const shiftLabelMap = { '2': 'Shift Pagi', '3': 'Shift Sore', '4': 'Shift Malam', '8': 'OFF' }
+    const shiftLabelMap = window._perbaikanShiftLabels || {}
 
     el.innerHTML = data.map(req => {
       const statusColor     = req.status === 'approved' ? '#dcfce7' : req.status === 'rejected' ? '#fee2e2' : '#fef3c7'
@@ -420,7 +411,7 @@ async function loadApprovalRequest() {
       return
     }
 
-    const shiftLabelMap = { '2': 'Shift Pagi', '3': 'Shift Sore', '4': 'Shift Malam', '8': 'OFF' }
+    const shiftLabelMap = window._perbaikanShiftLabels || {}
 
     el.innerHTML = data.map(req => `
       <div class="card" style="padding: 16px; margin-bottom: 12px;">

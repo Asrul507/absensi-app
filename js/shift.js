@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { showToast, confirmAction, setButtonLoading } from './feedback.js'
+import { resetShiftMasterCache } from './shift-resolver.js'
 
 export async function renderShiftManagement() {
   const content = document.getElementById('content')
@@ -70,6 +71,7 @@ export async function renderShiftManagement() {
     const { error } = await supabase.from('shift').insert([{ nama_shift: nama, jam_masuk: masuk, jam_pulang: pulang, keterangan: ket }])
     setButtonLoading(btn, false)
     if (error) { showToast('Gagal tambah shift: ' + error.message, 'error'); return }
+    resetShiftMasterCache()
     closeShiftModal()
     showToast('Shift berhasil ditambahkan', 'success')
     renderShiftManagement()
@@ -80,6 +82,7 @@ window.deleteShift = async function (id) {
   if (!(await confirmAction('Hapus shift ini?', 'Ya, hapus'))) return
   const { error } = await supabase.from('shift').delete().eq('id', id)
   if (error) { showToast('Gagal hapus shift: ' + error.message, 'error'); return }
+  resetShiftMasterCache()
   showToast('Shift dihapus', 'success')
   renderShiftManagement()
 }
