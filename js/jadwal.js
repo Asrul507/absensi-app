@@ -1,20 +1,43 @@
 import { supabase } from './supabase.js'
 import { showToast } from './feedback.js'
+import { getAllShiftOptions } from './shift-resolver.js'
 
-/* ===============================================================
-   DEFINISI SHIFT — sumber kebenaran tunggal untuk seluruh file
-=============================================================== */
-const SHIFT_INFO = {
-  '2': { label: 'Pagi',   jam: '07:00 – 15:00', bg: '#e0f2fe', color: '#0369a1', badge: '#0ea5e9' },
-  '3': { label: 'Sore',   jam: '15:00 – 23:00', bg: '#fef3c7', color: '#b45309', badge: '#f59e0b' },
-  '4': { label: 'Malam',  jam: '23:00 – 07:00', bg: '#e0e7ff', color: '#4338ca', badge: '#6366f1' },
-  '8': { label: 'OFF',    jam: 'Libur / Tidak Bekerja', bg: '#f1f5f9', color: '#64748b', badge: '#94a3b8' },
+const SHIFT_COLORS = [
+  { bg: '#e0f2fe', color: '#0369a1', badge: '#0ea5e9' },
+  { bg: '#fef3c7', color: '#b45309', badge: '#f59e0b' },
+  { bg: '#e0e7ff', color: '#4338ca', badge: '#6366f1' },
+  { bg: '#dcfce7', color: '#166534', badge: '#22c55e' },
+  { bg: '#fce7f3', color: '#be185d', badge: '#ec4899' },
+]
+const OFF_SHIFT_STYLE = { bg: '#f1f5f9', color: '#64748b', badge: '#94a3b8' }
+let SHIFT_INFO = {}
+
+function formatShiftTime(shift) {
+  if (!shift || shift.jam_masuk === '-' || shift.jam_pulang === '-') return 'Libur / Tidak Bekerja'
+  return `${shift.jam_masuk} – ${shift.jam_pulang}`
 }
 
-function shiftBadgeHtml(code) {
-  const s = SHIFT_INFO[code]
-  if (!s) return `<span style="color:var(--text-muted);">-</span>`
-  return `<span style="display:inline-block;padding:1px 8px;border-radius:4px;font-weight:800;font-size:.7rem;background:${s.bg};color:${s.color};">${s.label}</span>`
+function makeShortLabel(name, code) {
+  const cleaned = String(name || '').replace(/^shift\s+/i, '').trim()
+  if (!cleaned) return String(code)
+  if (cleaned.length <= 6) return cleaned
+  return cleaned.split(/\s+/).map(part => part[0]).join('').slice(0, 4).toUpperCase() || cleaned.slice(0, 4).toUpperCase()
+}
+
+function buildShiftInfoMap(options) {
+  return options.reduce((acc, shift, index) => {
+    const code = String(shift.code)
+    const isOff = /off|libur/i.test(shift.nama_shift || '') || shift.jam_masuk === '-' || shift.jam_pulang === '-'
+    const style = isOff ? OFF_SHIFT_STYLE : SHIFT_COLORS[index % SHIFT_COLORS.length]
+    acc[code] = {
+      ...style,
+      code,
+      label: makeShortLabel(shift.nama_shift, code),
+      nama_shift: shift.nama_shift,
+      jam: formatShiftTime(shift),
+    }
+    return acc
+  }, {})
 }
 
 export async function renderJadwalManagement(user) {
@@ -37,6 +60,9 @@ export async function renderJadwalManagement(user) {
   let yearOptions = `<option value="${currentYear-1}">${currentYear-1}</option>
                      <option value="${currentYear}" selected>${currentYear}</option>
                      <option value="${currentYear+1}">${currentYear+1}</option>`
+
+  const shiftOptions = await getAllShiftOptions()
+  SHIFT_INFO = buildShiftInfoMap(shiftOptions)
 
   content.innerHTML = `
     <style>
@@ -189,7 +215,7 @@ export async function renderJadwalManagement(user) {
           <div class="field" style="margin-bottom:0;">
             <label style="font-size:.75rem; margin-bottom:4px;">Kode Shift</label>
             <select id="inputJadwalShift" style="width:100%;padding:9px 10px;border-radius:var(--r-md);border:1.5px solid var(--border);font-size:.83rem;" onchange="window.updateShiftPreview()">
-              ${Object.entries(SHIFT_INFO).map(([code, s]) => `<option value="${code}">${code} — ${s.label} (${s.jam})</option>`).join('')}
+              ${Object.entries(SHIFT_INFO).map(([code, s]) => `<option value="${code}">${code} — ${s.nama_shift} (${s.jam})</option>`).join('')}
             </select>
           </div>
           <button class="btn-primary" onclick="window.simpanJadwalSatu()" style="padding:9px 16px;font-size:.83rem;white-space:nowrap;">
@@ -214,7 +240,7 @@ export async function renderJadwalManagement(user) {
         </div>
         <p id="uploadStatusText" style="font-size:.75rem;margin-top:8px;font-weight:700;min-height:16px;"></p>
         <div style="font-size:.73rem;color:var(--text-muted);margin-top:4px;">
-          <i class="fa fa-info-circle"></i> Format kolom Excel: <strong>nama</strong> (nama lengkap), lalu kolom tanggal berupa angka <strong>1, 2, 3, … 31</strong> diisi kode shift (<strong>2</strong>=Pagi, <strong>3</strong>=Sore, <strong>4</strong>=Malam, <strong>8</strong>=OFF)
+          <i class="fa fa-info-circle"></i> Format kolom Excel: <strong>nama</strong> (nama lengkap), lalu kolom tanggal berupa angka <strong>1, 2, 3, … 31</strong> diisi kode shift dari master Shift Management / tabel <code>shift</code> (contoh: <strong>${Object.keys(SHIFT_INFO).join('</strong>, <strong>')}</strong>)
         </div>
       </div>
     </div>
@@ -309,7 +335,7 @@ window.updateShiftPreview = function() {
   box.innerHTML = `
     <div style="display:inline-flex;align-items:center;gap:10px;background:${s.bg};border:1px solid ${s.badge}44;border-radius:8px;padding:8px 14px;">
       <span style="background:${s.badge};color:#fff;border-radius:5px;padding:2px 10px;font-weight:800;font-size:.8rem;">${code}</span>
-      <span style="font-weight:700;font-size:.83rem;color:${s.color};">${s.label}</span>
+      <span style="font-weight:700;font-size:.83rem;color:${s.color};">${s.nama_shift}</span>
       <span style="font-size:.75rem;color:var(--text-muted);">${s.jam}</span>
     </div>`
 }
@@ -348,7 +374,7 @@ window.simpanJadwalSatu = async function() {
   const s = SHIFT_INFO[shiftCode]
   if (statusEl) {
     statusEl.style.color = 'var(--success)'
-    statusEl.textContent = `✅ Jadwal berhasil disimpan: ${document.getElementById('inputJadwalUser').options[document.getElementById('inputJadwalUser').selectedIndex].text} — ${tanggal} — Shift ${s?.label || shiftCode} (${s?.jam || ''})`
+    statusEl.textContent = `✅ Jadwal berhasil disimpan: ${document.getElementById('inputJadwalUser').options[document.getElementById('inputJadwalUser').selectedIndex].text} — ${tanggal} — Shift ${s?.nama_shift || shiftCode} (${s?.jam || ''})`
   }
 
   // Refresh tabel jika sudah ditampilkan
@@ -369,8 +395,11 @@ window.downloadTemplateJadwal = function() {
 
   // Header: bulan | tahun | nama | 1 | 2 | ... | 31
   const header  = ['bulan', 'tahun', 'nama', ...Array.from({length:31}, (_,i) => i+1)]
-  const contoh1 = [bln, thn, 'Budi Santoso', ...Array.from({length:31}, (_,i) => i%3===0 ? '8' : i%3===1 ? '2' : '3')]
-  const contoh2 = [bln, thn, 'Siti Rahayu',  ...Array.from({length:31}, (_,i) => i%2===0 ? '3' : '4')]
+  const shiftCodes = Object.keys(SHIFT_INFO)
+  const contohCodes = shiftCodes
+  if (!contohCodes.length) { showToast('Master shift belum dimuat.', 'warning'); return }
+  const contoh1 = [bln, thn, 'Budi Santoso', ...Array.from({length:31}, (_,i) => contohCodes[i % contohCodes.length])]
+  const contoh2 = [bln, thn, 'Siti Rahayu',  ...Array.from({length:31}, (_,i) => contohCodes[(i + 1) % contohCodes.length])]
 
   const ws = XLSX.utils.aoa_to_sheet([header, contoh1, contoh2])
 
@@ -399,6 +428,10 @@ window.loadDaftarJadwalMaster = async function() {
   container.innerHTML = `<div class="card" style="text-align:center;padding:30px 0;"><i class="fa fa-spinner fa-spin" style="color:var(--primary);font-size:1.5rem;"></i><p style="font-size:.85rem;color:var(--text-muted);margin-top:10px;">Memuat data jadwal...</p></div>`
   
   try {
+    if (!Object.keys(SHIFT_INFO).length) {
+      SHIFT_INFO = buildShiftInfoMap(await getAllShiftOptions())
+    }
+
     const daysInMonth = new Date(y, m, 0).getDate()
     const startStr = `${y}-${String(m).padStart(2,'0')}-01`
     const endStr   = `${y}-${String(m).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`

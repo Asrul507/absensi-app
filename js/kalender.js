@@ -1,5 +1,23 @@
 import { supabase } from './supabase.js'
 import { getTodayLokal, toBulanTahunLokal, toTanggalPanjangLokal } from './timezone.js'
+import { getAllShiftOptions } from './shift-resolver.js'
+
+const SHIFT_COLORS = ['#3b82f6', '#f59e0b', '#6366f1', '#22c55e', '#ec4899']
+let KAL_SHIFT_INFO = {}
+
+function buildShiftInfo(options) {
+  KAL_SHIFT_INFO = options.reduce((acc, shift, index) => {
+    const code = String(shift.code)
+    const isOff = /off|libur/i.test(shift.nama_shift || '') || shift.jam_masuk === '-' || shift.jam_pulang === '-'
+    acc[code] = {
+      short: isOff ? 'OFF' : String(shift.nama_shift || code).replace(/^shift\s+/i, '').split(/\s+/).map(part => part[0]).join('').slice(0, 4).toUpperCase(),
+      full: isOff ? `⚫ ${shift.nama_shift}` : shift.nama_shift,
+      jam: (shift.jam_masuk === '-' || shift.jam_pulang === '-') ? '-' : `${shift.jam_masuk} - ${shift.jam_pulang}`,
+      color: isOff ? '#94a3b8' : SHIFT_COLORS[index % SHIFT_COLORS.length],
+    }
+    return acc
+  }, {})
+}
 
 export async function renderKalenderHR() {
   const user    = window.currentUser
@@ -20,6 +38,8 @@ async function buildKalender(isAdmin, user) {
   const end         = lastDay.toISOString().split('T')[0]
   const daysInMonth = lastDay.getDate()
   const monthName   = toBulanTahunLokal(`${year}-${String(month + 1).padStart(2, '0')}-01`)
+
+  buildShiftInfo(await getAllShiftOptions())
 
   let query = supabase.from('jadwal').select('*').gte('tanggal', start).lte('tanggal', end)
   if (!isAdmin) query = query.eq('user_id', user.id)
@@ -88,11 +108,8 @@ async function buildKalender(isAdmin, user) {
       
       ${!isAdmin ? `
         <div style="display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; font-size:.72rem; color:var(--text-muted); justify-content:center;">
-          <span><span style="color:#3b82f6; margin-right:4px;">●</span> Pagi</span>
-          <span><span style="color:#f59e0b; margin-right:4px;">●</span> Sore</span>
-          <span><span style="color:#6366f1; margin-right:4px;">●</span> Malam</span>
+          ${Object.values(KAL_SHIFT_INFO).map(s => `<span><span style="color:${s.color}; margin-right:4px;">●</span> ${s.full.replace(/^⚫\s*/, '')}</span>`).join('')}
           <span><span style="color:#22c55e; margin-right:4px;">●</span> Cuti</span>
-          <span><span style="color:#94a3b8; margin-right:4px;">●</span> OFF</span>
         </div>` : `
         <div style="margin-top:16px; font-size:.75rem; color:var(--text-muted); text-align:center;">
           <i class="fa fa-info-circle"></i> Klik tanggal untuk melihat rincian jadwal seluruh karyawan
@@ -152,36 +169,22 @@ function shiftShort(j) {
   if(j?.status_override==='cuti')  return 'CUTI'
   if(j?.status_override==='sakit') return 'SKT'
   if(j?.status_override==='izin')  return 'IZIN'
-  if(j?.shift_code=='2') return 'PAG'
-  if(j?.shift_code=='3') return 'SOR'
-  if(j?.shift_code=='4') return 'MLM'
-  if(j?.shift_code=='8') return 'OFF'
-  return '-'
+  return KAL_SHIFT_INFO[String(j?.shift_code || '')]?.short || '-'
 }
 function shiftFull(j) {
   if(j?.status_override==='cuti')  return '🌴 Cuti'
   if(j?.status_override==='sakit') return '🤒 Sakit'
   if(j?.status_override==='izin')  return '📋 Izin'
-  if(j?.shift_code=='2') return '🌅 Shift Pagi'
-  if(j?.shift_code=='3') return '🌇 Shift Sore'
-  if(j?.shift_code=='4') return '🌙 Shift Malam'
-  if(j?.shift_code=='8') return '⚫ OFF'
-  return '-'
+  return KAL_SHIFT_INFO[String(j?.shift_code || '')]?.full || '-'
 }
 function shiftJam(j) {
   if(j?.status_override) return '-'
-  if(j?.shift_code=='2') return '07:00 - 15:00'
-  if(j?.shift_code=='3') return '15:00 - 23:00'
-  if(j?.shift_code=='4') return '23:00 - 07:00'
-  return '-'
+  return KAL_SHIFT_INFO[String(j?.shift_code || '')]?.jam || '-'
 }
 function shiftColor(j) {
   if(j?.status_override==='cuti')  return '#22c55e'
   if(j?.status_override==='sakit') return '#f59e0b'
   if(j?.status_override==='izin')  return '#3b82f6'
-  if(j?.shift_code=='2') return '#3b82f6'
-  if(j?.shift_code=='3') return '#f59e0b'
-  if(j?.shift_code=='4') return '#6366f1'
-  return '#94a3b8'
+  return KAL_SHIFT_INFO[String(j?.shift_code || '')]?.color || '#94a3b8'
 }
 window.renderKalenderHR = renderKalenderHR
