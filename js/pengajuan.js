@@ -3,6 +3,7 @@ import { getTodayLokal, toTanggalLokal, toTanggalJamLokal } from './timezone.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import {
   STATUS_CUTI_TAHUNAN,
+  PROFILE_CUTI_SELECT,
   approveJatahCutiTahunan,
   canManageCutiTahunan,
   deductCutiTahunanOnApproval,
@@ -29,6 +30,52 @@ function toDateStr(value) {
    HITUNG TANGGAL SELESAI
    FIX: ganti toISOString() → toDateStr() agar tidak geser 1 hari
 =============================================================== */
+
+function parseDateLocal(value) {
+  if (!value) return null
+  const [y, m, d] = String(value).split('-').map(Number)
+  if (!y || !m || !d) return null
+  const date = new Date(y, m - 1, d)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function validateRentangPengajuan(tanggalMulai, jumlahHari, { allowPast = false } = {}) {
+  const jumlah = Number.parseInt(jumlahHari, 10)
+  if (!Number.isFinite(jumlah) || jumlah < 1) throw new Error('Jumlah hari tidak valid')
+
+  const mulaiDate = parseDateLocal(tanggalMulai)
+  if (!mulaiDate) throw new Error('Tanggal mulai wajib diisi atau formatnya tidak valid')
+
+  const selesai = hitungTanggalSelesai(tanggalMulai, jumlah)
+  if (!selesai) throw new Error('Tanggal selesai tidak valid')
+
+  if (!allowPast && tanggalMulai < getTodayLokal()) {
+    throw new Error('Tanggal mulai tidak boleh sebelum hari ini')
+  }
+
+  return { jumlahHari: jumlah, tanggalMulai, tanggalSelesai: selesai }
+}
+
+async function ensureTidakAdaPengajuanBentrok(userId, tanggalMulai, tanggalSelesai, excludeId = null) {
+  let query = supabase
+    .from('pengajuan')
+    .select('id, jenis, status, tanggal_mulai, tanggal_selesai')
+    .eq('user_id', userId)
+    .in('status', ['pending', 'approved'])
+    .lte('tanggal_mulai', tanggalSelesai)
+    .gte('tanggal_selesai', tanggalMulai)
+    .limit(1)
+
+  if (excludeId) query = query.neq('id', excludeId)
+
+  const { data, error } = await query
+  if (error) throw error
+  if (data?.length) {
+    const bentrok = data[0]
+    throw new Error(`Tanggal bentrok dengan pengajuan ${bentrok.jenis} (${bentrok.status}) pada ${bentrok.tanggal_mulai} s/d ${bentrok.tanggal_selesai}.`)
+  }
+}
+
 function hitungTanggalSelesai(startDate, hari) {
   if (!startDate || !hari) return null
   const [y, m, d] = String(startDate).split('-').map(Number)
@@ -69,7 +116,7 @@ export async function renderPengajuan(user) {
   if (isAdmin) {
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
-      .select('id, nama_lengkap, email, tanggal_bergabung, role, status_akun')
+      .select(PROFILE_CUTI_SELECT)
       .order('nama_lengkap')
     if (!profilesError) {
       try {
@@ -255,13 +302,23 @@ export async function renderPengajuan(user) {
   document.getElementById('btnSubmit').onclick = async () => {
     const jenis = document.getElementById('jenis').value
     const alasan = document.getElementById('alasan').value.trim()
-    const jumlahHari = parseInt(document.getElementById('jumlahHari').value)
-    const tanggalMulai = document.getElementById('tanggalMulai').value
+    const jumlahHariInput = document.getElementById('jumlahHari').value
+    const tanggalMulaiInput = document.getElementById('tanggalMulai').value
     const file = document.getElementById('fileSurat').files[0]
 
     if (!alasan) { showToast('Alasan wajib diisi', 'warning'); return }
-    if (!tanggalMulai) { showToast('Tanggal mulai wajib diisi', 'warning'); return }
-    if (!jumlahHari || jumlahHari < 1) { showToast('Jumlah hari tidak valid', 'warning'); return }
+
+    let rentang
+    try {
+      rentang = validateRentangPengajuan(tanggalMulaiInput, jumlahHariInput)
+      await ensureTidakAdaPengajuanBentrok(user.id, rentang.tanggalMulai, rentang.tanggalSelesai)
+    } catch (err) {
+      showToast(err.message, 'warning')
+      return
+    }
+
+    const jumlahHari = rentang.jumlahHari
+    const tanggalMulai = rentang.tanggalMulai
 
     if (jenis === 'cuti' && statusCutiTahunan !== STATUS_CUTI_TAHUNAN.AKTIF) {
       showToast('Cuti tahunan belum aktif, kontrak tidak aktif, atau jenis kontrak tidak mendapat cuti tahunan.', 'warning')
@@ -283,7 +340,7 @@ export async function renderPengajuan(user) {
       fileUrl = supabase.storage.from('surat').getPublicUrl(fileName).data.publicUrl
     }
 
-    const tanggal_selesai = hitungTanggalSelesai(tanggalMulai, jumlahHari)
+    const tanggal_selesai = rentang.tanggalSelesai
 
     const payload = {
       user_id: user.id,
@@ -517,68 +574,113 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
 
   try {
     if (type === 'approve') {
-      const { data: pengajuan } = await supabase.from('pengajuan').select('*').eq('id', id).single()
-      if (!pengajuan) return
+      const { data: pengajuan, error: loadError } = await supabase
+        .from('pengajuan')
+        .select('*')
+        .eq('id', id)
+        .eq('status', 'pending')
+        .single()
+      if (loadError) throw loadError
+      if (!pengajuan) throw new Error('Pengajuan tidak ditemukan atau sudah diproses.')
 
       const { user_id, jenis, tanggal_mulai, jumlah_hari } = pengajuan
+      const rentang = validateRentangPengajuan(tanggal_mulai, jumlah_hari, { allowPast: true })
+      await ensureTidakAdaPengajuanBentrok(user_id, rentang.tanggalMulai, rentang.tanggalSelesai, id)
 
       if (jenis === 'cuti') {
         const saldo = await getSisaCuti(user_id)
         if (saldo.status !== STATUS_CUTI_TAHUNAN.AKTIF) throw new Error('Cuti tahunan belum aktif untuk karyawan ini.')
-        if ((Number(saldo.sisa) || 0) < (Number(jumlah_hari) || 0)) throw new Error(`Saldo cuti tidak cukup. Sisa cuti ${saldo.sisa} hari.`)
+        if ((Number(saldo.sisa) || 0) < rentang.jumlahHari) throw new Error(`Saldo cuti tidak cukup. Sisa cuti ${saldo.sisa} hari.`)
       }
 
       const beforeState = { ...pengajuan }
-      await supabase.from('pengajuan').update({
-        status: 'approved',
-        catatan_approval: catatan || null,
-        approved_at: new Date().toISOString()
-      }).eq('id', id)
+      const approvedAt = new Date().toISOString()
+      const afterState = { ...beforeState, status: 'approved', catatan_approval: catatan || null, approved_at: approvedAt }
+      const { data: approvedRow, error: approveError } = await supabase
+        .from('pengajuan')
+        .update({
+          status: 'approved',
+          catatan_approval: catatan || null,
+          approved_at: approvedAt
+        })
+        .eq('id', id)
+        .eq('status', 'pending')
+        .select('*')
+        .single()
+      if (approveError) throw approveError
+      if (!approvedRow) throw new Error('Pengajuan sudah diproses oleh admin/HR lain.')
 
-      // ── FIX: Parse tanggal_mulai sebagai waktu lokal, bukan UTC ──────────
-      const [y, m, d] = tanggal_mulai.split('-').map(Number)
+      const jadwalSnapshots = []
+      try {
+        // ── FIX: Parse tanggal_mulai sebagai waktu lokal, bukan UTC ──────────
+        const [y, m, d] = rentang.tanggalMulai.split('-').map(Number)
 
-      // Distribusikan override ke jadwal harian staff
-      for (let i = 0; i < (jumlah_hari || 1); i++) {
-        const date = new Date(y, m - 1, d)   // new Date(tahun, bulan-1, hari) = waktu LOKAL
-        date.setDate(date.getDate() + i)
-        const tgl = toDateStr(date)           // FIX: was date.toISOString().split('T')[0]
+        // Distribusikan override ke jadwal harian staff
+        for (let i = 0; i < rentang.jumlahHari; i++) {
+          const date = new Date(y, m - 1, d)   // new Date(tahun, bulan-1, hari) = waktu LOKAL
+          date.setDate(date.getDate() + i)
+          const tgl = toDateStr(date)           // FIX: was date.toISOString().split('T')[0]
 
-        console.log(`[APPROVAL] Insert jadwal override: ${tgl} - ${jenis}`)
+          console.log(`[APPROVAL] Insert jadwal override: ${tgl} - ${jenis}`)
 
-        const { data: existing } = await supabase
-          .from('jadwal')
-          .select('id')
-          .eq('user_id', user_id)
-          .eq('tanggal', tgl)
-          .maybeSingle()
+          const { data: existing } = await supabase
+            .from('jadwal')
+            .select('id, shift_id, status_override, pengajuan_id')
+            .eq('user_id', user_id)
+            .eq('tanggal', tgl)
+            .maybeSingle()
 
-        if (existing) {
-          await supabase.from('jadwal')
-            .update({ status_override: jenis, shift_id: null, pengajuan_id: id })
-            .eq('id', existing.id)
-        } else {
-          await supabase.from('jadwal')
-            .insert([{ user_id, tanggal: tgl, shift_id: null, status_override: jenis, pengajuan_id: id }])
+          if (existing) {
+            jadwalSnapshots.push({ ...existing, inserted: false })
+            await supabase.from('jadwal')
+              .update({ status_override: jenis, shift_id: null, pengajuan_id: id })
+              .eq('id', existing.id)
+          } else {
+            const { data: insertedJadwal, error: insertJadwalError } = await supabase.from('jadwal')
+              .insert([{ user_id, tanggal: tgl, shift_id: null, status_override: jenis, pengajuan_id: id }])
+              .select('id')
+              .single()
+            if (insertJadwalError) throw insertJadwalError
+            if (insertedJadwal?.id) jadwalSnapshots.push({ id: insertedJadwal.id, inserted: true })
+          }
         }
-      }
-      // ─────────────────────────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────────
 
-      // Jika jenisnya cuti, kurangi saldo dari sumber utama cuti_tahunan.
-      if (jenis === 'cuti') {
-        await deductCutiTahunanOnApproval(user_id, jumlah_hari)
+        // Jika jenisnya cuti, kurangi saldo dari sumber utama cuti_tahunan.
+        if (jenis === 'cuti') {
+          await deductCutiTahunanOnApproval(user_id, rentang.jumlahHari)
+        }
+      } catch (postApproveError) {
+        for (const snapshot of jadwalSnapshots.reverse()) {
+          if (snapshot.inserted) {
+            await supabase.from('jadwal').delete().eq('id', snapshot.id)
+          } else {
+            await supabase
+              .from('jadwal')
+              .update({
+                shift_id: snapshot.shift_id,
+                status_override: snapshot.status_override,
+                pengajuan_id: snapshot.pengajuan_id
+              })
+              .eq('id', snapshot.id)
+          }
+        }
+        await supabase
+          .from('pengajuan')
+          .update({ status: 'pending', catatan_approval: null, approved_at: null })
+          .eq('id', id)
+        throw postApproveError
       }
 
-      await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: { ...beforeState, status: 'approved', catatan_approval: catatan || null } })
+      await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: afterState })
       showToast('Pengajuan disetujui, jadwal & kuota cuti diperbarui', 'success')
-
     } else {
       const { data: beforeReject } = await supabase.from('pengajuan').select('*').eq('id', id).single()
       await supabase.from('pengajuan').update({
         status: 'rejected',
         catatan_approval: catatan,
         approved_at: new Date().toISOString()
-      }).eq('id', id)
+      }).eq('id', id).eq('status', 'pending')
 
       await logAuditEvent({ action: 'reject', entityType: 'pengajuan', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
       showToast('Pengajuan ditolak', 'info')
