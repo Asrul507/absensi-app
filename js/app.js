@@ -1128,6 +1128,10 @@ window.openEditKaryawan = async function(id) {
         <label>Tanggal Lahir</label>
         <input type="date" id="editLahir" value="${target.tanggal_lahir || ''}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
+      <div class="field">
+        <label>Tanggal Bergabung</label>
+        <input type="date" id="editTgl" value="${target.tanggal_bergabung || ''}" ${canEditAllFields ? '' : 'disabled'}>
+      </div>
 
       <div class="field">
         <label>Atur Titik Lokasi GPS</label>
@@ -1172,6 +1176,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         departemen:    document.getElementById('editDept')?.value.trim()    || '',
         no_hp:         document.getElementById('editHp')?.value.trim()      || '',
         tanggal_lahir: document.getElementById('editLahir')?.value          || null,
+        tanggal_bergabung: document.getElementById('editTgl')?.value       || null,
         titik_radius:  titikRadiusBaru,
         ...kontrakPayload
       }
@@ -1210,6 +1215,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       window._allUsers[userIndex].departemen    = document.getElementById('editDept')?.value.trim()    || ''
       window._allUsers[userIndex].no_hp         = document.getElementById('editHp')?.value.trim()      || ''
       window._allUsers[userIndex].tanggal_lahir = document.getElementById('editLahir')?.value          || null
+      window._allUsers[userIndex].tanggal_bergabung = document.getElementById('editTgl')?.value       || null
       window._allUsers[userIndex].titik_radius  = titikRadiusBaru
       Object.assign(window._allUsers[userIndex], readKontrakForm('edit'))
     }
@@ -1221,6 +1227,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         window.currentUser.departemen    = document.getElementById('editDept')?.value.trim()    || ''
         window.currentUser.no_hp         = document.getElementById('editHp')?.value.trim()      || ''
         window.currentUser.tanggal_lahir = document.getElementById('editLahir')?.value          || null
+        window.currentUser.tanggal_bergabung = document.getElementById('editTgl')?.value       || null
         Object.assign(window.currentUser, readKontrakForm('edit'))
       }
       window.currentUser.titik_radius = titikRadiusBaru
