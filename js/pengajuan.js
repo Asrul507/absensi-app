@@ -49,15 +49,26 @@ function validateRentangPengajuan(tanggalMulai, jumlahHari, { allowPast = false 
   const selesai = hitungTanggalSelesai(tanggalMulai, jumlah)
   if (!selesai) throw new Error('Tanggal selesai tidak valid')
 
-  const today = parseDateLocal(getTodayLokal())
-  const todayYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-  const tanggalYearMonth = tanggalMulai.substring(0, 7) // YYYY-MM
-  
-  // Untuk tanggal mundur (sebelum hari ini)
-  if (!allowPast && tanggalMulai < getTodayLokal()) {
-    // Boleh mundur HANYA jika masih dalam bulan berjalan
-    if (tanggalYearMonth !== todayYearMonth) {
-      throw new Error('Tanggal mulai tidak boleh mundur ke bulan lain. Boleh mundur hanya untuk tanggal di bulan berjalan.')
+  // Validasi tanggal: tidak boleh mundur (ke bulan lalu), maksimal 30 hari ke depan
+  if (!allowPast) {
+    const today = parseDateLocal(getTodayLokal())
+    const todayYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+    const tanggalYearMonth = tanggalMulai.substring(0, 7) // YYYY-MM
+
+    // Cek tanggal mundur (sebelum hari ini)
+    if (tanggalMulai < getTodayLokal()) {
+      if (tanggalYearMonth !== todayYearMonth) {
+        throw new Error('❌ Tanggal mulai tidak boleh mundur ke bulan lain. Hanya boleh mundur untuk tanggal di bulan berjalan.')
+      }
+    }
+
+    // Cek maksimal 30 hari ke depan
+    const maxDate = new Date(today)
+    maxDate.setDate(maxDate.getDate() + 30)
+    const maxDateStr = toDateStr(maxDate)
+
+    if (tanggalMulai > maxDateStr) {
+      throw new Error(`❌ Tanggal mulai tidak boleh lebih dari 30 hari ke depan. Maksimal: ${maxDateStr}`)
     }
   }
 
@@ -151,7 +162,7 @@ export async function renderPengajuan(user) {
             Masa kerja ${formatMasaKerja(masaKerja)} · Periode ${periode_mulai || '-'} s/d ${periode_selesai || '-'}
           </div>
           <div style="font-size:.8rem;opacity:.82;margin-top:2px;">
-            ${statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF ? '✅ Jatah cuti aktif dan bisa diajukan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE ? '⚠ Jenis kontrak ini tidak mendapat cuti tahunan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? '⏳ Jatah cuti menunggu approval HR/Admin' : '❌ Belum eligible cuti (masa kerja < 12 bulan)'}
+            ${statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF ? '✅ Jatah cuti aktif dan bisa diajukan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE ? '⚠ Jenis kontrak ini tidak mendapatkan cuti tahunan.' : `⏳ Anda belum eligible. Masa kerja ${formatMasaKerja(masaKerja)}.`}
           </div>
         </div>
         <div style="display:flex;gap:20px;text-align:center;">
@@ -397,7 +408,7 @@ function renderCutiTahunanAdminSection(rows) {
           <div>${row.jatah_cuti || 0}</div>
           <div>${row.cuti_terpakai || 0}</div>
           <div>${row.sisa_cuti || 0}</div>
-          <div><span class="badge ${row.status === STATUS_CUTI_TAHUNAN.AKTIF ? 'badge-green' : [STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK, STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE].includes(row.status) ? 'badge-red' : 'badge-yellow'}">${row.status || '-'}</span></div>
+          <div><span class="badge ${row.status === STATUS_CUTI_TAHUNAN.AKTIF ? 'badge-green' : [STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK, STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE].includes(row.status) ? 'badge-red' : 'badge-yellow'}">${row.status}</span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             ${row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? `<button class="btn-primary btn-sm" onclick="approveJatahCutiTahunanUI('${row.id}')"><i class="fa fa-check"></i> Approve</button>` : ''}
             ${isExpired ? `<button class="btn-danger btn-sm" onclick="prosesHangusCutiTahunanUI('${row.id}')"><i class="fa fa-ban"></i> Proses Hangus</button>` : ''}
@@ -422,7 +433,7 @@ function renderCutiTahunanAdminSection(rows) {
         <div class="card" style="padding:10px;background:#fff1f2;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Expired Kontrak</div><strong>${counts[STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK] || 0}</strong></div>
       </div>
       <div style="overflow:auto;border:1px solid var(--border);border-radius:12px;">
-        <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) repeat(4,minmax(70px,.6fr)) minmax(160px,1fr);gap:8px;padding:10px;background:var(--gray-50);font-size:.72rem;font-weight:600;position:sticky;top:0;z-index:10;">
+        <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) repeat(4,minmax(70px,.6fr)) minmax(160px,1fr);gap:8px;padding:10px;background:var(--gray-50);font-size:.72rem;font-weight:800;border-bottom:1px solid var(--border);">
           <div>Karyawan / Periode</div><div>Jatah</div><div>Terpakai</div><div>Sisa</div><div>Status</div><div>Aksi / Riwayat</div>
         </div>
         <div style="min-width:760px;">${[
@@ -485,7 +496,7 @@ window.showExtendCutiModal = async function(rowId) {
         <div class="field"><label>Keterangan/alasan extend <span class="req">*</span></label><textarea id="extendCutiReason" placeholder="Tuliskan alasan extend..." style="min-height:90px;"></textarea></div>
         <div style="display:flex;gap:10px;">
           <button class="btn-secondary" style="flex:1;" onclick="this.closest('.modal-overlay').remove()">Batal</button>
-          <button class="btn-primary" style="flex:1;" onclick="submitExtendCuti('${rowId}', document.getElementById('extendCutiBulan').value, document.getElementById('extendCutiReason').value, this)">Simpan Extend</button>
+          <button class="btn-primary" style="flex:1;" onclick="submitExtendCuti('${rowId}', document.getElementById('extendCutiBulan').value, document.getElementById('extendCutiReason').value, this)">Simpan</button>
         </div>
       </div>
     `
