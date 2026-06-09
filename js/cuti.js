@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { ATTENDANCE_CONFIG } from './config.js'
 
 export const STATUS_CUTI_TAHUNAN = {
   BELUM_ELIGIBLE: 'BELUM_ELIGIBLE',
@@ -156,13 +157,14 @@ export function formatMasaKerja(bulan) {
 
 /* ================= CEK ELIGIBLE CUTI ================= */
 export function isEligibleCuti(tanggalBergabung, profile = null) {
-  if (profile) return isKontrakAktif(profile) && isJenisKontrakEligibleCuti(profile.jenis_kontrak)
-  return hitungMasaKerja(tanggalBergabung) >= 12
+  const masaKerjaCukup = hitungMasaKerja(tanggalBergabung || profile?.tanggal_bergabung) >= ATTENDANCE_CONFIG.MIN_TENURE_FOR_LEAVE
+  if (profile) return masaKerjaCukup && isKontrakAktif(profile) && isJenisKontrakEligibleCuti(profile.jenis_kontrak)
+  return masaKerjaCukup
 }
 
 /* ================= HITUNG JATAH CUTI TAHUNAN ================= */
 export function hitungJatahCuti(tanggalBergabung, profile = null) {
-  if (profile) return isKontrakAktif(profile) && isJenisKontrakEligibleCuti(profile.jenis_kontrak) ? JATAH_CUTI_TAHUNAN : 0
+  if (profile) return isEligibleCuti(profile.tanggal_bergabung, profile) ? JATAH_CUTI_TAHUNAN : 0
   if (!isEligibleCuti(tanggalBergabung)) return 0
   return JATAH_CUTI_TAHUNAN
 }
@@ -171,7 +173,8 @@ function buildAnnualLeavePayload(profile) {
   const periode = getKontrakPeriode(profile)
   const kontrakAktif = periode?.status_kontrak !== 'berakhir' && !!periode?.kontrak_mulai && !!periode?.kontrak_berakhir
   const jenisEligible = isJenisKontrakEligibleCuti(profile?.jenis_kontrak)
-  const status = kontrakAktif && jenisEligible
+  const masaKerjaCukup = hitungMasaKerja(profile?.tanggal_bergabung) >= ATTENDANCE_CONFIG.MIN_TENURE_FOR_LEAVE
+  const status = kontrakAktif && jenisEligible && masaKerjaCukup
     ? STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR
     : kontrakAktif && !jenisEligible
       ? STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE
