@@ -296,7 +296,7 @@ export function isAllowedCorrectionDate(tanggal, todayValue = getTodayLokal()) {
   const selected = parseDateOnlyLocal(tanggal)
   const today = parseDateOnlyLocal(todayValue)
   if (!selected || !today) return false
-  return selected.value <= today.value
+  return selected.value >= today.value
 }
 
 export function validateLeaveDateRangeLocal(tanggalMulai, tanggalSelesai, todayValue = getTodayLokal()) {
@@ -326,8 +326,8 @@ export function validateCorrectionDateLocal(tanggal, todayValue = getTodayLokal(
   if (!selected) throw new Error('Tanggal wajib diisi atau formatnya tidak valid')
   const today = parseDateOnlyLocal(todayValue)
   if (!today) throw new Error('Tanggal lokal aplikasi tidak valid.')
-  if (selected.value > today.value) {
-    throw new Error('Perbaikan absen tidak boleh untuk tanggal setelah hari ini.')
+  if (selected.value < today.value) {
+    throw new Error('Perbaikan absen tidak boleh untuk tanggal sebelum hari ini.')
   }
   return true
 }

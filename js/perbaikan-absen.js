@@ -19,7 +19,7 @@
  */
 
 import { supabase } from './supabase.js'
-import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal, validateCorrectionDateLocal } from './timezone.js'
+import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal, validateCorrectionDateLocal } from './timezone.js?v=20260609-2'
 import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
@@ -58,7 +58,7 @@ export async function renderPerbaikanAbsen(user) {
 
         <div class="field">
           <label>Tanggal <span style="color: var(--danger);">*</span></label>
-          <input type="date" id="inputTanggal" max="${getTodayLokal()}" onchange="onPerbaikanTanggalChange(window.currentUser)"
+          <input type="date" id="inputTanggal" min="${getTodayLokal()}" onchange="onPerbaikanTanggalChange(window.currentUser)"
             style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
               font-size: .85rem; font-family: inherit; outline: none;">
           <div id="infoShiftHariIni" style="font-size: .75rem; color: var(--primary); margin-top: 4px; font-weight: 700;"></div>
@@ -295,7 +295,7 @@ window.submitPerbaikanAbsen = async function (user, ev) {
   if (!jenis)            { msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Jenis perbaikan wajib dipilih'; return }
   if (!keterangan.trim()){ msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Keterangan wajib diisi'; return }
 
-  // Validasi tanggal: tidak boleh setelah hari ini
+  // Validasi tanggal: tidak boleh sebelum hari ini
   try {
     validateTanggalPerbaikan(tanggal)
   } catch (err) {
