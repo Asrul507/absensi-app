@@ -50,17 +50,15 @@ function validateRentangPengajuan(tanggalMulai, jumlahHari, { allowPast = false 
   if (!selesai) throw new Error('Tanggal selesai tidak valid')
 
   const today = parseDateLocal(getTodayLokal())
-  if (!allowPast && tanggalMulai < getTodayLokal()) {
-    throw new Error('Tanggal mulai tidak boleh sebelum hari ini')
-  }
-
-  // CEK BATAS 30 HARI KE DEPAN
-  const maxDate = new Date(today)
-  maxDate.setDate(maxDate.getDate() + 30)
-  const maxDateStr = toDateStr(maxDate)
+  const todayYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+  const tanggalYearMonth = tanggalMulai.substring(0, 7) // YYYY-MM
   
-  if (tanggalMulai > maxDateStr) {
-    throw new Error('Tanggal mulai tidak boleh lebih dari 30 hari ke depan dari hari ini')
+  // Untuk tanggal mundur (sebelum hari ini)
+  if (!allowPast && tanggalMulai < getTodayLokal()) {
+    // Boleh mundur HANYA jika masih dalam bulan berjalan
+    if (tanggalYearMonth !== todayYearMonth) {
+      throw new Error('Tanggal mulai tidak boleh mundur ke bulan lain. Boleh mundur hanya untuk tanggal di bulan berjalan.')
+    }
   }
 
   return { jumlahHari: jumlah, tanggalMulai, tanggalSelesai: selesai }
