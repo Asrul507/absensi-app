@@ -4,24 +4,19 @@ Aplikasi HR dan absensi berbasis static frontend, Supabase, dan siap deploy ke N
 
 ## Supabase configuration
 
-Konfigurasi Supabase dipusatkan di `js/supabase.js`. Karena aplikasi ini berjalan sebagai static frontend, penggunaan Supabase `anon` key diperbolehkan, tetapi wajib diamankan dengan Row Level Security (RLS) di Supabase.
+Konfigurasi Supabase dipusatkan di `js/supabase.js`. Project ini **bukan Vite/build app** dan tidak memiliki `package.json`, sehingga browser tidak bisa membaca `import.meta.env`, `process.env`, atau variable Netlify secara langsung.
 
-Rekomendasi deployment:
+Konfigurasi yang dipakai saat deploy static:
 
-1. Jangan pernah menyimpan `service_role` key di repository atau frontend.
-2. Batasi akses tabel melalui RLS berdasarkan `auth.uid()` dan role pada tabel `profiles`.
-3. Untuk rotasi konfigurasi tanpa mengubah bundle, set `window.__SUPABASE_CONFIG__` sebelum `js/app.js` dimuat:
+- `supabaseUrl` / project URL: diset di `js/supabase.js`.
+- `supabaseKey` / anon public key: diset di `js/supabase.js`.
 
-```html
-<script>
-  window.__SUPABASE_CONFIG__ = {
-    url: 'https://PROJECT.supabase.co',
-    anonKey: 'SUPABASE_ANON_KEY'
-  }
-</script>
-```
+Catatan keamanan:
 
-Jika override tidak tersedia, aplikasi memakai fallback anon key yang ada di `js/supabase.js`.
+1. Frontend static hanya boleh memakai Supabase `anon` public key.
+2. Jangan pernah menyimpan `service_role` key di repository atau frontend.
+3. Batasi akses tabel melalui Row Level Security (RLS) berdasarkan `auth.uid()` dan role pada tabel `profiles`.
+4. Jika ingin memakai Netlify environment variables seperti `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY`, tambahkan build step yang mengganti/men-generate config sebelum deploy. Tanpa build step, variable tersebut tidak otomatis tersedia di browser.
 
 ## Database migrations
 
