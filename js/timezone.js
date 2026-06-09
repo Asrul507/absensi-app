@@ -295,7 +295,7 @@ export function isAllowedCorrectionDate(tanggal, todayValue = getTodayLokal()) {
   const selected = parseDateOnlyLocal(tanggal)
   const today = parseDateOnlyLocal(todayValue)
   if (!selected || !today) return false
-  return selected.value >= today.value
+  return selected.value <= today.value
 }
 
 export function validateLeaveDateRangeLocal(tanggalMulai, tanggalSelesai, todayValue = getTodayLokal()) {

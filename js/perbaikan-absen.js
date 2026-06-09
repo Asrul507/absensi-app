@@ -58,7 +58,7 @@ export async function renderPerbaikanAbsen(user) {
 
         <div class="field">
           <label>Tanggal <span style="color: var(--danger);">*</span></label>
-          <input type="date" id="inputTanggal" min="${getTodayLokal()}" onchange="onPerbaikanTanggalChange(window.currentUser)"
+          <input type="date" id="inputTanggal" max="${getTodayLokal()}" onchange="onPerbaikanTanggalChange(window.currentUser)"
             style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
               font-size: .85rem; font-family: inherit; outline: none;">
           <div id="infoShiftHariIni" style="font-size: .75rem; color: var(--primary); margin-top: 4px; font-weight: 700;"></div>
