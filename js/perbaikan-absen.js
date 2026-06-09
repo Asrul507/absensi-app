@@ -19,7 +19,7 @@
  */
 
 import { supabase } from './supabase.js'
-import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal, validateCorrectionDateLocal } from './timezone.js?v=20260609-2'
+import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal, validateCorrectionDateLocal } from './timezone.js?v=20260609-4'
 import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
@@ -295,7 +295,7 @@ window.submitPerbaikanAbsen = async function (user, ev) {
   if (!jenis)            { msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Jenis perbaikan wajib dipilih'; return }
   if (!keterangan.trim()){ msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Keterangan wajib diisi'; return }
 
-  // Validasi tanggal: tidak boleh sebelum hari ini
+  // Validasi tanggal: tidak boleh untuk tanggal yang sudah lewat.
   try {
     validateTanggalPerbaikan(tanggal)
   } catch (err) {

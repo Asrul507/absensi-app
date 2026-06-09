@@ -3,7 +3,7 @@ import { getTodayLokal, getDurasiMenit, toJamLokal, toTanggalLokal, toTanggalAbs
 import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
 import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
 import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
-import { getSisaCuti } from './cuti.js'
+import { getSisaCuti } from './services/leave-service.js'
 
 export async function renderDashboard() {
   const content = document.getElementById('content')
@@ -419,6 +419,7 @@ async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
       const hadir = Number(statsEl?.dataset?.hadir || 0)
       const terlambat = Number(statsEl?.dataset?.terlambat || 0)
       const lupa = Number(statsEl?.dataset?.lupa || 0)
+      Chart.getChart(ctx)?.destroy()
       new Chart(ctx, {
         type: 'bar',
         data: {

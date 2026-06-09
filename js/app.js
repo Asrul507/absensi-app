@@ -18,13 +18,13 @@ import { renderJadwalManagement } from './jadwal.js'
 import { renderRekap } from './rekap.js'
 import { renderRekapInOut } from './rekap-inout.js'
 import { renderDaftarAbsensi } from './daftar-absensi.js'
-import { renderPerbaikanAbsen } from './perbaikan-absen.js?v=20260609-2'
-import { renderPengajuan } from './pengajuan.js?v=20260609-2'
+import { renderPerbaikanAbsen } from './perbaikan-absen.js?v=20260609-4'
+import { renderPengajuan } from './pengajuan.js?v=20260609-4'
 import { renderKalenderHR } from './kalender.js'
-import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan, syncEligibleCutiTahunanForProfiles, buildKontrakPayload, canManageCutiTahunan, formatMasaKontrak, getSisaHariKontrak, getStatusKontrak, hitungKontrakBerakhir, prosesHangusCutiTahunan } from './cuti.js'
+import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan, syncEligibleCutiTahunanForProfiles, buildKontrakPayload, canManageCutiTahunan, formatMasaKontrak, getSisaHariKontrak, getStatusKontrak, hitungKontrakBerakhir, prosesHangusCutiTahunan } from './services/leave-service.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
-import { initTimezone, resetTimezoneCache, getTodayLokal, toTanggalJamLokal } from './timezone.js?v=20260609-2'
+import { initTimezone, resetTimezoneCache, getTodayLokal, toTanggalJamLokal } from './timezone.js?v=20260609-4'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 import { showToast, confirmAction } from './feedback.js'
 import { logAuditEvent } from './audit-trail.js'
@@ -390,9 +390,26 @@ function renderBottomNav(role) {
     </button>`).join('')
 }
 
+const ADMIN_ROLES = ['admin', 'super_admin', 'hr', 'spv']
+const STAFF_PAGES = ['dashboard', 'absensi', 'perbaikan-absen', 'pengajuan', 'kalender', 'daftar-absensi', 'rekap-inout', 'rekap', 'profile']
+const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'daftar-absensi', 'rekap-inout', 'rekap', 'laporan-keseluruhan', 'profile']
+
+function isAdminRole(role) {
+  return ADMIN_ROLES.includes(role)
+}
+
+function canAccessPage(user, page) {
+  const role = user?.role || 'staff'
+  return (isAdminRole(role) ? ADMIN_PAGES : STAFF_PAGES).includes(page)
+}
+
 /* ================= SINGLE PAGE APPLICATION NAVIGATION ================= */
 window.navigate = async function (page) {
   if (!window.currentUser) { showToast('Sesi berakhir. Silakan login ulang.', 'warning'); showLoginPage(); return }
+  if (!canAccessPage(window.currentUser, page)) {
+    showToast('Anda tidak memiliki akses ke menu tersebut.', 'warning')
+    page = 'dashboard'
+  }
 
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
   document.getElementById(`menu-${page}`)?.classList.add('active')
@@ -899,11 +916,21 @@ window.openFormTambah = async function() {
         <label>Nama Lengkap <span class="req">*</span></label>
         <input id="pNama" placeholder="Nama lengkap karyawan">
       </div>
+      <div class="field"><label>Email Login</label><input type="email" id="pEmail" placeholder="nama@company.com"></div>
+      <div class="field"><label>Status Akun</label>
+        <select id="pStatusAkun">
+          <option value="Aktif">Aktif</option>
+          <option value="Menunggu Verifikasi">Menunggu Verifikasi</option>
+          <option value="Non-Aktif">Non-Aktif</option>
+        </select>
+      </div>
       <div class="field"><label>Jabatan</label><input id="pJabatan" placeholder="Jabatan"></div>
       <div class="field"><label>Departemen</label><input id="pDept" placeholder="Departemen"></div>
       <div class="field"><label>No. HP</label><input id="pHp" placeholder="08xx"></div>
       <div class="field"><label>Tanggal Bergabung</label><input type="date" id="pTgl" value="${getTodayLokal()}"></div>
+      <div class="field"><label>Sisa Cuti Awal</label><input type="number" id="pSisaCuti" min="0" value="0"></div>
       <div class="field"><label>Tanggal Lahir</label><input type="date" id="pLahir"></div>
+      <div class="field"><label>URL Foto (opsional)</label><input id="pFotoUrl" placeholder="https://..."></div>
       <div class="field"><label>Role Hak Akses</label>
         <select id="pRole">
           <option value="staff">Staff Karyawan</option>
@@ -934,12 +961,16 @@ window.savePendingKaryawan = async function() {
 
   const { error } = await supabase.from('pending_profiles').insert([{
     nama_lengkap:      nama,
+    email:             document.getElementById('pEmail')?.value.trim() || null,
     jabatan:           document.getElementById('pJabatan').value.trim(),
     departemen:        document.getElementById('pDept').value.trim(),
     no_hp:             document.getElementById('pHp').value.trim(),
     tanggal_bergabung: document.getElementById('pTgl').value || null,
     tanggal_lahir:     document.getElementById('pLahir').value || null,
     role:              document.getElementById('pRole').value,
+    status_akun:       document.getElementById('pStatusAkun')?.value || 'Aktif',
+    sisa_cuti:         Math.max(0, Number.parseInt(document.getElementById('pSisaCuti')?.value || '0', 10) || 0),
+    foto_url:          document.getElementById('pFotoUrl')?.value.trim() || '',
     titik_radius:      document.getElementById('pTitikRadius').value || null,
     ...kontrakPayload,
     created_by:        window.currentUser?.id || null
@@ -1043,6 +1074,7 @@ window.openDetailKaryawan = function(id) {
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Departemen:</span><strong>${target.departemen || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">No. HP:</span><strong>${target.no_hp || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Bergabung:</span><strong>${target.tanggal_bergabung || '-'}</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Masa Kerja:</span><strong>${formatMasaKerja(hitungMasaKerja(target.tanggal_bergabung))}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${target.tanggal_lahir || '-'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Plot Titik Absen:</span><strong style="color:var(--primary);">📍 ${target.titik_radius || 'Bebas Radius'}</strong></div>
       <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${target.status_akun || 'Aktif'}</strong></div>
@@ -1113,6 +1145,10 @@ window.openEditKaryawan = async function(id) {
         <input id="editNama" value="${target.nama_lengkap}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
+        <label>Email Login</label>
+        <input type="email" id="editEmail" value="${target.email || ''}" ${canEditAllFields ? '' : 'disabled'}>
+      </div>
+      <div class="field">
         <label>Jabatan</label>
         <input id="editJabatan" value="${target.jabatan || ''}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
@@ -1131,6 +1167,22 @@ window.openEditKaryawan = async function(id) {
       <div class="field">
         <label>Tanggal Bergabung</label>
         <input type="date" id="editTgl" value="${target.tanggal_bergabung || ''}" ${canEditAllFields ? '' : 'disabled'}>
+      </div>
+      <div class="field">
+        <label>Status Akun</label>
+        <select id="editStatusAkun" ${canEditAllFields ? '' : 'disabled'}>
+          <option value="Aktif"${(target.status_akun || 'Aktif') === 'Aktif' ? ' selected' : ''}>Aktif</option>
+          <option value="Menunggu Verifikasi"${target.status_akun === 'Menunggu Verifikasi' ? ' selected' : ''}>Menunggu Verifikasi</option>
+          <option value="Non-Aktif"${target.status_akun === 'Non-Aktif' ? ' selected' : ''}>Non-Aktif</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Sisa Cuti</label>
+        <input type="number" id="editSisaCuti" min="0" value="${target.sisa_cuti || 0}" ${canEditAllFields ? '' : 'disabled'}>
+      </div>
+      <div class="field full" style="grid-column:1/-1;">
+        <label>URL Foto</label>
+        <input id="editFotoUrl" value="${target.foto_url || ''}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
 
       <div class="field">
@@ -1172,11 +1224,15 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       if (!validateKontrakPayload(kontrakPayload)) return
       const updatePayload = {
         nama_lengkap:  document.getElementById('editNama')?.value.trim()    || '',
+        email:         document.getElementById('editEmail')?.value.trim()   || null,
         jabatan:       document.getElementById('editJabatan')?.value.trim() || '',
         departemen:    document.getElementById('editDept')?.value.trim()    || '',
         no_hp:         document.getElementById('editHp')?.value.trim()      || '',
         tanggal_lahir: document.getElementById('editLahir')?.value          || null,
         tanggal_bergabung: document.getElementById('editTgl')?.value       || null,
+        status_akun:   document.getElementById('editStatusAkun')?.value    || 'Aktif',
+        sisa_cuti:     Math.max(0, Number.parseInt(document.getElementById('editSisaCuti')?.value || '0', 10) || 0),
+        foto_url:      document.getElementById('editFotoUrl')?.value.trim() || '',
         titik_radius:  titikRadiusBaru,
         ...kontrakPayload
       }
