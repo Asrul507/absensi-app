@@ -19,10 +19,32 @@
  */
 
 import { supabase } from './supabase.js'
-import { buildTimestampLokal, toJamLokal, toTanggalJamLokal } from './timezone.js'
+import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal } from './timezone.js'
 import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
+
+function parseDateLocal(value) {
+  if (!value) return null
+  const [y, m, d] = String(value).split('-').map(Number)
+  if (!y || !m || !d) return null
+  const date = new Date(y, m - 1, d)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function validateTanggalPerbaikan(tanggal) {
+  if (!tanggal) throw new Error('Tanggal wajib diisi')
+  
+  const today = parseDateLocal(getTodayLokal())
+  const selectedDate = parseDateLocal(tanggal)
+  
+  if (!selectedDate) throw new Error('Format tanggal tidak valid')
+  
+  // PERBAIKAN ABSEN/SHIFT: TIDAK BOLEH MUNDUR (hanya tanggal hari ini atau yang akan datang)
+  if (tanggal < getTodayLokal()) {
+    throw new Error('Perbaikan absen tidak boleh mundur ke tanggal sebelumnya. Hanya boleh untuk hari ini atau yang akan datang.')
+  }
+}
 
 export async function renderPerbaikanAbsen(user) {
   const content = document.getElementById('content')
@@ -269,6 +291,15 @@ window.submitPerbaikanAbsen = async function (user, ev) {
   if (!tanggal)          { msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Tanggal wajib diisi'; return }
   if (!jenis)            { msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Jenis perbaikan wajib dipilih'; return }
   if (!keterangan.trim()){ msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Keterangan wajib diisi'; return }
+
+  // Validasi tanggal: tidak boleh mundur
+  try {
+    validateTanggalPerbaikan(tanggal)
+  } catch (err) {
+    msgEl.style.color = '#dc2626'
+    msgEl.textContent = '⚠ ' + err.message
+    return
+  }
 
   let payload = {
     user_id:    user.id,
