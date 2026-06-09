@@ -2,7 +2,6 @@ import { supabase } from './supabase.js'
 import {
   getTodayLokal,
   getCurrentMonthStartLocal,
-  getNextMonthEndLocal,
   toTanggalLokal,
   toTanggalJamLokal,
   validateLeaveDateRangeLocal
@@ -135,7 +134,7 @@ export async function renderPengajuan(user) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field">
           <label><i class="fa fa-calendar"></i> Tanggal Mulai <span class="req">*</span></label>
-          <input type="date" id="tanggalMulai" min="${getCurrentMonthStartLocal()}" max="${getNextMonthEndLocal()}">
+          <input type="date" id="tanggalMulai" min="${getCurrentMonthStartLocal()}">
         </div>
         <div class="field">
           <label><i class="fa fa-hashtag"></i> Jumlah Hari <span class="req">*</span></label>
@@ -145,7 +144,7 @@ export async function renderPengajuan(user) {
 
       <div class="field">
         <label><i class="fa fa-calendar-check"></i> Tanggal Selesai</label>
-        <input type="date" id="tanggalSelesai" min="${getCurrentMonthStartLocal()}" max="${getNextMonthEndLocal()}" disabled style="background:var(--gray-100);">
+        <input type="date" id="tanggalSelesai" min="${getCurrentMonthStartLocal()}" disabled style="background:var(--gray-100);">
       </div>
 
       <div class="field">
@@ -208,6 +207,18 @@ export async function renderPengajuan(user) {
     const jenis = document.getElementById('jenis').value
     const infoEl = document.getElementById('infoEligible')
     const msgEl = document.getElementById('infoEligibleMsg')
+    const mulaiEl = document.getElementById('tanggalMulai')
+    const selesaiEl = document.getElementById('tanggalSelesai')
+
+    if (mulaiEl && selesaiEl) {
+      if (jenis === 'cuti' && periode_selesai) {
+        mulaiEl.max = periode_selesai
+        selesaiEl.max = periode_selesai
+      } else {
+        mulaiEl.removeAttribute('max')
+        selesaiEl.removeAttribute('max')
+      }
+    }
 
     if (jenis === 'cuti') {
       if (statusCutiTahunan !== STATUS_CUTI_TAHUNAN.AKTIF) {
@@ -223,7 +234,11 @@ export async function renderPengajuan(user) {
         infoEl.className = 'alert warning'
         msgEl.textContent = `Sisa cuti Anda ${sisa} hari. Pengajuan cuti tidak bisa dikirim.`
       } else {
-        infoEl.style.display = 'none'
+        infoEl.style.display = 'flex'
+        infoEl.className = 'alert info'
+        msgEl.textContent = periode_selesai
+          ? `Cuti dapat diajukan sampai tanggal expire cuti ${periode_selesai}.`
+          : 'Cuti dapat diajukan selama saldo dan periode cuti masih aktif.'
       }
     } else {
       infoEl.style.display = 'none'
@@ -243,6 +258,10 @@ export async function renderPengajuan(user) {
     if (mulai && selesai) {
       try {
         validateLeaveDateRangeLocal(mulai, selesai)
+        const jenis = document.getElementById('jenis')?.value
+        if (jenis === 'cuti' && periode_selesai && selesai > periode_selesai) {
+          throw new Error(`Pengajuan cuti tidak boleh melewati tanggal expire cuti (${periode_selesai}).`)
+        }
       } catch (err) {
         showToast(err.message, 'warning')
       }

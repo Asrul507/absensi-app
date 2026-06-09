@@ -295,7 +295,7 @@ window.submitPerbaikanAbsen = async function (user, ev) {
   if (!jenis)            { msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Jenis perbaikan wajib dipilih'; return }
   if (!keterangan.trim()){ msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Keterangan wajib diisi'; return }
 
-  // Validasi tanggal: tidak boleh setelah hari ini.
+  // Validasi tanggal: tidak boleh untuk tanggal yang sudah lewat.
   try {
     validateTanggalPerbaikan(tanggal)
   } catch (err) {

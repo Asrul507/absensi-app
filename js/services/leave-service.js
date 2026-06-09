@@ -110,7 +110,7 @@ export async function ensureTidakAdaPengajuanBentrok(userId, tanggalMulai, tangg
   }
 }
 
-export async function validateCutiRequestQuota(userId, jumlahHari) {
+export async function validateCutiRequestQuota(userId, jumlahHari, tanggalSelesai = null) {
   const saldo = await getSisaCuti(userId)
   if (saldo.status !== STATUS_CUTI_TAHUNAN.AKTIF) {
     throw new Error('Cuti tahunan belum aktif untuk karyawan ini.')
@@ -118,12 +118,16 @@ export async function validateCutiRequestQuota(userId, jumlahHari) {
   if ((Number(saldo.sisa) || 0) < jumlahHari) {
     throw new Error(`Saldo cuti tidak cukup. Sisa cuti ${saldo.sisa} hari.`)
   }
+  // Cuti mengikuti masa berlaku periode cuti/kontrak. Izin dan sakit tidak dibatasi tanggal expire cuti.
+  if (tanggalSelesai && saldo.periode_selesai && tanggalSelesai > saldo.periode_selesai) {
+    throw new Error(`Pengajuan cuti tidak boleh melewati tanggal expire cuti (${saldo.periode_selesai}).`)
+  }
   return saldo
 }
 
 export async function validatePengajuanRequest({ userId, jenis, tanggalMulai, jumlahHari, excludeId = null, allowPast = false }) {
   const rentang = validateRentangPengajuan(tanggalMulai, jumlahHari, { allowPast })
   await ensureTidakAdaPengajuanBentrok(userId, rentang.tanggalMulai, rentang.tanggalSelesai, excludeId)
-  if (jenis === 'cuti') await validateCutiRequestQuota(userId, rentang.jumlahHari)
+  if (jenis === 'cuti') await validateCutiRequestQuota(userId, rentang.jumlahHari, rentang.tanggalSelesai)
   return rentang
 }
