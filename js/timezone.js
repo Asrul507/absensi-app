@@ -224,6 +224,114 @@ export function getTodayLokal() {
   return `${y}-${m}-${d}`
 }
 
+function parseDateOnlyLocal(value) {
+  if (!value) return null
+  const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(year, month - 1, day)
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null
+  }
+
+  return {
+    date,
+    year,
+    month,
+    day,
+    value: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+}
+
+function formatDateOnlyLocal(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function getTodayLocal() {
+  return getTodayLokal()
+}
+
+export function getCurrentMonthStartLocal(todayValue = getTodayLokal()) {
+  const today = parseDateOnlyLocal(todayValue)
+  if (!today) return null
+  return `${today.year}-${String(today.month).padStart(2, '0')}-01`
+}
+
+export function getNextMonthStartLocal(todayValue = getTodayLokal()) {
+  const today = parseDateOnlyLocal(todayValue)
+  if (!today) return null
+  const date = new Date(today.year, today.month, 1)
+  return formatDateOnlyLocal(date)
+}
+
+export function getNextMonthEndLocal(todayValue = getTodayLokal()) {
+  const today = parseDateOnlyLocal(todayValue)
+  if (!today) return null
+  const date = new Date(today.year, today.month + 1, 0)
+  return formatDateOnlyLocal(date)
+}
+
+export function isAllowedLeaveDate(tanggal, todayValue = getTodayLokal()) {
+  const selected = parseDateOnlyLocal(tanggal)
+  const minDate = getCurrentMonthStartLocal(todayValue)
+  const maxDate = getNextMonthEndLocal(todayValue)
+  if (!selected || !minDate || !maxDate) return false
+  return selected.value >= minDate && selected.value <= maxDate
+}
+
+export function isAllowedCorrectionDate(tanggal, todayValue = getTodayLokal()) {
+  const selected = parseDateOnlyLocal(tanggal)
+  const today = parseDateOnlyLocal(todayValue)
+  if (!selected || !today) return false
+  return selected.value >= today.value
+}
+
+export function validateLeaveDateRangeLocal(tanggalMulai, tanggalSelesai, todayValue = getTodayLokal()) {
+  const start = parseDateOnlyLocal(tanggalMulai)
+  const end = parseDateOnlyLocal(tanggalSelesai)
+  if (!start) throw new Error('Tanggal mulai wajib diisi atau formatnya tidak valid')
+  if (!end) throw new Error('Tanggal selesai wajib diisi atau formatnya tidak valid')
+  if (end.value < start.value) throw new Error('Tanggal selesai tidak boleh sebelum tanggal mulai.')
+
+  const minDate = getCurrentMonthStartLocal(todayValue)
+  const maxDate = getNextMonthEndLocal(todayValue)
+  if (!minDate || !maxDate) throw new Error('Tanggal lokal aplikasi tidak valid.')
+
+  if (start.value < minDate || end.value < minDate) {
+    throw new Error('Pengajuan tidak boleh untuk bulan sebelumnya.')
+  }
+
+  if (start.value > maxDate || end.value > maxDate) {
+    throw new Error('Pengajuan hanya boleh untuk bulan berjalan atau bulan setelahnya.')
+  }
+
+  return true
+}
+
+export function validateCorrectionDateLocal(tanggal, todayValue = getTodayLokal()) {
+  const selected = parseDateOnlyLocal(tanggal)
+  if (!selected) throw new Error('Tanggal wajib diisi atau formatnya tidak valid')
+  const today = parseDateOnlyLocal(todayValue)
+  if (!today) throw new Error('Tanggal lokal aplikasi tidak valid.')
+  if (selected.value < today.value) {
+    throw new Error('Perbaikan absen tidak boleh untuk tanggal sebelum hari ini.')
+  }
+  return true
+}
+
 export async function getTimezoneFromLokasi() {
   // Pertahankan compatibility agar import lama tidak rusak
   try {

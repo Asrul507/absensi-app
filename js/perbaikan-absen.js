@@ -19,31 +19,13 @@
  */
 
 import { supabase } from './supabase.js'
-import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal } from './timezone.js'
+import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal, validateCorrectionDateLocal } from './timezone.js?v=20260609-2'
 import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
 
-function parseDateLocal(value) {
-  if (!value) return null
-  const [y, m, d] = String(value).split('-').map(Number)
-  if (!y || !m || !d) return null
-  const date = new Date(y, m - 1, d)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
 function validateTanggalPerbaikan(tanggal) {
-  if (!tanggal) throw new Error('Tanggal wajib diisi')
-  
-  const today = parseDateLocal(getTodayLokal())
-  const selectedDate = parseDateLocal(tanggal)
-  
-  if (!selectedDate) throw new Error('Format tanggal tidak valid')
-  
-  // PERBAIKAN ABSEN/SHIFT: TIDAK BOLEH MUNDUR (hanya tanggal hari ini atau yang akan datang)
-  if (tanggal < getTodayLokal()) {
-    throw new Error('Perbaikan absen tidak boleh mundur ke tanggal sebelumnya. Hanya boleh untuk hari ini atau yang akan datang.')
-  }
+  return validateCorrectionDateLocal(tanggal)
 }
 
 export async function renderPerbaikanAbsen(user) {
@@ -76,7 +58,7 @@ export async function renderPerbaikanAbsen(user) {
 
         <div class="field">
           <label>Tanggal <span style="color: var(--danger);">*</span></label>
-          <input type="date" id="inputTanggal" onchange="loadJadwalForDate(window.currentUser)"
+          <input type="date" id="inputTanggal" min="${getTodayLokal()}" onchange="onPerbaikanTanggalChange(window.currentUser)"
             style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-md);
               font-size: .85rem; font-family: inherit; outline: none;">
           <div id="infoShiftHariIni" style="font-size: .75rem; color: var(--primary); margin-top: 4px; font-weight: 700;"></div>
@@ -225,6 +207,27 @@ window.updatePerbaikanForm = function () {
   })
 }
 
+window.onPerbaikanTanggalChange = async function (user) {
+  const tanggal = document.getElementById('inputTanggal')?.value
+  const msgEl = document.getElementById('msgStatusBuat')
+  if (msgEl) msgEl.textContent = ''
+
+  if (tanggal) {
+    try {
+      validateTanggalPerbaikan(tanggal)
+    } catch (err) {
+      if (msgEl) {
+        msgEl.style.color = '#dc2626'
+        msgEl.textContent = '⚠ ' + err.message
+      }
+      showToast(err.message, 'warning')
+      return
+    }
+  }
+
+  await loadJadwalForDate(user)
+}
+
 window.loadJadwalForDate = async function (user) {
   const tanggal = document.getElementById('inputTanggal').value
   const infoEl  = document.getElementById('infoShiftHariIni')
@@ -292,7 +295,7 @@ window.submitPerbaikanAbsen = async function (user, ev) {
   if (!jenis)            { msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Jenis perbaikan wajib dipilih'; return }
   if (!keterangan.trim()){ msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Keterangan wajib diisi'; return }
 
-  // Validasi tanggal: tidak boleh mundur
+  // Validasi tanggal: tidak boleh sebelum hari ini
   try {
     validateTanggalPerbaikan(tanggal)
   } catch (err) {

@@ -1,5 +1,12 @@
 import { supabase } from './supabase.js'
-import { getTodayLokal, toTanggalLokal, toTanggalJamLokal } from './timezone.js'
+import {
+  getTodayLokal,
+  getCurrentMonthStartLocal,
+  getNextMonthEndLocal,
+  toTanggalLokal,
+  toTanggalJamLokal,
+  validateLeaveDateRangeLocal
+} from './timezone.js?v=20260609-2'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import {
   STATUS_CUTI_TAHUNAN,
@@ -49,27 +56,8 @@ function validateRentangPengajuan(tanggalMulai, jumlahHari, { allowPast = false 
   const selesai = hitungTanggalSelesai(tanggalMulai, jumlah)
   if (!selesai) throw new Error('Tanggal selesai tidak valid')
 
-  // Validasi tanggal: tidak boleh mundur (ke bulan lalu), maksimal 30 hari ke depan
   if (!allowPast) {
-    const today = parseDateLocal(getTodayLokal())
-    const todayYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-    const tanggalYearMonth = tanggalMulai.substring(0, 7) // YYYY-MM
-
-    // Cek tanggal mundur (sebelum hari ini)
-    if (tanggalMulai < getTodayLokal()) {
-      if (tanggalYearMonth !== todayYearMonth) {
-        throw new Error('❌ Tanggal mulai tidak boleh mundur ke bulan lain. Hanya boleh mundur untuk tanggal di bulan berjalan.')
-      }
-    }
-
-    // Cek maksimal 30 hari ke depan
-    const maxDate = new Date(today)
-    maxDate.setDate(maxDate.getDate() + 30)
-    const maxDateStr = toDateStr(maxDate)
-
-    if (tanggalMulai > maxDateStr) {
-      throw new Error(`❌ Tanggal mulai tidak boleh lebih dari 30 hari ke depan. Maksimal: ${maxDateStr}`)
-    }
+    validateLeaveDateRangeLocal(tanggalMulai, selesai)
   }
 
   return { jumlahHari: jumlah, tanggalMulai, tanggalSelesai: selesai }
@@ -212,7 +200,7 @@ export async function renderPengajuan(user) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field">
           <label><i class="fa fa-calendar"></i> Tanggal Mulai <span class="req">*</span></label>
-          <input type="date" id="tanggalMulai">
+          <input type="date" id="tanggalMulai" min="${getCurrentMonthStartLocal()}" max="${getNextMonthEndLocal()}">
         </div>
         <div class="field">
           <label><i class="fa fa-hashtag"></i> Jumlah Hari <span class="req">*</span></label>
@@ -222,7 +210,7 @@ export async function renderPengajuan(user) {
 
       <div class="field">
         <label><i class="fa fa-calendar-check"></i> Tanggal Selesai</label>
-        <input type="date" id="tanggalSelesai" disabled style="background:var(--gray-100);">
+        <input type="date" id="tanggalSelesai" min="${getCurrentMonthStartLocal()}" max="${getNextMonthEndLocal()}" disabled style="background:var(--gray-100);">
       </div>
 
       <div class="field">
@@ -313,7 +301,17 @@ export async function renderPengajuan(user) {
     const mulai = document.getElementById('tanggalMulai').value
     const jumlah = document.getElementById('jumlahHari').value
     const selesai = hitungTanggalSelesai(mulai, jumlah)
-    if (selesai) document.getElementById('tanggalSelesai').value = selesai
+    const selesaiEl = document.getElementById('tanggalSelesai')
+    if (selesai) selesaiEl.value = selesai
+    else if (selesaiEl) selesaiEl.value = ''
+
+    if (mulai && selesai) {
+      try {
+        validateLeaveDateRangeLocal(mulai, selesai)
+      } catch (err) {
+        showToast(err.message, 'warning')
+      }
+    }
   }
 
   document.getElementById('tanggalMulai').addEventListener('change', window.updateTanggalSelesai)
@@ -392,7 +390,7 @@ export async function renderPengajuan(user) {
 
 
 function renderCutiTahunanAdminSection(rows) {
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayLokal()
   const counts = rows.reduce((acc, row) => {
     acc[row.status] = (acc[row.status] || 0) + 1
     return acc
