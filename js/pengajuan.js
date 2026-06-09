@@ -49,8 +49,18 @@ function validateRentangPengajuan(tanggalMulai, jumlahHari, { allowPast = false 
   const selesai = hitungTanggalSelesai(tanggalMulai, jumlah)
   if (!selesai) throw new Error('Tanggal selesai tidak valid')
 
+  const today = parseDateLocal(getTodayLokal())
   if (!allowPast && tanggalMulai < getTodayLokal()) {
     throw new Error('Tanggal mulai tidak boleh sebelum hari ini')
+  }
+
+  // CEK BATAS 30 HARI KE DEPAN
+  const maxDate = new Date(today)
+  maxDate.setDate(maxDate.getDate() + 30)
+  const maxDateStr = toDateStr(maxDate)
+  
+  if (tanggalMulai > maxDateStr) {
+    throw new Error('Tanggal mulai tidak boleh lebih dari 30 hari ke depan dari hari ini')
   }
 
   return { jumlahHari: jumlah, tanggalMulai, tanggalSelesai: selesai }
@@ -143,7 +153,7 @@ export async function renderPengajuan(user) {
             Masa kerja ${formatMasaKerja(masaKerja)} · Periode ${periode_mulai || '-'} s/d ${periode_selesai || '-'}
           </div>
           <div style="font-size:.8rem;opacity:.82;margin-top:2px;">
-            ${statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF ? '✅ Jatah cuti aktif dan bisa diajukan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE ? '⚠ Jenis kontrak ini tidak mendapatkan cuti tahunan.' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? '⏳ Eligible, menunggu approval HR/admin' : '⚠ Belum ada kontrak aktif untuk cuti tahunan'}
+            ${statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF ? '✅ Jatah cuti aktif dan bisa diajukan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE ? '⚠ Jenis kontrak ini tidak mendapat cuti tahunan' : statusCutiTahunan === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? '⏳ Jatah cuti menunggu approval HR/Admin' : '❌ Belum eligible cuti (masa kerja < 12 bulan)'}
           </div>
         </div>
         <div style="display:flex;gap:20px;text-align:center;">
@@ -384,17 +394,17 @@ function renderCutiTahunanAdminSection(rows) {
     .map(row => {
       const isExpired = row.periode_selesai && row.periode_selesai < today && row.status === STATUS_CUTI_TAHUNAN.AKTIF
       return `
-        <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) repeat(4,minmax(70px,.6fr)) minmax(160px,1fr);gap:8px;align-items:center;padding:10px;border-bottom:1px solid var(--border);font-size:.8rem;">
+        <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) repeat(4,minmax(70px,.6fr)) minmax(160px,1fr);gap:8px;align-items:center;padding:10px;border-bottom:1px solid var(--border);">
           <div><strong>${row.nama || '-'}</strong><div style="color:var(--text-muted);font-size:.72rem;">${row.periode_mulai || '-'} s/d ${row.periode_selesai || '-'}</div></div>
           <div>${row.jatah_cuti || 0}</div>
           <div>${row.cuti_terpakai || 0}</div>
           <div>${row.sisa_cuti || 0}</div>
-          <div><span class="badge ${row.status === STATUS_CUTI_TAHUNAN.AKTIF ? 'badge-green' : [STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK, STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE].includes(row.status) ? 'badge-red' : row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? 'badge-yellow' : 'badge-gray'}">${row.status}</span></div>
+          <div><span class="badge ${row.status === STATUS_CUTI_TAHUNAN.AKTIF ? 'badge-green' : [STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK, STATUS_CUTI_TAHUNAN.TIDAK_ELIGIBLE].includes(row.status) ? 'badge-red' : 'badge-yellow'}">${row.status || '-'}</span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? `<button class="btn-primary btn-sm" onclick="approveJatahCutiTahunanUI('${row.id}')"><i class="fa fa-check"></i> Approve Jatah 12 Hari</button>` : ''}
+            ${row.status === STATUS_CUTI_TAHUNAN.ELIGIBLE_MENUNGGU_APPROVAL_HR ? `<button class="btn-primary btn-sm" onclick="approveJatahCutiTahunanUI('${row.id}')"><i class="fa fa-check"></i> Approve</button>` : ''}
             ${isExpired ? `<button class="btn-danger btn-sm" onclick="prosesHangusCutiTahunanUI('${row.id}')"><i class="fa fa-ban"></i> Proses Hangus</button>` : ''}
-            ${row.status === STATUS_CUTI_TAHUNAN.AKTIF && !isExpired ? `<button class="btn-secondary btn-sm" onclick="showExtendCutiModal('${row.id}')"><i class="fa fa-calendar-plus"></i> Extend Cuti</button>` : ''}
-            ${[STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK].includes(row.status) ? `<button class="btn-secondary btn-sm" onclick="showExtendCutiModal('${row.id}')"><i class="fa fa-calendar-plus"></i> Extend Cuti</button>` : ''}
+            ${row.status === STATUS_CUTI_TAHUNAN.AKTIF && !isExpired ? `<button class="btn-secondary btn-sm" onclick="showExtendCutiModal('${row.id}')"><i class="fa fa-calendar-plus"></i> Extend</button>` : ''}
+            ${[STATUS_CUTI_TAHUNAN.HANGUS, STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK].includes(row.status) ? `<button class="btn-secondary btn-sm" onclick="showExtendCutiModal('${row.id}')"><i class="fa fa-calendar-plus"></i> Extend</button>` : ''}
             ${row.approved_at ? `<span style="color:var(--text-muted);font-size:.72rem;">Approve: ${toTanggalLokal(row.approved_at)}</span>` : ''}
             ${row.expired_at ? `<span style="color:var(--danger);font-size:.72rem;">Hangus: ${row.sisa_cuti_hangus || 0} hari</span>` : ''}
           </div>
@@ -414,7 +424,7 @@ function renderCutiTahunanAdminSection(rows) {
         <div class="card" style="padding:10px;background:#fff1f2;"><div style="font-size:.7rem;color:var(--text-muted);font-weight:800;">Expired Kontrak</div><strong>${counts[STATUS_CUTI_TAHUNAN.EXPIRED_KONTRAK] || 0}</strong></div>
       </div>
       <div style="overflow:auto;border:1px solid var(--border);border-radius:12px;">
-        <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) repeat(4,minmax(70px,.6fr)) minmax(160px,1fr);gap:8px;padding:10px;background:var(--gray-50);font-size:.72rem;font-weight:900;color:var(--text-muted);text-transform:uppercase;min-width:760px;">
+        <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) repeat(4,minmax(70px,.6fr)) minmax(160px,1fr);gap:8px;padding:10px;background:var(--gray-50);font-size:.72rem;font-weight:600;position:sticky;top:0;z-index:10;">
           <div>Karyawan / Periode</div><div>Jatah</div><div>Terpakai</div><div>Sisa</div><div>Status</div><div>Aksi / Riwayat</div>
         </div>
         <div style="min-width:760px;">${[
