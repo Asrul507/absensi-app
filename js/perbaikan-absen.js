@@ -23,6 +23,7 @@ import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal, vali
 import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
+import { buildAttendanceDateTime, recalculateAttendanceStatus, STATUS_ABSENSI, STATUS_KEHADIRAN } from './attendance-approval.js'
 
 function validateTanggalPerbaikan(tanggal) {
   return validateCorrectionDateLocal(tanggal)
@@ -36,6 +37,39 @@ function canApprovePerbaikan(user = window.currentUser) {
 
 function setPerbaikanApprovalButtons(id, disabled) {
   document.querySelectorAll(`button[onclick*="${id}"]`).forEach(btn => { btn.disabled = disabled })
+}
+
+
+async function getShiftInfoForCorrection(req, absensi = {}) {
+  const code = absensi.shift_code || req.shift_baru
+  if (code) {
+    const shift = await getShiftDetailByCode(code)
+    if (shift) return shift
+  }
+
+  if (absensi.jam_jadwal_masuk || absensi.jam_jadwal_pulang) {
+    return {
+      jam_masuk: absensi.jam_jadwal_masuk || null,
+      jam_pulang: absensi.jam_jadwal_pulang || null
+    }
+  }
+
+  if (req.user_id && req.tanggal) {
+    const { data: jadwal } = await supabase
+      .from('jadwal')
+      .select('shift_code')
+      .eq('user_id', req.user_id)
+      .eq('tanggal', req.tanggal)
+      .maybeSingle()
+    if (jadwal?.shift_code) return getShiftDetailByCode(jadwal.shift_code)
+  }
+
+  return null
+}
+
+function nextAttendanceApprovalStatus(row, hasCompletePair) {
+  if (row?.status_absensi === STATUS_ABSENSI.COMPLETE) return STATUS_ABSENSI.COMPLETE
+  return hasCompletePair ? STATUS_ABSENSI.COMPLETE : STATUS_ABSENSI.OPEN
 }
 
 async function findAbsensiByUserOrNama(req, select = 'id') {
@@ -607,20 +641,29 @@ window.confirmApprovePerbaikan = async function (id, catatan, actionButton = nul
     // ── CABANG: LUPA MASUK ──────────────────────────────────────────────────
     if (req.jenis === 'lupa_masuk' && req.jam_masuk) {
       // Konversi "HH:MM" + tanggal → ISO timestamp (asumsi WIB UTC+7)
-      const waktuMasukISO = buildTimestampLokal(req.tanggal, req.jam_masuk)
+      const shiftInfo = await getShiftInfoForCorrection(req, {})
+      const waktuMasukISO = buildAttendanceDateTime(req.tanggal, req.jam_masuk, { jamMasukJadwal: shiftInfo?.jam_masuk, jamPulangJadwal: shiftInfo?.jam_pulang }) || buildTimestampLokal(req.tanggal, req.jam_masuk)
 
       // Cek apakah baris absensi hari itu sudah ada
-      const existingAbsen = await findAbsensiByUserOrNama(req, 'id, waktu_pulang')
+      const existingAbsen = await findAbsensiByUserOrNama(req, 'id, status_absensi, waktu_masuk, waktu_pulang, shift_code, jam_jadwal_masuk, jam_jadwal_pulang, status_masuk, menit_terlambat')
 
       if (existingAbsen) {
         // Sudah ada baris → update waktu_masuk dan status
+        const existingShift = await getShiftInfoForCorrection(req, existingAbsen)
+        const nextRow = { ...existingAbsen, waktu_masuk: waktuMasukISO }
+        const recalculated = recalculateAttendanceStatus(nextRow, existingShift || {})
         const { error: updErr } = await supabase
           .from('absensi')
           .update({
-            waktu_masuk:     waktuMasukISO,
-            status_absensi:  existingAbsen.waktu_pulang ? 'COMPLETE' : 'OPEN',
-            status_kehadiran: existingAbsen.waktu_pulang ? 'HADIR' : 'MENUNGGU_VERIFIKASI',
-            status_masuk:    'Manual'
+            waktu_masuk:          waktuMasukISO,
+            status_absensi:       nextAttendanceApprovalStatus(existingAbsen, Boolean(waktuMasukISO && existingAbsen.waktu_pulang)),
+            status_kehadiran:     recalculated.status_kehadiran,
+            status_pulang:        recalculated.status_pulang,
+            menit_pulang_cepat:   recalculated.menit_pulang_cepat,
+            status_masuk:         'Manual',
+            jam_jadwal_masuk:     existingShift?.jam_masuk || existingAbsen.jam_jadwal_masuk || null,
+            jam_jadwal_pulang:    existingShift?.jam_pulang || existingAbsen.jam_jadwal_pulang || null,
+            shift_code:           existingAbsen.shift_code || existingShift?.code || null
           })
           .eq('id', existingAbsen.id)
 
@@ -635,9 +678,12 @@ window.confirmApprovePerbaikan = async function (id, catatan, actionButton = nul
             nama:           req.nama,
             tanggal:        req.tanggal,
             waktu_masuk:    waktuMasukISO,
-            status_absensi: 'OPEN',
-            status_kehadiran: 'MENUNGGU_VERIFIKASI',
-            status_masuk:   'Manual'
+            status_absensi: STATUS_ABSENSI.OPEN,
+            status_kehadiran: STATUS_KEHADIRAN.MENUNGGU_VERIFIKASI,
+            status_masuk:   'Manual',
+            jam_jadwal_masuk: shiftInfo?.jam_masuk || null,
+            jam_jadwal_pulang: shiftInfo?.jam_pulang || null,
+            shift_code: shiftInfo?.code || null
           }])
 
         if (insErr) throw new Error('Gagal insert absensi baru: ' + insErr.message)
@@ -646,19 +692,25 @@ window.confirmApprovePerbaikan = async function (id, catatan, actionButton = nul
 
     // ── CABANG: LUPA PULANG ─────────────────────────────────────────────────
     if (req.jenis === 'lupa_pulang' && req.jam_pulang) {
-      const waktuPulangISO = buildTimestampLokal(req.tanggal, req.jam_pulang)
+      const existingAbsen = await findAbsensiByUserOrNama(req, 'id, status_absensi, waktu_masuk, waktu_pulang, shift_code, jam_jadwal_masuk, jam_jadwal_pulang, status_masuk, menit_terlambat')
+      const shiftInfo = await getShiftInfoForCorrection(req, existingAbsen || {})
+      const waktuPulangISO = buildAttendanceDateTime(req.tanggal, req.jam_pulang, { jamMasukJadwal: shiftInfo?.jam_masuk || existingAbsen?.jam_jadwal_masuk, jamPulangJadwal: shiftInfo?.jam_pulang || existingAbsen?.jam_jadwal_pulang }) || buildTimestampLokal(req.tanggal, req.jam_pulang)
 
       // Cari baris absensi yang sudah ada (harus ada karena sudah masuk)
-      const existingAbsen = await findAbsensiByUserOrNama(req, 'id')
-
       if (existingAbsen) {
+        const nextRow = { ...existingAbsen, waktu_pulang: waktuPulangISO }
+        const recalculated = recalculateAttendanceStatus(nextRow, shiftInfo || {})
         const { error: updErr } = await supabase
           .from('absensi')
           .update({
-            waktu_pulang:   waktuPulangISO,
-            status_absensi: 'COMPLETE',
-            status_kehadiran: 'HADIR',
-            status_pulang:  'Manual'
+            waktu_pulang:        waktuPulangISO,
+            status_absensi:      nextAttendanceApprovalStatus(existingAbsen, Boolean(existingAbsen.waktu_masuk && waktuPulangISO)),
+            status_kehadiran:    recalculated.status_kehadiran,
+            status_pulang:       recalculated.status_pulang,
+            menit_pulang_cepat:  recalculated.menit_pulang_cepat,
+            jam_jadwal_masuk:    shiftInfo?.jam_masuk || existingAbsen.jam_jadwal_masuk || null,
+            jam_jadwal_pulang:   shiftInfo?.jam_pulang || existingAbsen.jam_jadwal_pulang || null,
+            shift_code:          existingAbsen.shift_code || shiftInfo?.code || null
           })
           .eq('id', existingAbsen.id)
 
@@ -673,9 +725,12 @@ window.confirmApprovePerbaikan = async function (id, catatan, actionButton = nul
             nama:           req.nama,
             tanggal:        req.tanggal,
             waktu_pulang:   waktuPulangISO,
-            status_absensi: 'OPEN',
-            status_kehadiran: 'MENUNGGU_VERIFIKASI',
-            status_pulang:  'Manual'
+            status_absensi: STATUS_ABSENSI.OPEN,
+            status_kehadiran: STATUS_KEHADIRAN.LUPA_ABSEN_MASUK,
+            status_pulang:  'Manual',
+            jam_jadwal_masuk: shiftInfo?.jam_masuk || null,
+            jam_jadwal_pulang: shiftInfo?.jam_pulang || null,
+            shift_code: shiftInfo?.code || null
           }])
 
         if (insErr) throw new Error('Gagal insert absensi baru (pulang): ' + insErr.message)

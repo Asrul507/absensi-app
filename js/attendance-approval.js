@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { toJamLokal, getDurasiMenit, buildTimestampLokal, toTanggalJamLokal } from './timezone.js'
+import { getShiftDetailByCode } from './shift-resolver.js'
 import { getServerTimeIso } from './server-time.js'
 
 export const STATUS_ABSENSI = {
@@ -63,12 +64,90 @@ export function buildPendingAttendanceFields(radiusStatus = RADIUS_STATUS.VALID,
   }
 }
 
+function timeToMinutes(value) {
+  const [h, m] = String(value || '').slice(0, 5).split(':').map(Number)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null
+  return h * 60 + m
+}
+
+function isShiftCrossDay(jamMasukJadwal = null, jamPulangJadwal = null) {
+  const startMinutes = timeToMinutes(jamMasukJadwal)
+  const endMinutes = timeToMinutes(jamPulangJadwal)
+  return startMinutes !== null && endMinutes !== null && endMinutes <= startMinutes
+}
+
+function minutesOnShiftDay(timeValue, jamMasukJadwal = null, jamPulangJadwal = null) {
+  const minutes = timeToMinutes(timeValue)
+  const startMinutes = timeToMinutes(jamMasukJadwal)
+  if (minutes === null) return null
+  if (isShiftCrossDay(jamMasukJadwal, jamPulangJadwal) && startMinutes !== null && minutes < startMinutes) return minutes + 1440
+  return minutes
+}
+
+export function buildAttendanceDateTime(tanggal, jamInput, { jamMasukJadwal = null, jamPulangJadwal = null } = {}) {
+  if (!tanggal || !jamInput) return null
+  const [y, m, d] = String(tanggal).split('-').map(Number)
+  const normalizedJam = String(jamInput).trim().slice(0, 5)
+  if (!y || !m || !d || !/^\d{2}:\d{2}$/.test(normalizedJam)) return null
+
+  const date = new Date(y, m - 1, d)
+  const inputMinutes = timeToMinutes(normalizedJam)
+  const startMinutes = timeToMinutes(jamMasukJadwal)
+  if (isShiftCrossDay(jamMasukJadwal, jamPulangJadwal) && inputMinutes !== null && startMinutes !== null && inputMinutes < startMinutes) {
+    date.setDate(date.getDate() + 1)
+  }
+
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return buildTimestampLokal(`${yyyy}-${mm}-${dd}`, normalizedJam)
+}
+
+export function recalculateAttendanceStatus(row = {}, shiftInfo = {}) {
+  const waktuMasuk = row.waktu_masuk || null
+  const waktuPulang = row.waktu_pulang || null
+  const jamMasukJadwal = shiftInfo?.jam_masuk || row.jam_jadwal_masuk || null
+  const jamPulangJadwal = shiftInfo?.jam_pulang || row.jam_jadwal_pulang || null
+
+  if (!waktuMasuk && waktuPulang) {
+    return {
+      status_kehadiran: STATUS_KEHADIRAN.LUPA_ABSEN_MASUK,
+      status_pulang: row.status_pulang || 'Manual',
+      menit_pulang_cepat: Number(row.menit_pulang_cepat || 0)
+    }
+  }
+
+  if (waktuMasuk && !waktuPulang) {
+    return {
+      status_kehadiran: STATUS_KEHADIRAN.LUPA_ABSEN_PULANG,
+      status_pulang: null,
+      menit_pulang_cepat: 0
+    }
+  }
+
+  if (!waktuMasuk && !waktuPulang) {
+    return {
+      status_kehadiran: STATUS_KEHADIRAN.MENUNGGU_VERIFIKASI,
+      status_pulang: null,
+      menit_pulang_cepat: 0
+    }
+  }
+
+  const actualPulangMinutes = minutesOnShiftDay(toJamLokal(waktuPulang), jamMasukJadwal, jamPulangJadwal)
+  const targetPulangMinutes = minutesOnShiftDay(jamPulangJadwal, jamMasukJadwal, jamPulangJadwal)
+  const minutesEarly = actualPulangMinutes !== null && targetPulangMinutes !== null
+    ? Math.max(0, targetPulangMinutes - actualPulangMinutes)
+    : 0
+
+  return {
+    status_kehadiran: minutesEarly > 0 ? STATUS_KEHADIRAN.PULANG_CEPAT : STATUS_KEHADIRAN.HADIR,
+    status_pulang: minutesEarly > 0 ? 'Pulang Cepat' : 'Selesai',
+    menit_pulang_cepat: minutesEarly
+  }
+}
+
 export function calculateFinalAttendanceStatus(row = {}) {
-  if (!row.waktu_masuk && row.waktu_pulang) return STATUS_KEHADIRAN.LUPA_ABSEN_MASUK
-  if (row.waktu_masuk && !row.waktu_pulang) return STATUS_KEHADIRAN.LUPA_ABSEN_PULANG
-  if (row.menit_pulang_cepat && Number(row.menit_pulang_cepat) > 0) return STATUS_KEHADIRAN.PULANG_CEPAT
-  if (row.status_masuk === 'Terlambat' || Number(row.menit_terlambat || 0) > 0) return STATUS_KEHADIRAN.TERLAMBAT
-  return STATUS_KEHADIRAN.HADIR
+  return recalculateAttendanceStatus(row).status_kehadiran
 }
 
 export function formatAttendanceStatus(status) {
@@ -222,23 +301,41 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
   const masuk = document.getElementById(`editMasuk-${id}`)?.value || null
   const pulang = document.getElementById(`editPulang-${id}`)?.value || null
   const serverIso = await getServerTimeIso()
+
+  const { data: currentRow, error: currentError } = await supabase
+    .from('absensi')
+    .select('*')
+    .eq('id', id)
+    .eq('status_absensi', STATUS_ABSENSI.OPEN)
+    .maybeSingle()
+  if (currentError) { alert('Gagal memuat absensi: ' + currentError.message); setAttendanceApprovalButtons(id, false); return }
+  if (!currentRow) { alert('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
+
+  const nextRow = { ...currentRow }
+  if (masuk) nextRow.waktu_masuk = localInputToMakassarIso(masuk)
+  if (pulang) nextRow.waktu_pulang = localInputToMakassarIso(pulang)
+
+  const shiftInfo = currentRow.shift_code ? await getShiftDetailByCode(currentRow.shift_code) : null
+  const recalculated = recalculateAttendanceStatus(nextRow, shiftInfo || {})
   const payload = {
     status_absensi: STATUS_ABSENSI.COMPLETE,
-    status_kehadiran: finalStatus || STATUS_KEHADIRAN.HADIR,
+    status_kehadiran: recalculated.status_kehadiran,
+    status_pulang: recalculated.status_pulang,
+    menit_pulang_cepat: recalculated.menit_pulang_cepat,
     approved_by: window.currentUser?.id || null,
     approved_at: serverIso,
     approval_note: note || null
   }
-  if (masuk) payload.waktu_masuk = localInputToMakassarIso(masuk)
-  if (pulang) payload.waktu_pulang = localInputToMakassarIso(pulang)
+  if (nextRow.waktu_masuk !== currentRow.waktu_masuk) payload.waktu_masuk = nextRow.waktu_masuk
+  if (nextRow.waktu_pulang !== currentRow.waktu_pulang) payload.waktu_pulang = nextRow.waktu_pulang
 
-  console.log('[APPROVAL ABSENSI] before approve update', { id, payload })
+  console.log('[APPROVAL ABSENSI] before approve update', { id, payload, ignoredManualFinalStatus: finalStatus })
   const updateResult = await supabase
     .from('absensi')
     .update(payload)
     .eq('id', id)
     .eq('status_absensi', STATUS_ABSENSI.OPEN)
-    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang')
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang,status_pulang,menit_pulang_cepat')
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve update response', updateResult)
 
@@ -247,7 +344,7 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
 
   const verifyResult = await supabase
     .from('absensi')
-    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang')
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang,status_pulang,menit_pulang_cepat')
     .eq('id', id)
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve verify from DB', verifyResult)
