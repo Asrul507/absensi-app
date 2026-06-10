@@ -61,14 +61,28 @@ async function muatLogAbsensi(user) {
   const tglSelesai = document.getElementById('filterSelesai').value
 
   try {
-    const { data: listAbsen, error } = await supabase
+    let query = supabase
       .from('absensi')
       .select('*')
-      .eq('nama', user.nama_lengkap)
+      .eq('user_id', user.id)
       .eq('status_absensi', 'COMPLETE')
       .gte('tanggal', tglMulai)
       .lte('tanggal', tglSelesai)
       .order('tanggal', { ascending: false })
+
+    let { data: listAbsen, error } = await query
+    if (!error && (!listAbsen || listAbsen.length === 0) && user.nama_lengkap) {
+      const legacy = await supabase
+        .from('absensi')
+        .select('*')
+        .eq('nama', user.nama_lengkap)
+        .eq('status_absensi', 'COMPLETE')
+        .gte('tanggal', tglMulai)
+        .lte('tanggal', tglSelesai)
+        .order('tanggal', { ascending: false })
+      listAbsen = legacy.data
+      error = legacy.error
+    }
 
     if (error) {
       if (String(error.message || '').includes('status_absensi')) {

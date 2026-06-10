@@ -129,7 +129,7 @@ export function toTanggalPanjangLokal(isoStr) {
     const d = parseAbsensiTimestamp(isoStr)
     if (!d) return '-'
 
-    const parts = new Intl.DateTimeFormat(LOCALE_ID, {
+    return new Intl.DateTimeFormat(LOCALE_ID, {
       timeZone: TZ_NAME,
       weekday: 'long',
       day: 'numeric',
@@ -287,16 +287,15 @@ export function getNextMonthEndLocal(todayValue = getTodayLokal()) {
 export function isAllowedLeaveDate(tanggal, todayValue = getTodayLokal()) {
   const selected = parseDateOnlyLocal(tanggal)
   const minDate = getCurrentMonthStartLocal(todayValue)
-  const maxDate = getNextMonthEndLocal(todayValue)
-  if (!selected || !minDate || !maxDate) return false
-  return selected.value >= minDate && selected.value <= maxDate
+  if (!selected || !minDate) return false
+  return selected.value >= minDate
 }
 
 export function isAllowedCorrectionDate(tanggal, todayValue = getTodayLokal()) {
   const selected = parseDateOnlyLocal(tanggal)
   const today = parseDateOnlyLocal(todayValue)
   if (!selected || !today) return false
-  return selected.value >= today.value
+  return selected.value <= today.value
 }
 
 export function validateLeaveDateRangeLocal(tanggalMulai, tanggalSelesai, todayValue = getTodayLokal()) {
@@ -307,15 +306,10 @@ export function validateLeaveDateRangeLocal(tanggalMulai, tanggalSelesai, todayV
   if (end.value < start.value) throw new Error('Tanggal selesai tidak boleh sebelum tanggal mulai.')
 
   const minDate = getCurrentMonthStartLocal(todayValue)
-  const maxDate = getNextMonthEndLocal(todayValue)
-  if (!minDate || !maxDate) throw new Error('Tanggal lokal aplikasi tidak valid.')
+  if (!minDate) throw new Error('Tanggal lokal aplikasi tidak valid.')
 
   if (start.value < minDate || end.value < minDate) {
     throw new Error('Pengajuan tidak boleh untuk bulan sebelumnya.')
-  }
-
-  if (start.value > maxDate || end.value > maxDate) {
-    throw new Error('Pengajuan hanya boleh untuk bulan berjalan atau bulan setelahnya.')
   }
 
   return true
@@ -326,8 +320,8 @@ export function validateCorrectionDateLocal(tanggal, todayValue = getTodayLokal(
   if (!selected) throw new Error('Tanggal wajib diisi atau formatnya tidak valid')
   const today = parseDateOnlyLocal(todayValue)
   if (!today) throw new Error('Tanggal lokal aplikasi tidak valid.')
-  if (selected.value < today.value) {
-    throw new Error('Perbaikan absen tidak boleh untuk tanggal sebelum hari ini.')
+  if (selected.value > today.value) {
+    throw new Error('Perbaikan absen tidak boleh untuk tanggal setelah hari ini. Untuk kebutuhan perubahan jadwal masa depan, hubungi admin/HRD.')
   }
   return true
 }

@@ -2,11 +2,10 @@ import { supabase } from './supabase.js'
 import {
   getTodayLokal,
   getCurrentMonthStartLocal,
-  getNextMonthEndLocal,
   toTanggalLokal,
   toTanggalJamLokal,
   validateLeaveDateRangeLocal
-} from './timezone.js?v=20260609-2'
+} from './timezone.js?v=20260609-6'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import {
   STATUS_CUTI_TAHUNAN,
@@ -14,86 +13,21 @@ import {
   approveJatahCutiTahunan,
   canManageCutiTahunan,
   deductCutiTahunanOnApproval,
+  ensureTidakAdaPengajuanBentrok,
   extendCutiTahunan,
   formatMasaKerja,
   getOrCreateCutiTahunan,
   getSisaCuti,
   hitungMasaKerja,
+  hitungTanggalSelesai,
   prosesHangusCutiTahunan,
-  syncEligibleCutiTahunanForProfiles
-} from './cuti.js'
+  syncEligibleCutiTahunanForProfiles,
+  toDateStr,
+  validatePengajuanRequest,
+  validateRentangPengajuan
+} from './services/leave-service.js'
 import { showToast, setButtonLoading } from './feedback.js'
 
-function toDateStr(value) {
-  const d = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(d.getTime())) return null
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-/* ===============================================================
-   HITUNG TANGGAL SELESAI
-   FIX: ganti toISOString() → toDateStr() agar tidak geser 1 hari
-=============================================================== */
-
-function parseDateLocal(value) {
-  if (!value) return null
-  const [y, m, d] = String(value).split('-').map(Number)
-  if (!y || !m || !d) return null
-  const date = new Date(y, m - 1, d)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
-function validateRentangPengajuan(tanggalMulai, jumlahHari, { allowPast = false } = {}) {
-  const jumlah = Number.parseInt(jumlahHari, 10)
-  if (!Number.isFinite(jumlah) || jumlah < 1) throw new Error('Jumlah hari tidak valid')
-
-  const mulaiDate = parseDateLocal(tanggalMulai)
-  if (!mulaiDate) throw new Error('Tanggal mulai wajib diisi atau formatnya tidak valid')
-
-  const selesai = hitungTanggalSelesai(tanggalMulai, jumlah)
-  if (!selesai) throw new Error('Tanggal selesai tidak valid')
-
-  if (!allowPast) {
-    validateLeaveDateRangeLocal(tanggalMulai, selesai)
-  }
-
-  return { jumlahHari: jumlah, tanggalMulai, tanggalSelesai: selesai }
-}
-
-async function ensureTidakAdaPengajuanBentrok(userId, tanggalMulai, tanggalSelesai, excludeId = null) {
-  let query = supabase
-    .from('pengajuan')
-    .select('id, jenis, status, tanggal_mulai, tanggal_selesai')
-    .eq('user_id', userId)
-    .in('status', ['pending', 'approved'])
-    .lte('tanggal_mulai', tanggalSelesai)
-    .gte('tanggal_selesai', tanggalMulai)
-    .limit(1)
-
-  if (excludeId) query = query.neq('id', excludeId)
-
-  const { data, error } = await query
-  if (error) throw error
-  if (data?.length) {
-    const bentrok = data[0]
-    throw new Error(`Tanggal bentrok dengan pengajuan ${bentrok.jenis} (${bentrok.status}) pada ${bentrok.tanggal_mulai} s/d ${bentrok.tanggal_selesai}.`)
-  }
-}
-
-function hitungTanggalSelesai(startDate, hari) {
-  if (!startDate || !hari) return null
-  const [y, m, d] = String(startDate).split('-').map(Number)
-  if (!y || !m || !d) return null
-  const date = new Date(y, m - 1, d)
-  if (Number.isNaN(date.getTime())) return null
-  const jmlHari = Number.parseInt(hari, 10)
-  if (!Number.isFinite(jmlHari) || jmlHari < 1) return null
-  date.setDate(date.getDate() + (jmlHari - 1))
-  return toDateStr(date)
-}
 
 export async function renderPengajuan(user) {
   const content = document.getElementById('content')
@@ -200,7 +134,7 @@ export async function renderPengajuan(user) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field">
           <label><i class="fa fa-calendar"></i> Tanggal Mulai <span class="req">*</span></label>
-          <input type="date" id="tanggalMulai" min="${getCurrentMonthStartLocal()}" max="${getNextMonthEndLocal()}">
+          <input type="date" id="tanggalMulai" min="${getCurrentMonthStartLocal()}">
         </div>
         <div class="field">
           <label><i class="fa fa-hashtag"></i> Jumlah Hari <span class="req">*</span></label>
@@ -210,7 +144,7 @@ export async function renderPengajuan(user) {
 
       <div class="field">
         <label><i class="fa fa-calendar-check"></i> Tanggal Selesai</label>
-        <input type="date" id="tanggalSelesai" min="${getCurrentMonthStartLocal()}" max="${getNextMonthEndLocal()}" disabled style="background:var(--gray-100);">
+        <input type="date" id="tanggalSelesai" min="${getCurrentMonthStartLocal()}" disabled style="background:var(--gray-100);">
       </div>
 
       <div class="field">
@@ -273,6 +207,18 @@ export async function renderPengajuan(user) {
     const jenis = document.getElementById('jenis').value
     const infoEl = document.getElementById('infoEligible')
     const msgEl = document.getElementById('infoEligibleMsg')
+    const mulaiEl = document.getElementById('tanggalMulai')
+    const selesaiEl = document.getElementById('tanggalSelesai')
+
+    if (mulaiEl && selesaiEl) {
+      if (jenis === 'cuti' && periode_selesai) {
+        mulaiEl.max = periode_selesai
+        selesaiEl.max = periode_selesai
+      } else {
+        mulaiEl.removeAttribute('max')
+        selesaiEl.removeAttribute('max')
+      }
+    }
 
     if (jenis === 'cuti') {
       if (statusCutiTahunan !== STATUS_CUTI_TAHUNAN.AKTIF) {
@@ -288,7 +234,11 @@ export async function renderPengajuan(user) {
         infoEl.className = 'alert warning'
         msgEl.textContent = `Sisa cuti Anda ${sisa} hari. Pengajuan cuti tidak bisa dikirim.`
       } else {
-        infoEl.style.display = 'none'
+        infoEl.style.display = 'flex'
+        infoEl.className = 'alert info'
+        msgEl.textContent = periode_selesai
+          ? `Cuti dapat diajukan sampai tanggal expire cuti ${periode_selesai}.`
+          : 'Cuti dapat diajukan selama saldo dan periode cuti masih aktif.'
       }
     } else {
       infoEl.style.display = 'none'
@@ -308,6 +258,10 @@ export async function renderPengajuan(user) {
     if (mulai && selesai) {
       try {
         validateLeaveDateRangeLocal(mulai, selesai)
+        const jenis = document.getElementById('jenis')?.value
+        if (jenis === 'cuti' && periode_selesai && selesai > periode_selesai) {
+          throw new Error(`Pengajuan cuti tidak boleh melewati tanggal expire cuti (${periode_selesai}).`)
+        }
       } catch (err) {
         showToast(err.message, 'warning')
       }
@@ -327,8 +281,7 @@ export async function renderPengajuan(user) {
 
     let rentang
     try {
-      rentang = validateRentangPengajuan(tanggalMulaiInput, jumlahHariInput)
-      await ensureTidakAdaPengajuanBentrok(user.id, rentang.tanggalMulai, rentang.tanggalSelesai)
+      rentang = await validatePengajuanRequest({ userId: user.id, jenis, tanggalMulai: tanggalMulaiInput, jumlahHari: jumlahHariInput })
     } catch (err) {
       showToast(err.message, 'warning')
       return
@@ -337,14 +290,6 @@ export async function renderPengajuan(user) {
     const jumlahHari = rentang.jumlahHari
     const tanggalMulai = rentang.tanggalMulai
 
-    if (jenis === 'cuti' && statusCutiTahunan !== STATUS_CUTI_TAHUNAN.AKTIF) {
-      showToast('Cuti tahunan belum aktif, kontrak tidak aktif, atau jenis kontrak tidak mendapat cuti tahunan.', 'warning')
-      return
-    }
-    if (jenis === 'cuti' && jumlahHari > sisa) {
-      showToast(`Saldo cuti tidak cukup. Sisa cuti Anda ${sisa} hari.`, 'warning')
-      return
-    }
 
     const btn = document.getElementById('btnSubmit')
     setButtonLoading(btn, true, '<i class="fa fa-spinner fa-spin"></i> Mengirim...')
@@ -453,6 +398,7 @@ window.approveJatahCutiTahunanUI = async function(rowId) {
     if (error) throw error
     await approveJatahCutiTahunan(row, window.currentUser)
     showToast('Jatah cuti tahunan 12 hari berhasil diaktifkan', 'success')
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     renderPengajuan(window.currentUser)
   } catch (err) {
     showToast('Gagal approve jatah cuti: ' + err.message, 'error')
@@ -464,6 +410,7 @@ window.prosesHangusCutiTahunanUI = async function(rowId) {
   try {
     await prosesHangusCutiTahunan(rowId, window.currentUser)
     showToast('Sisa cuti lama berhasil diproses hangus', 'success')
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     renderPengajuan(window.currentUser)
   } catch (err) {
     showToast('Gagal proses hangus: ' + err.message, 'error')
@@ -515,6 +462,7 @@ window.submitExtendCuti = async function(rowId, months, reason, btn) {
     await extendCutiTahunan(rowId, { months, reason }, window.currentUser)
     btn.closest('.modal-overlay')?.remove()
     showToast('Periode cuti berhasil diperpanjang. Sisa cuti tidak berubah.', 'success')
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     renderPengajuan(window.currentUser)
   } catch (err) {
     setButtonLoading(btn, false, 'Simpan Extend')
@@ -556,7 +504,7 @@ window.showApprovalModal = function(id, type) {
         font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
     <div style="display: flex; gap: 10px;">
       <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-secondary" style="flex: 1;">Batal</button>
-      <button onclick="submitApprovalWithComment('${id}', '${type}', document.getElementById('catatanApproval').value); this.parentElement.parentElement.parentElement.remove();" class="${btnColor}" style="flex: 1;">
+      <button onclick="submitApprovalWithComment('${id}', '${type}', document.getElementById('catatanApproval').value, this)" class="${btnColor}" style="flex: 1;">
         ${btnText}
       </button>
     </div>
@@ -583,11 +531,22 @@ window.showApprovalModal = function(id, type) {
      const date = new Date(y, m-1, d)       ← parse sebagai waktu LOKAL
      const tgl = toDateStr(date)            ← format YYYY-MM-DD dari lokal
 =============================================================== */
-window.submitApprovalWithComment = async function(id, type, catatan) {
+function setPengajuanApprovalButtons(id, disabled) {
+  document.querySelectorAll(`button[onclick*="${id}"]`).forEach(btn => { btn.disabled = disabled })
+}
+
+window.submitApprovalWithComment = async function(id, type, catatan, actionButton = null) {
+  if (!canManageCutiTahunan(window.currentUser)) {
+    showToast('Akses approval pengajuan hanya untuk Admin, Super Admin, HR, dan SPV.', 'error')
+    return
+  }
   if (type === 'reject' && !catatan.trim()) {
     showToast('Alasan penolakan wajib diisi', 'warning')
     return
   }
+
+  setPengajuanApprovalButtons(id, true)
+  if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
 
   try {
     if (type === 'approve') {
@@ -596,19 +555,12 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
         .select('*')
         .eq('id', id)
         .eq('status', 'pending')
-        .single()
+        .maybeSingle()
       if (loadError) throw loadError
       if (!pengajuan) throw new Error('Pengajuan tidak ditemukan atau sudah diproses.')
 
       const { user_id, jenis, tanggal_mulai, jumlah_hari } = pengajuan
-      const rentang = validateRentangPengajuan(tanggal_mulai, jumlah_hari, { allowPast: true })
-      await ensureTidakAdaPengajuanBentrok(user_id, rentang.tanggalMulai, rentang.tanggalSelesai, id)
-
-      if (jenis === 'cuti') {
-        const saldo = await getSisaCuti(user_id)
-        if (saldo.status !== STATUS_CUTI_TAHUNAN.AKTIF) throw new Error('Cuti tahunan belum aktif untuk karyawan ini.')
-        if ((Number(saldo.sisa) || 0) < rentang.jumlahHari) throw new Error(`Saldo cuti tidak cukup. Sisa cuti ${saldo.sisa} hari.`)
-      }
+      const rentang = await validatePengajuanRequest({ userId: user_id, jenis, tanggalMulai: tanggal_mulai, jumlahHari: jumlah_hari, excludeId: id, allowPast: true })
 
       const beforeState = { ...pengajuan }
       const approvedAt = new Date().toISOString()
@@ -623,7 +575,7 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
         .eq('id', id)
         .eq('status', 'pending')
         .select('*')
-        .single()
+        .maybeSingle()
       if (approveError) throw approveError
       if (!approvedRow) throw new Error('Pengajuan sudah diproses oleh admin/HR lain.')
 
@@ -692,21 +644,27 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
       await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: afterState })
       showToast('Pengajuan disetujui, jadwal & kuota cuti diperbarui', 'success')
     } else {
-      const { data: beforeReject } = await supabase.from('pengajuan').select('*').eq('id', id).single()
-      await supabase.from('pengajuan').update({
+      const { data: beforeReject, error: beforeRejectError } = await supabase.from('pengajuan').select('*').eq('id', id).eq('status', 'pending').maybeSingle()
+      if (beforeRejectError) throw beforeRejectError
+      if (!beforeReject) throw new Error('Pengajuan tidak ditemukan atau sudah diproses.')
+      const { data: rejectedRow, error: rejectError } = await supabase.from('pengajuan').update({
         status: 'rejected',
         catatan_approval: catatan,
         approved_at: new Date().toISOString()
-      }).eq('id', id).eq('status', 'pending')
+      }).eq('id', id).eq('status', 'pending').select('id').maybeSingle()
+      if (rejectError) throw rejectError
+      if (!rejectedRow) throw new Error('Pengajuan sudah diproses oleh admin/HR lain.')
 
       await logAuditEvent({ action: 'reject', entityType: 'pengajuan', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
       showToast('Pengajuan ditolak', 'info')
     }
 
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     renderPengajuan(window.currentUser)
 
   } catch (err) {
     showToast('Error: ' + err.message, 'error')
+    setPengajuanApprovalButtons(id, false)
   }
 }
 

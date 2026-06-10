@@ -224,7 +224,7 @@ export async function renderAbsensi(user) {
   }
 
   // ── DATA: Ambil absensi hari ini dan jadwal shift ────────────────────────
-  const absen      = await getTodayAbsen(user.nama_lengkap, todayServer, serverNowInitial)
+  const absen      = await getTodayAbsen(user, todayServer, serverNowInitial)
   const todayShift = await getTodayShift(user.id, todayServer, serverNowInitial)
 
   const shiftSpecial = ['CUTI', 'SAKIT', 'IZIN', 'OFF'].includes(todayShift?.nama_shift)
@@ -516,10 +516,18 @@ export async function renderAbsensi(user) {
       if (pendingFields.status_absensi === 'OPEN') {
         const yDate = new Date(`${tanggalServer}T00:00:00+08:00`)
         yDate.setUTCDate(yDate.getUTCDate() - 1)
-        const { data: lastAbsen } = await supabase.from('absensi').select('*')
-          .eq('nama', user.nama_lengkap)
-          .eq('tanggal', yDate.toISOString().split('T')[0])
+        const yTanggal = yDate.toISOString().split('T')[0]
+        let { data: lastAbsen } = await supabase.from('absensi').select('*')
+          .eq('user_id', user.id)
+          .eq('tanggal', yTanggal)
           .maybeSingle()
+        if (!lastAbsen && user.nama_lengkap) {
+          const legacyLast = await supabase.from('absensi').select('*')
+            .eq('nama', user.nama_lengkap)
+            .eq('tanggal', yTanggal)
+            .maybeSingle()
+          lastAbsen = legacyLast.data
+        }
         if (lastAbsen?.waktu_masuk && !lastAbsen?.waktu_pulang) {
           pendingFields.approval_flag = 'PREVIOUS_CHECKOUT_MISSING'
         }

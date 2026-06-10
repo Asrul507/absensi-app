@@ -141,7 +141,7 @@ window.applyRekapFilter = async function (user) {
       let query = supabase.from('absensi').select('*').eq('status_absensi', 'COMPLETE').order('tanggal', { ascending: false })
 
       if (!isAdmin) {
-        query = query.eq('nama', user.nama_lengkap)
+        query = query.eq('user_id', user.id)
       } else if (namaPencarian) {
         // FITUR UTAMA: Filter nama spesifik secara realtime ke database
         query = query.ilike('nama', `%${namaPencarian}%`)

@@ -124,7 +124,7 @@ window.loadRiwayat = async function (user) {
     const status  = document.getElementById('filterStatus')?.value
 
     if (!isAdmin) {
-      query = query.eq('nama', user.nama_lengkap)
+      query = query.eq('user_id', user.id)
     } else if (nama) {
       query = query.ilike('nama', `%${nama}%`)
     }
