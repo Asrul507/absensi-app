@@ -168,7 +168,7 @@ window.applyRekapInOutFilter = async function (user) {
     if (window._selectedRekapKaryawan) {
       query = query.eq('nama', window._selectedRekapKaryawan)
     } else if (!isAdmin) {
-      query = query.eq('nama', user.nama_lengkap)
+      query = query.eq('user_id', user.id)
     }
 
     if (dari) query = query.gte('tanggal', dari)

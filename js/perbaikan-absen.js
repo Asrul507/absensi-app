@@ -19,7 +19,7 @@
  */
 
 import { supabase } from './supabase.js'
-import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal, validateCorrectionDateLocal } from './timezone.js?v=20260609-4'
+import { buildTimestampLokal, toJamLokal, toTanggalJamLokal, getTodayLokal, validateCorrectionDateLocal } from './timezone.js?v=20260609-6'
 import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
@@ -28,10 +28,42 @@ function validateTanggalPerbaikan(tanggal) {
   return validateCorrectionDateLocal(tanggal)
 }
 
+const APPROVER_ROLES_PERBAIKAN = ['admin', 'super_admin', 'spv', 'supervisor']
+
+function canApprovePerbaikan(user = window.currentUser) {
+  return APPROVER_ROLES_PERBAIKAN.includes(user?.role)
+}
+
+function setPerbaikanApprovalButtons(id, disabled) {
+  document.querySelectorAll(`button[onclick*="${id}"]`).forEach(btn => { btn.disabled = disabled })
+}
+
+async function findAbsensiByUserOrNama(req, select = 'id') {
+  if (req.user_id) {
+    const byUser = await supabase
+      .from('absensi')
+      .select(select)
+      .eq('user_id', req.user_id)
+      .eq('tanggal', req.tanggal)
+      .maybeSingle()
+    if (byUser.error) throw byUser.error
+    if (byUser.data) return byUser.data
+  }
+
+  const byName = await supabase
+    .from('absensi')
+    .select(select)
+    .eq('nama', req.nama)
+    .eq('tanggal', req.tanggal)
+    .maybeSingle()
+  if (byName.error) throw byName.error
+  return byName.data || null
+}
+
 export async function renderPerbaikanAbsen(user) {
   const content = document.getElementById('content')
   if (!content) return
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  const isAdmin = canApprovePerbaikan(user)
 
   content.innerHTML = `
     <div class="page-header">
@@ -295,7 +327,7 @@ window.submitPerbaikanAbsen = async function (user, ev) {
   if (!jenis)            { msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Jenis perbaikan wajib dipilih'; return }
   if (!keterangan.trim()){ msgEl.style.color = '#dc2626'; msgEl.textContent = '⚠ Keterangan wajib diisi'; return }
 
-  // Validasi tanggal: tidak boleh untuk tanggal yang sudah lewat.
+  // Validasi tanggal: perbaikan absen tidak boleh untuk tanggal masa depan.
   try {
     validateTanggalPerbaikan(tanggal)
   } catch (err) {
@@ -509,7 +541,7 @@ window.showApprovePerbaikanModal = function (id) {
         font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
     <div style="display: flex; gap: 10px;">
       <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-secondary" style="flex: 1;">Batal</button>
-      <button onclick="confirmApprovePerbaikan('${id}', document.getElementById('catatanPerbaikan').value); this.parentElement.parentElement.parentElement.remove();" class="btn-success" style="flex: 1;">Setujui</button>
+      <button onclick="confirmApprovePerbaikan('${id}', document.getElementById('catatanPerbaikan').value, this)" class="btn-success" style="flex: 1;">Setujui</button>
     </div>
   `
 
@@ -536,20 +568,28 @@ window.showApprovePerbaikanModal = function (id) {
    tanggal absensi menjadi ISO string dengan offset dari titik radius
    agar tersimpan dalam format timestamp yang benar di Supabase.
    ============================================================ */
-window.confirmApprovePerbaikan = async function (id, catatan) {
+window.confirmApprovePerbaikan = async function (id, catatan, actionButton = null) {
+  if (!canApprovePerbaikan()) {
+    showToast('Akses approval perbaikan absen hanya untuk Admin, Super Admin, dan SPV.', 'error')
+    return
+  }
+  setPerbaikanApprovalButtons(id, true)
+  if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   try {
     // 1. Ambil detail request
     const { data: req, error: fetchErr } = await supabase
       .from('perbaikan_absen')
       .select('*')
       .eq('id', id)
-      .single()
+      .eq('status', 'pending')
+      .maybeSingle()
 
-    if (fetchErr || !req) throw new Error('Data request perbaikan tidak ditemukan.')
+    if (fetchErr) throw fetchErr
+    if (!req) throw new Error('Request perbaikan sudah diproses atau tidak lagi berstatus pending.')
 
     // 2. Tandai request sebagai approved
     const beforeState = { ...req }
-    const { error: approveErr } = await supabase
+    const { data: approveData, error: approveErr } = await supabase
       .from('perbaikan_absen')
       .update({
         status:            'approved',
@@ -557,8 +597,12 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
         approved_at:       new Date().toISOString()
       })
       .eq('id', id)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle()
 
     if (approveErr) throw approveErr
+    if (!approveData) throw new Error('Request perbaikan sudah diproses oleh approver lain.')
 
     // ── CABANG: LUPA MASUK ──────────────────────────────────────────────────
     if (req.jenis === 'lupa_masuk' && req.jam_masuk) {
@@ -566,12 +610,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
       const waktuMasukISO = buildTimestampLokal(req.tanggal, req.jam_masuk)
 
       // Cek apakah baris absensi hari itu sudah ada
-      const { data: existingAbsen } = await supabase
-        .from('absensi')
-        .select('id, waktu_pulang')
-        .eq('nama', req.nama)
-        .eq('tanggal', req.tanggal)
-        .maybeSingle()
+      const existingAbsen = await findAbsensiByUserOrNama(req, 'id, waktu_pulang')
 
       if (existingAbsen) {
         // Sudah ada baris → update waktu_masuk dan status
@@ -610,12 +649,7 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
       const waktuPulangISO = buildTimestampLokal(req.tanggal, req.jam_pulang)
 
       // Cari baris absensi yang sudah ada (harus ada karena sudah masuk)
-      const { data: existingAbsen } = await supabase
-        .from('absensi')
-        .select('id')
-        .eq('nama', req.nama)
-        .eq('tanggal', req.tanggal)
-        .maybeSingle()
+      const existingAbsen = await findAbsensiByUserOrNama(req, 'id')
 
       if (existingAbsen) {
         const { error: updErr } = await supabase
@@ -675,11 +709,13 @@ window.confirmApprovePerbaikan = async function (id, catatan) {
       console.warn('Audit approve perbaikan gagal:', auditErr)
     }
     showToast('Request berhasil disetujui dan data absensi diperbarui', 'success')
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     await loadApprovalRequest()
 
   } catch (err) {
     console.error('confirmApprovePerbaikan error:', err)
     showToast('Error saat memproses approval: ' + err.message, 'error')
+    setPerbaikanApprovalButtons(id, false)
   }
 }
 
@@ -706,7 +742,7 @@ window.showRejectModal = function (id) {
         font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
     <div style="display: flex; gap: 10px;">
       <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-secondary" style="flex: 1;">Batal</button>
-      <button onclick="confirmRejectPerbaikan('${id}', document.getElementById('catatan').value); this.parentElement.parentElement.parentElement.remove();" class="btn-danger" style="flex: 1;">Tolak</button>
+      <button onclick="confirmRejectPerbaikan('${id}', document.getElementById('catatan').value, this)" class="btn-danger" style="flex: 1;">Tolak</button>
     </div>
   `
 
@@ -715,12 +751,20 @@ window.showRejectModal = function (id) {
   document.body.appendChild(modal)
 }
 
-window.confirmRejectPerbaikan = async function (id, catatan) {
+window.confirmRejectPerbaikan = async function (id, catatan, actionButton = null) {
+  if (!canApprovePerbaikan()) {
+    showToast('Akses approval perbaikan absen hanya untuk Admin, Super Admin, dan SPV.', 'error')
+    return
+  }
   if (!catatan.trim()) { showToast('Alasan penolakan wajib diisi', 'warning'); return }
+  setPerbaikanApprovalButtons(id, true)
+  if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
 
   try {
-    const { data: beforeReject } = await supabase.from('perbaikan_absen').select('*').eq('id', id).single()
-    const { error } = await supabase
+    const { data: beforeReject, error: beforeRejectErr } = await supabase.from('perbaikan_absen').select('*').eq('id', id).eq('status', 'pending').maybeSingle()
+    if (beforeRejectErr) throw beforeRejectErr
+    if (!beforeReject) throw new Error('Request perbaikan sudah diproses atau tidak lagi berstatus pending.')
+    const { data: rejectData, error } = await supabase
       .from('perbaikan_absen')
       .update({
         status:           'rejected',
@@ -728,8 +772,12 @@ window.confirmRejectPerbaikan = async function (id, catatan) {
         approved_at:      new Date().toISOString()
       })
       .eq('id', id)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle()
 
     if (error) throw error
+    if (!rejectData) throw new Error('Request perbaikan sudah diproses oleh approver lain.')
 
     try {
       await logAuditEvent({ action: 'reject', entityType: 'perbaikan_absen', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
@@ -737,10 +785,12 @@ window.confirmRejectPerbaikan = async function (id, catatan) {
       console.warn('Audit reject perbaikan gagal:', auditErr)
     }
     showToast('Request ditolak', 'success')
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     await loadApprovalRequest()
 
   } catch (err) {
     showToast('Error: ' + err.message, 'error')
+    setPerbaikanApprovalButtons(id, false)
   }
 }
 

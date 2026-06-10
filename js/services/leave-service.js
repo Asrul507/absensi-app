@@ -110,24 +110,45 @@ export async function ensureTidakAdaPengajuanBentrok(userId, tanggalMulai, tangg
   }
 }
 
-export async function validateCutiRequestQuota(userId, jumlahHari, tanggalSelesai = null) {
+export async function getPendingCutiReservedDays(userId, excludeId = null) {
+  let query = supabase
+    .from('pengajuan')
+    .select('id, jumlah_hari')
+    .eq('user_id', userId)
+    .eq('jenis', 'cuti')
+    .eq('status', 'pending')
+
+  if (excludeId) query = query.neq('id', excludeId)
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data || []).reduce((sum, row) => sum + (Number(row.jumlah_hari) || 0), 0)
+}
+
+export async function validateCutiRequestQuota(userId, jumlahHari, tanggalSelesai = null, excludeId = null) {
   const saldo = await getSisaCuti(userId)
   if (saldo.status !== STATUS_CUTI_TAHUNAN.AKTIF) {
     throw new Error('Cuti tahunan belum aktif untuk karyawan ini.')
   }
-  if ((Number(saldo.sisa) || 0) < jumlahHari) {
-    throw new Error(`Saldo cuti tidak cukup. Sisa cuti ${saldo.sisa} hari.`)
+
+  const sisa = Number(saldo.sisa) || 0
+  const pendingReserved = await getPendingCutiReservedDays(userId, excludeId)
+  const availableAfterPending = sisa - pendingReserved
+
+  if (availableAfterPending < jumlahHari) {
+    throw new Error(`Saldo cuti tidak cukup. Sisa cuti ${sisa} hari, sudah di-reserve oleh pengajuan pending ${pendingReserved} hari, tersedia ${Math.max(0, availableAfterPending)} hari.`)
   }
+
   // Cuti mengikuti masa berlaku periode cuti/kontrak. Izin dan sakit tidak dibatasi tanggal expire cuti.
   if (tanggalSelesai && saldo.periode_selesai && tanggalSelesai > saldo.periode_selesai) {
     throw new Error(`Pengajuan cuti tidak boleh melewati tanggal expire cuti (${saldo.periode_selesai}).`)
   }
-  return saldo
+  return { ...saldo, pendingReserved, availableAfterPending }
 }
 
 export async function validatePengajuanRequest({ userId, jenis, tanggalMulai, jumlahHari, excludeId = null, allowPast = false }) {
   const rentang = validateRentangPengajuan(tanggalMulai, jumlahHari, { allowPast })
   await ensureTidakAdaPengajuanBentrok(userId, rentang.tanggalMulai, rentang.tanggalSelesai, excludeId)
-  if (jenis === 'cuti') await validateCutiRequestQuota(userId, rentang.jumlahHari, rentang.tanggalSelesai)
+  if (jenis === 'cuti') await validateCutiRequestQuota(userId, rentang.jumlahHari, rentang.tanggalSelesai, excludeId)
   return rentang
 }

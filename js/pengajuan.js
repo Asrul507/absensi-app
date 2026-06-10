@@ -5,7 +5,7 @@ import {
   toTanggalLokal,
   toTanggalJamLokal,
   validateLeaveDateRangeLocal
-} from './timezone.js?v=20260609-4'
+} from './timezone.js?v=20260609-6'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import {
   STATUS_CUTI_TAHUNAN,
@@ -398,6 +398,7 @@ window.approveJatahCutiTahunanUI = async function(rowId) {
     if (error) throw error
     await approveJatahCutiTahunan(row, window.currentUser)
     showToast('Jatah cuti tahunan 12 hari berhasil diaktifkan', 'success')
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     renderPengajuan(window.currentUser)
   } catch (err) {
     showToast('Gagal approve jatah cuti: ' + err.message, 'error')
@@ -409,6 +410,7 @@ window.prosesHangusCutiTahunanUI = async function(rowId) {
   try {
     await prosesHangusCutiTahunan(rowId, window.currentUser)
     showToast('Sisa cuti lama berhasil diproses hangus', 'success')
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     renderPengajuan(window.currentUser)
   } catch (err) {
     showToast('Gagal proses hangus: ' + err.message, 'error')
@@ -460,6 +462,7 @@ window.submitExtendCuti = async function(rowId, months, reason, btn) {
     await extendCutiTahunan(rowId, { months, reason }, window.currentUser)
     btn.closest('.modal-overlay')?.remove()
     showToast('Periode cuti berhasil diperpanjang. Sisa cuti tidak berubah.', 'success')
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     renderPengajuan(window.currentUser)
   } catch (err) {
     setButtonLoading(btn, false, 'Simpan Extend')
@@ -501,7 +504,7 @@ window.showApprovalModal = function(id, type) {
         font-size: .85rem; font-family: inherit; outline: none; min-height: 100px; margin-bottom: 16px; resize: vertical;"></textarea>
     <div style="display: flex; gap: 10px;">
       <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-secondary" style="flex: 1;">Batal</button>
-      <button onclick="submitApprovalWithComment('${id}', '${type}', document.getElementById('catatanApproval').value); this.parentElement.parentElement.parentElement.remove();" class="${btnColor}" style="flex: 1;">
+      <button onclick="submitApprovalWithComment('${id}', '${type}', document.getElementById('catatanApproval').value, this)" class="${btnColor}" style="flex: 1;">
         ${btnText}
       </button>
     </div>
@@ -528,11 +531,22 @@ window.showApprovalModal = function(id, type) {
      const date = new Date(y, m-1, d)       ← parse sebagai waktu LOKAL
      const tgl = toDateStr(date)            ← format YYYY-MM-DD dari lokal
 =============================================================== */
-window.submitApprovalWithComment = async function(id, type, catatan) {
+function setPengajuanApprovalButtons(id, disabled) {
+  document.querySelectorAll(`button[onclick*="${id}"]`).forEach(btn => { btn.disabled = disabled })
+}
+
+window.submitApprovalWithComment = async function(id, type, catatan, actionButton = null) {
+  if (!canManageCutiTahunan(window.currentUser)) {
+    showToast('Akses approval pengajuan hanya untuk Admin, Super Admin, HR, dan SPV.', 'error')
+    return
+  }
   if (type === 'reject' && !catatan.trim()) {
     showToast('Alasan penolakan wajib diisi', 'warning')
     return
   }
+
+  setPengajuanApprovalButtons(id, true)
+  if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
 
   try {
     if (type === 'approve') {
@@ -541,7 +555,7 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
         .select('*')
         .eq('id', id)
         .eq('status', 'pending')
-        .single()
+        .maybeSingle()
       if (loadError) throw loadError
       if (!pengajuan) throw new Error('Pengajuan tidak ditemukan atau sudah diproses.')
 
@@ -561,7 +575,7 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
         .eq('id', id)
         .eq('status', 'pending')
         .select('*')
-        .single()
+        .maybeSingle()
       if (approveError) throw approveError
       if (!approvedRow) throw new Error('Pengajuan sudah diproses oleh admin/HR lain.')
 
@@ -630,21 +644,27 @@ window.submitApprovalWithComment = async function(id, type, catatan) {
       await logAuditEvent({ action: 'approve', entityType: 'pengajuan', entityId: id, before: beforeState, after: afterState })
       showToast('Pengajuan disetujui, jadwal & kuota cuti diperbarui', 'success')
     } else {
-      const { data: beforeReject } = await supabase.from('pengajuan').select('*').eq('id', id).single()
-      await supabase.from('pengajuan').update({
+      const { data: beforeReject, error: beforeRejectError } = await supabase.from('pengajuan').select('*').eq('id', id).eq('status', 'pending').maybeSingle()
+      if (beforeRejectError) throw beforeRejectError
+      if (!beforeReject) throw new Error('Pengajuan tidak ditemukan atau sudah diproses.')
+      const { data: rejectedRow, error: rejectError } = await supabase.from('pengajuan').update({
         status: 'rejected',
         catatan_approval: catatan,
         approved_at: new Date().toISOString()
-      }).eq('id', id).eq('status', 'pending')
+      }).eq('id', id).eq('status', 'pending').select('id').maybeSingle()
+      if (rejectError) throw rejectError
+      if (!rejectedRow) throw new Error('Pengajuan sudah diproses oleh admin/HR lain.')
 
       await logAuditEvent({ action: 'reject', entityType: 'pengajuan', entityId: id, before: beforeReject || null, after: { ...(beforeReject || {}), status: 'rejected', catatan_approval: catatan } })
       showToast('Pengajuan ditolak', 'info')
     }
 
+    actionButton?.parentElement?.parentElement?.parentElement?.remove()
     renderPengajuan(window.currentUser)
 
   } catch (err) {
     showToast('Error: ' + err.message, 'error')
+    setPengajuanApprovalButtons(id, false)
   }
 }
 

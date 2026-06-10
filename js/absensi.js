@@ -176,55 +176,54 @@ function isOvernightShiftStillActive(shiftKemarin, nowDate = new Date(), todayOv
    fallback ke getShiftDetailByJamMasuk(jam_jadwal_masuk) agar
    shift malam tetap terdeteksi dengan benar.
 =============================================================== */
-export async function getTodayAbsen(nama, todayOverride = null, nowDate = new Date()) {
+export async function getTodayAbsen(userOrName, todayOverride = null, nowDate = new Date()) {
   const today = todayOverride || getTodayLokal()
+  const userId = typeof userOrName === 'object' ? userOrName?.id : null
+  const nama = typeof userOrName === 'object'
+    ? (userOrName?.nama_lengkap || userOrName?.email || '')
+    : userOrName
 
-  // ── FIX SHIFT MALAM: Prioritaskan absensi terbuka dari kemarin ──────────
-  const kemarinStr = addDaysYmd(today, -1)
-
-  const { data: dataKemarin } = await supabase
-    .from('absensi')
-    .select('*')
-    .eq('nama', nama)
-    .eq('tanggal', kemarinStr)
-    .maybeSingle()
-
-  if (dataKemarin?.waktu_masuk && !dataKemarin?.waktu_pulang) {
-    // Ada absensi terbuka kemarin → cek apakah shift-nya masih aktif sekarang
-    let shiftKemarin = await getShiftDetailByCode(
-      dataKemarin.shift_code || dataKemarin.kode_shift
-    )
-
-    // ── PATCH: Fallback ke jam_jadwal_masuk jika shift_code tidak tersimpan ──
-    // Bug terjadi ketika record absensi lama tidak memiliki shift_code (null).
-    // Solusi: lookup shift berdasarkan jam_jadwal_masuk yang selalu tersimpan.
-    if (!shiftKemarin && dataKemarin.jam_jadwal_masuk) {
-      console.log('[SHIFT FALLBACK] shift_code null, lookup via jam_jadwal_masuk:', dataKemarin.jam_jadwal_masuk)
-      shiftKemarin = await getShiftDetailByJamMasuk(dataKemarin.jam_jadwal_masuk)
+  async function fetchAbsensiByDate(tanggal) {
+    if (userId) {
+      const byUser = await supabase
+        .from('absensi')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('tanggal', tanggal)
+        .maybeSingle()
+      if (byUser.error) throw byUser.error
+      if (byUser.data) return byUser.data
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
-    if (isOvernightShiftStillActive(shiftKemarin, nowDate, today)) {
-      console.log('[SHIFT AKTIF] Melanjutkan absensi terbuka dari kemarin:', kemarinStr)
-      return dataKemarin
+    // Fallback aman untuk data lama yang belum memiliki user_id.
+    if (nama) {
+      const byName = await supabase
+        .from('absensi')
+        .select('*')
+        .eq('nama', nama)
+        .eq('tanggal', tanggal)
+        .maybeSingle()
+      if (byName.error) throw byName.error
+      return byName.data || null
     }
-  }
-  // ─────────────────────────────────────────────────────────────────────────
 
-  // Tidak ada shift lintas_hari aktif dari kemarin → ambil data hari ini
-  const { data, error } = await supabase
-    .from('absensi')
-    .select('*')
-    .eq('nama', nama)
-    .eq('tanggal', today)
-    .maybeSingle()
-
-  if (error) {
-    console.error('Error fetch absensi:', error)
     return null
   }
 
-  return data || null
+  const kemarin = getTanggalKemarinLocal(today)
+  const dataKemarin = await fetchAbsensiByDate(kemarin)
+
+  // Jika kemarin adalah shift malam dan belum pulang, gunakan record kemarin.
+  if (dataKemarin && dataKemarin.waktu_masuk && !dataKemarin.waktu_pulang) {
+    const shiftKemarin = dataKemarin.shift_id
+      ? await getShiftById(dataKemarin.shift_id)
+      : await getTodayShift(userId, kemarin)
+    if (isShiftMalam(shiftKemarin) && isStillInNightShiftWindow(shiftKemarin, nowDate)) {
+      return dataKemarin
+    }
+  }
+
+  return fetchAbsensiByDate(today)
 }
 
 /* ===============================================================

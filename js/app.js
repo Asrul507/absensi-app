@@ -18,13 +18,13 @@ import { renderJadwalManagement } from './jadwal.js'
 import { renderRekap } from './rekap.js'
 import { renderRekapInOut } from './rekap-inout.js'
 import { renderDaftarAbsensi } from './daftar-absensi.js'
-import { renderPerbaikanAbsen } from './perbaikan-absen.js?v=20260609-4'
-import { renderPengajuan } from './pengajuan.js?v=20260609-4'
+import { renderPerbaikanAbsen } from './perbaikan-absen.js?v=20260609-6'
+import { renderPengajuan } from './pengajuan.js?v=20260609-6'
 import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan, syncEligibleCutiTahunanForProfiles, buildKontrakPayload, canManageCutiTahunan, formatMasaKontrak, getSisaHariKontrak, getStatusKontrak, hitungKontrakBerakhir, prosesHangusCutiTahunan } from './services/leave-service.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
-import { initTimezone, resetTimezoneCache, getTodayLokal, toTanggalJamLokal } from './timezone.js?v=20260609-4'
+import { initTimezone, resetTimezoneCache, getTodayLokal, toTanggalJamLokal } from './timezone.js?v=20260609-6'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 import { showToast, confirmAction } from './feedback.js'
 import { logAuditEvent } from './audit-trail.js'
@@ -88,14 +88,13 @@ async function checkUser() {
 
     const profile = await getProfile(user.id)
 
-    // Jika akun terdaftar tapi status masih menunggu, bypass ke Aktif
-    if (profile && profile.status_akun === 'Menunggu Verifikasi') {
-      await supabase.from('profiles').update({ status_akun: 'Aktif' }).eq('id', user.id)
-      profile.status_akun = 'Aktif'
+    if (!profile) {
+      await denyInactiveAccount('Profil akun tidak ditemukan. Hubungi HR/admin.')
+      return
     }
 
-    if (!profile) {
-      showLoginPage()
+    if (profile.status_akun !== 'Aktif') {
+      await denyInactiveAccount(`Akun Anda berstatus ${profile.status_akun || 'Tidak Aktif'} dan belum dapat mengakses aplikasi. Hubungi HR/admin.`)
       return
     }
 
@@ -137,6 +136,24 @@ function showLoginPage() {
   const appPage   = document.getElementById('appPage')
   if (loginPage) loginPage.style.display = 'flex'
   if (appPage)   appPage.style.display   = 'none'
+}
+
+async function denyInactiveAccount(message) {
+  window.currentUser = null
+  stopNotificationPolling()
+  try {
+    await supabase.auth.signOut()
+  } catch (err) {
+    console.warn('Gagal signOut akun tidak aktif:', err)
+  }
+  showLoginPage()
+  const loginError = document.getElementById('loginError')
+  if (loginError) {
+    loginError.textContent = '⚠ ' + message
+    loginError.style.display = 'block'
+  } else {
+    showToast(message, 'warning')
+  }
 }
 
 function showAppPage() {
@@ -390,7 +407,7 @@ function renderBottomNav(role) {
     </button>`).join('')
 }
 
-const ADMIN_ROLES = ['admin', 'super_admin', 'hr', 'spv']
+const ADMIN_ROLES = ['admin', 'super_admin', 'hr', 'spv', 'supervisor']
 const STAFF_PAGES = ['dashboard', 'absensi', 'perbaikan-absen', 'pengajuan', 'kalender', 'daftar-absensi', 'rekap-inout', 'rekap', 'profile']
 const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'daftar-absensi', 'rekap-inout', 'rekap', 'laporan-keseluruhan', 'profile']
 

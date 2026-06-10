@@ -320,8 +320,8 @@ export function validateCorrectionDateLocal(tanggal, todayValue = getTodayLokal(
   if (!selected) throw new Error('Tanggal wajib diisi atau formatnya tidak valid')
   const today = parseDateOnlyLocal(todayValue)
   if (!today) throw new Error('Tanggal lokal aplikasi tidak valid.')
-  if (selected.value < today.value) {
-    throw new Error('Perbaikan absen tidak boleh untuk tanggal yang sudah lewat.')
+  if (selected.value > today.value) {
+    throw new Error('Perbaikan absen tidak boleh untuk tanggal setelah hari ini. Untuk kebutuhan perubahan jadwal masa depan, hubungi admin/HRD.')
   }
   return true
 }

@@ -26,7 +26,7 @@ export const RADIUS_STATUS = {
   OUT_RADIUS: 'OUT_RADIUS'
 }
 
-const APPROVER_ROLES = ['admin', 'super_admin', 'spv']
+const APPROVER_ROLES = ['admin', 'super_admin', 'spv', 'supervisor']
 
 export function canApproveAttendance(user = window.currentUser) {
   return APPROVER_ROLES.includes(user?.role)
@@ -198,16 +198,26 @@ window.loadAttendanceApproval = async function () {
         </div>
         <textarea id="note-${row.id}" placeholder="Catatan approval (opsional)" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;min-height:58px;"></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn-primary btn-sm" onclick="window.approveAttendance('${row.id}', '${suggested}')"><i class="fa fa-check"></i> Approve (${suggested.replaceAll('_',' ')})</button>
-          <button class="btn-secondary btn-sm" onclick="window.approveAttendance('${row.id}', 'HADIR')"><i class="fa fa-pen"></i> Perbaiki & Approve</button>
-          <button class="btn-danger btn-sm" onclick="window.rejectAttendance('${row.id}')"><i class="fa fa-times"></i> Reject</button>
+          <button class="btn-primary btn-sm" onclick="window.approveAttendance('${row.id}', '${suggested}', this)"><i class="fa fa-check"></i> Approve (${suggested.replaceAll('_',' ')})</button>
+          <button class="btn-secondary btn-sm" onclick="window.approveAttendance('${row.id}', 'HADIR', this)"><i class="fa fa-pen"></i> Perbaiki & Approve</button>
+          <button class="btn-danger btn-sm" onclick="window.rejectAttendance('${row.id}', this)"><i class="fa fa-times"></i> Reject</button>
         </div>
       </div>`
   }).join('')
 }
 
-window.approveAttendance = async function (id, finalStatus) {
-  if (!canApproveAttendance()) return
+function setAttendanceApprovalButtons(id, disabled) {
+  document.querySelectorAll(`button[onclick*="${id}"]`).forEach(btn => { btn.disabled = disabled })
+}
+
+function denyAttendanceApprovalAccess() {
+  alert('Akses approval absensi hanya untuk Admin, Super Admin, dan SPV.')
+}
+
+window.approveAttendance = async function (id, finalStatus, actionButton = null) {
+  if (!canApproveAttendance()) { denyAttendanceApprovalAccess(); return }
+  setAttendanceApprovalButtons(id, true)
+  if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   const note = document.getElementById(`note-${id}`)?.value || ''
   const masuk = document.getElementById(`editMasuk-${id}`)?.value || null
   const pulang = document.getElementById(`editPulang-${id}`)?.value || null
@@ -227,12 +237,13 @@ window.approveAttendance = async function (id, finalStatus) {
     .from('absensi')
     .update(payload)
     .eq('id', id)
+    .eq('status_absensi', STATUS_ABSENSI.OPEN)
     .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang')
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve update response', updateResult)
 
-  if (updateResult.error) { alert('Gagal approve: ' + updateResult.error.message); return }
-  if (!updateResult.data) { alert('Gagal approve: record absensi tidak ditemukan / tidak ter-update.'); return }
+  if (updateResult.error) { alert('Gagal approve: ' + updateResult.error.message); setAttendanceApprovalButtons(id, false); return }
+  if (!updateResult.data) { alert('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
 
   const verifyResult = await supabase
     .from('absensi')
@@ -241,17 +252,20 @@ window.approveAttendance = async function (id, finalStatus) {
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve verify from DB', verifyResult)
 
-  if (verifyResult.error) { alert('Gagal cek ulang approval: ' + verifyResult.error.message); return }
+  if (verifyResult.error) { alert('Gagal cek ulang approval: ' + verifyResult.error.message); setAttendanceApprovalButtons(id, false); return }
   if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.COMPLETE) {
     alert('Approval belum tersimpan sebagai COMPLETE. Silakan coba lagi.')
+    setAttendanceApprovalButtons(id, false)
     return
   }
 
   await window.loadAttendanceApproval()
 }
 
-window.rejectAttendance = async function (id) {
-  if (!canApproveAttendance()) return
+window.rejectAttendance = async function (id, actionButton = null) {
+  if (!canApproveAttendance()) { denyAttendanceApprovalAccess(); return }
+  setAttendanceApprovalButtons(id, true)
+  if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   const note = document.getElementById(`note-${id}`)?.value || ''
   const serverIso = await getServerTimeIso()
   const payload = {
@@ -266,12 +280,13 @@ window.rejectAttendance = async function (id) {
     .from('absensi')
     .update(payload)
     .eq('id', id)
+    .eq('status_absensi', STATUS_ABSENSI.OPEN)
     .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] reject update response', updateResult)
 
-  if (updateResult.error) { alert('Gagal reject: ' + updateResult.error.message); return }
-  if (!updateResult.data) { alert('Gagal reject: record absensi tidak ditemukan / tidak ter-update.'); return }
+  if (updateResult.error) { alert('Gagal reject: ' + updateResult.error.message); setAttendanceApprovalButtons(id, false); return }
+  if (!updateResult.data) { alert('Reject gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
 
   const verifyResult = await supabase
     .from('absensi')
@@ -280,9 +295,10 @@ window.rejectAttendance = async function (id) {
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] reject verify from DB', verifyResult)
 
-  if (verifyResult.error) { alert('Gagal cek ulang reject: ' + verifyResult.error.message); return }
+  if (verifyResult.error) { alert('Gagal cek ulang reject: ' + verifyResult.error.message); setAttendanceApprovalButtons(id, false); return }
   if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.REJECTED) {
     alert('Reject belum tersimpan sebagai REJECTED. Silakan coba lagi.')
+    setAttendanceApprovalButtons(id, false)
     return
   }
 
