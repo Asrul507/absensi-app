@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { toJamLokal, getDurasiMenit, buildTimestampLokal, toTanggalJamLokal } from './timezone.js'
+import { getShiftDetailByCode } from './shift-resolver.js'
 import { getServerTimeIso } from './server-time.js'
 
 export const STATUS_ABSENSI = {
@@ -26,7 +27,7 @@ export const RADIUS_STATUS = {
   OUT_RADIUS: 'OUT_RADIUS'
 }
 
-const APPROVER_ROLES = ['admin', 'super_admin', 'spv']
+const APPROVER_ROLES = ['admin', 'super_admin', 'spv', 'supervisor']
 
 export function canApproveAttendance(user = window.currentUser) {
   return APPROVER_ROLES.includes(user?.role)
@@ -63,12 +64,90 @@ export function buildPendingAttendanceFields(radiusStatus = RADIUS_STATUS.VALID,
   }
 }
 
+function timeToMinutes(value) {
+  const [h, m] = String(value || '').slice(0, 5).split(':').map(Number)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null
+  return h * 60 + m
+}
+
+function isShiftCrossDay(jamMasukJadwal = null, jamPulangJadwal = null) {
+  const startMinutes = timeToMinutes(jamMasukJadwal)
+  const endMinutes = timeToMinutes(jamPulangJadwal)
+  return startMinutes !== null && endMinutes !== null && endMinutes <= startMinutes
+}
+
+function minutesOnShiftDay(timeValue, jamMasukJadwal = null, jamPulangJadwal = null) {
+  const minutes = timeToMinutes(timeValue)
+  const startMinutes = timeToMinutes(jamMasukJadwal)
+  if (minutes === null) return null
+  if (isShiftCrossDay(jamMasukJadwal, jamPulangJadwal) && startMinutes !== null && minutes < startMinutes) return minutes + 1440
+  return minutes
+}
+
+export function buildAttendanceDateTime(tanggal, jamInput, { jamMasukJadwal = null, jamPulangJadwal = null } = {}) {
+  if (!tanggal || !jamInput) return null
+  const [y, m, d] = String(tanggal).split('-').map(Number)
+  const normalizedJam = String(jamInput).trim().slice(0, 5)
+  if (!y || !m || !d || !/^\d{2}:\d{2}$/.test(normalizedJam)) return null
+
+  const date = new Date(y, m - 1, d)
+  const inputMinutes = timeToMinutes(normalizedJam)
+  const startMinutes = timeToMinutes(jamMasukJadwal)
+  if (isShiftCrossDay(jamMasukJadwal, jamPulangJadwal) && inputMinutes !== null && startMinutes !== null && inputMinutes < startMinutes) {
+    date.setDate(date.getDate() + 1)
+  }
+
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return buildTimestampLokal(`${yyyy}-${mm}-${dd}`, normalizedJam)
+}
+
+export function recalculateAttendanceStatus(row = {}, shiftInfo = {}) {
+  const waktuMasuk = row.waktu_masuk || null
+  const waktuPulang = row.waktu_pulang || null
+  const jamMasukJadwal = shiftInfo?.jam_masuk || row.jam_jadwal_masuk || null
+  const jamPulangJadwal = shiftInfo?.jam_pulang || row.jam_jadwal_pulang || null
+
+  if (!waktuMasuk && waktuPulang) {
+    return {
+      status_kehadiran: STATUS_KEHADIRAN.LUPA_ABSEN_MASUK,
+      status_pulang: row.status_pulang || 'Manual',
+      menit_pulang_cepat: Number(row.menit_pulang_cepat || 0)
+    }
+  }
+
+  if (waktuMasuk && !waktuPulang) {
+    return {
+      status_kehadiran: STATUS_KEHADIRAN.LUPA_ABSEN_PULANG,
+      status_pulang: null,
+      menit_pulang_cepat: 0
+    }
+  }
+
+  if (!waktuMasuk && !waktuPulang) {
+    return {
+      status_kehadiran: STATUS_KEHADIRAN.MENUNGGU_VERIFIKASI,
+      status_pulang: null,
+      menit_pulang_cepat: 0
+    }
+  }
+
+  const actualPulangMinutes = minutesOnShiftDay(toJamLokal(waktuPulang), jamMasukJadwal, jamPulangJadwal)
+  const targetPulangMinutes = minutesOnShiftDay(jamPulangJadwal, jamMasukJadwal, jamPulangJadwal)
+  const minutesEarly = actualPulangMinutes !== null && targetPulangMinutes !== null
+    ? Math.max(0, targetPulangMinutes - actualPulangMinutes)
+    : 0
+
+  return {
+    status_kehadiran: minutesEarly > 0 ? STATUS_KEHADIRAN.PULANG_CEPAT : STATUS_KEHADIRAN.HADIR,
+    status_pulang: minutesEarly > 0 ? 'Pulang Cepat' : 'Selesai',
+    menit_pulang_cepat: minutesEarly
+  }
+}
+
 export function calculateFinalAttendanceStatus(row = {}) {
-  if (!row.waktu_masuk && row.waktu_pulang) return STATUS_KEHADIRAN.LUPA_ABSEN_MASUK
-  if (row.waktu_masuk && !row.waktu_pulang) return STATUS_KEHADIRAN.LUPA_ABSEN_PULANG
-  if (row.menit_pulang_cepat && Number(row.menit_pulang_cepat) > 0) return STATUS_KEHADIRAN.PULANG_CEPAT
-  if (row.status_masuk === 'Terlambat' || Number(row.menit_terlambat || 0) > 0) return STATUS_KEHADIRAN.TERLAMBAT
-  return STATUS_KEHADIRAN.HADIR
+  return recalculateAttendanceStatus(row).status_kehadiran
 }
 
 export function formatAttendanceStatus(status) {
@@ -198,60 +277,92 @@ window.loadAttendanceApproval = async function () {
         </div>
         <textarea id="note-${row.id}" placeholder="Catatan approval (opsional)" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;min-height:58px;"></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn-primary btn-sm" onclick="window.approveAttendance('${row.id}', '${suggested}')"><i class="fa fa-check"></i> Approve (${suggested.replaceAll('_',' ')})</button>
-          <button class="btn-secondary btn-sm" onclick="window.approveAttendance('${row.id}', 'HADIR')"><i class="fa fa-pen"></i> Perbaiki & Approve</button>
-          <button class="btn-danger btn-sm" onclick="window.rejectAttendance('${row.id}')"><i class="fa fa-times"></i> Reject</button>
+          <button class="btn-primary btn-sm" onclick="window.approveAttendance('${row.id}', '${suggested}', this)"><i class="fa fa-check"></i> Approve (${suggested.replaceAll('_',' ')})</button>
+          <button class="btn-secondary btn-sm" onclick="window.approveAttendance('${row.id}', 'HADIR', this)"><i class="fa fa-pen"></i> Perbaiki & Approve</button>
+          <button class="btn-danger btn-sm" onclick="window.rejectAttendance('${row.id}', this)"><i class="fa fa-times"></i> Reject</button>
         </div>
       </div>`
   }).join('')
 }
 
-window.approveAttendance = async function (id, finalStatus) {
-  if (!canApproveAttendance()) return
+function setAttendanceApprovalButtons(id, disabled) {
+  document.querySelectorAll(`button[onclick*="${id}"]`).forEach(btn => { btn.disabled = disabled })
+}
+
+function denyAttendanceApprovalAccess() {
+  alert('Akses approval absensi hanya untuk Admin, Super Admin, dan SPV.')
+}
+
+window.approveAttendance = async function (id, finalStatus, actionButton = null) {
+  if (!canApproveAttendance()) { denyAttendanceApprovalAccess(); return }
+  setAttendanceApprovalButtons(id, true)
+  if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   const note = document.getElementById(`note-${id}`)?.value || ''
   const masuk = document.getElementById(`editMasuk-${id}`)?.value || null
   const pulang = document.getElementById(`editPulang-${id}`)?.value || null
   const serverIso = await getServerTimeIso()
+
+  const { data: currentRow, error: currentError } = await supabase
+    .from('absensi')
+    .select('*')
+    .eq('id', id)
+    .eq('status_absensi', STATUS_ABSENSI.OPEN)
+    .maybeSingle()
+  if (currentError) { alert('Gagal memuat absensi: ' + currentError.message); setAttendanceApprovalButtons(id, false); return }
+  if (!currentRow) { alert('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
+
+  const nextRow = { ...currentRow }
+  if (masuk) nextRow.waktu_masuk = localInputToMakassarIso(masuk)
+  if (pulang) nextRow.waktu_pulang = localInputToMakassarIso(pulang)
+
+  const shiftInfo = currentRow.shift_code ? await getShiftDetailByCode(currentRow.shift_code) : null
+  const recalculated = recalculateAttendanceStatus(nextRow, shiftInfo || {})
   const payload = {
     status_absensi: STATUS_ABSENSI.COMPLETE,
-    status_kehadiran: finalStatus || STATUS_KEHADIRAN.HADIR,
+    status_kehadiran: recalculated.status_kehadiran,
+    status_pulang: recalculated.status_pulang,
+    menit_pulang_cepat: recalculated.menit_pulang_cepat,
     approved_by: window.currentUser?.id || null,
     approved_at: serverIso,
     approval_note: note || null
   }
-  if (masuk) payload.waktu_masuk = localInputToMakassarIso(masuk)
-  if (pulang) payload.waktu_pulang = localInputToMakassarIso(pulang)
+  if (nextRow.waktu_masuk !== currentRow.waktu_masuk) payload.waktu_masuk = nextRow.waktu_masuk
+  if (nextRow.waktu_pulang !== currentRow.waktu_pulang) payload.waktu_pulang = nextRow.waktu_pulang
 
-  console.log('[APPROVAL ABSENSI] before approve update', { id, payload })
+  console.log('[APPROVAL ABSENSI] before approve update', { id, payload, ignoredManualFinalStatus: finalStatus })
   const updateResult = await supabase
     .from('absensi')
     .update(payload)
     .eq('id', id)
-    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang')
+    .eq('status_absensi', STATUS_ABSENSI.OPEN)
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang,status_pulang,menit_pulang_cepat')
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve update response', updateResult)
 
-  if (updateResult.error) { alert('Gagal approve: ' + updateResult.error.message); return }
-  if (!updateResult.data) { alert('Gagal approve: record absensi tidak ditemukan / tidak ter-update.'); return }
+  if (updateResult.error) { alert('Gagal approve: ' + updateResult.error.message); setAttendanceApprovalButtons(id, false); return }
+  if (!updateResult.data) { alert('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
 
   const verifyResult = await supabase
     .from('absensi')
-    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang')
+    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang,status_pulang,menit_pulang_cepat')
     .eq('id', id)
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve verify from DB', verifyResult)
 
-  if (verifyResult.error) { alert('Gagal cek ulang approval: ' + verifyResult.error.message); return }
+  if (verifyResult.error) { alert('Gagal cek ulang approval: ' + verifyResult.error.message); setAttendanceApprovalButtons(id, false); return }
   if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.COMPLETE) {
     alert('Approval belum tersimpan sebagai COMPLETE. Silakan coba lagi.')
+    setAttendanceApprovalButtons(id, false)
     return
   }
 
   await window.loadAttendanceApproval()
 }
 
-window.rejectAttendance = async function (id) {
-  if (!canApproveAttendance()) return
+window.rejectAttendance = async function (id, actionButton = null) {
+  if (!canApproveAttendance()) { denyAttendanceApprovalAccess(); return }
+  setAttendanceApprovalButtons(id, true)
+  if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   const note = document.getElementById(`note-${id}`)?.value || ''
   const serverIso = await getServerTimeIso()
   const payload = {
@@ -266,12 +377,13 @@ window.rejectAttendance = async function (id) {
     .from('absensi')
     .update(payload)
     .eq('id', id)
+    .eq('status_absensi', STATUS_ABSENSI.OPEN)
     .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] reject update response', updateResult)
 
-  if (updateResult.error) { alert('Gagal reject: ' + updateResult.error.message); return }
-  if (!updateResult.data) { alert('Gagal reject: record absensi tidak ditemukan / tidak ter-update.'); return }
+  if (updateResult.error) { alert('Gagal reject: ' + updateResult.error.message); setAttendanceApprovalButtons(id, false); return }
+  if (!updateResult.data) { alert('Reject gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
 
   const verifyResult = await supabase
     .from('absensi')
@@ -280,9 +392,10 @@ window.rejectAttendance = async function (id) {
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] reject verify from DB', verifyResult)
 
-  if (verifyResult.error) { alert('Gagal cek ulang reject: ' + verifyResult.error.message); return }
+  if (verifyResult.error) { alert('Gagal cek ulang reject: ' + verifyResult.error.message); setAttendanceApprovalButtons(id, false); return }
   if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.REJECTED) {
     alert('Reject belum tersimpan sebagai REJECTED. Silakan coba lagi.')
+    setAttendanceApprovalButtons(id, false)
     return
   }
 

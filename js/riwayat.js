@@ -2,6 +2,8 @@ import { supabase } from './supabase.js'
 import { toJamLokal, getTodayLokal, toTanggalAbsensiLokal } from './timezone.js'
 import { showToast, promptAction } from './feedback.js'
 import { getStatusPulangReminder } from './absensi.js'
+import { recalculateAttendanceStatus } from './attendance-approval.js'
+import { getShiftDetailByCode } from './shift-resolver.js'
 
 /* ================= HELPER BADGE KETERANGAN ================= */
 function normalizeStatusAbsensiLabel(status) {
@@ -124,7 +126,7 @@ window.loadRiwayat = async function (user) {
     const status  = document.getElementById('filterStatus')?.value
 
     if (!isAdmin) {
-      query = query.eq('nama', user.nama_lengkap)
+      query = query.eq('user_id', user.id)
     } else if (nama) {
       query = query.ilike('nama', `%${nama}%`)
     }
@@ -236,9 +238,21 @@ window.loadRiwayat = async function (user) {
 /* ================= APPROVE ================= */
 window.approveAbsen = async function (id) {
   const note = (await promptAction('Keterangan approval (opsional):', 'Tambahkan catatan jika diperlukan', 'Approve')) ?? ''
+  const { data: row, error: loadError } = await supabase
+    .from('absensi')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (loadError) { showToast('Gagal memuat absensi: ' + loadError.message, 'error'); return }
+  if (!row) { showToast('Record absensi tidak ditemukan.', 'error'); return }
+
+  const shiftInfo = row.shift_code ? await getShiftDetailByCode(row.shift_code) : null
+  const recalculated = recalculateAttendanceStatus(row, shiftInfo || {})
   const payload = {
     status_absensi: 'COMPLETE',
-    status_kehadiran: 'HADIR',
+    status_kehadiran: recalculated.status_kehadiran,
+    status_pulang: recalculated.status_pulang,
+    menit_pulang_cepat: recalculated.menit_pulang_cepat,
     approval_note: note || null
   }
 
@@ -247,7 +261,7 @@ window.approveAbsen = async function (id) {
     .from('absensi')
     .update(payload)
     .eq('id', id)
-    .select('id,status_absensi,status_kehadiran,approval_note')
+    .select('id,status_absensi,status_kehadiran,status_pulang,menit_pulang_cepat,approval_note')
     .maybeSingle()
   console.log('[RIWAYAT APPROVE] update response', updateResult)
 
@@ -256,7 +270,7 @@ window.approveAbsen = async function (id) {
 
   const verifyResult = await supabase
     .from('absensi')
-    .select('id,status_absensi,status_kehadiran,approval_note')
+    .select('id,status_absensi,status_kehadiran,status_pulang,menit_pulang_cepat,approval_note')
     .eq('id', id)
     .maybeSingle()
   console.log('[RIWAYAT APPROVE] verify from DB', verifyResult)

@@ -277,7 +277,7 @@ export async function renderJadwalManagement(user) {
   // Isi dropdown karyawan untuk input satu per satu
   if (isAdmin) {
     try {
-      const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').order('nama_lengkap')
+      const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').eq('status_akun', 'Aktif').order('nama_lengkap')
       const sel = document.getElementById('inputJadwalUser')
       if (sel && profiles?.length) {
         profiles.forEach(p => {
@@ -436,7 +436,7 @@ window.loadDaftarJadwalMaster = async function() {
     const startStr = `${y}-${String(m).padStart(2,'0')}-01`
     const endStr   = `${y}-${String(m).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`
 
-    const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').order('nama_lengkap')
+    const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').eq('status_akun', 'Aktif').order('nama_lengkap')
     const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
 
     if (!profiles?.length) {
@@ -546,7 +546,7 @@ window.uploadJadwalExcel = async function() {
 
       // Kelompokkan baris per bulan-tahun (file bisa berisi multi-bulan sekaligus)
       // Setiap baris punya bulan & tahun sendiri → fleksibel
-      const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap')
+      const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap').eq('status_akun', 'Aktif')
       if (errUser) throw errUser
 
       const userMap = {}

@@ -3,7 +3,37 @@ import { getTodayLokal, getDurasiMenit, toJamLokal, toTanggalLokal, toTanggalAbs
 import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
 import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
 import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
-import { getSisaCuti } from './cuti.js'
+import { getSisaCuti } from './services/leave-service.js'
+
+async function fetchAbsensiRowsForUser({ userId, nama, dateFrom = null, dateTo = null, tanggal = null, select = '*' } = {}) {
+  async function applyFilters(query) {
+    if (tanggal) return query.eq('tanggal', tanggal)
+    let q = query
+    if (dateFrom) q = q.gte('tanggal', dateFrom)
+    if (dateTo) q = q.lte('tanggal', dateTo)
+    return q
+  }
+
+  if (userId) {
+    let byUser = supabase.from('absensi').select(select).eq('user_id', userId)
+    byUser = await applyFilters(byUser)
+    const { data, error } = await byUser
+    if (error) throw error
+    if (Array.isArray(data) ? data.length : data) return data
+  }
+
+  if (!nama) return tanggal ? null : []
+  let byName = supabase.from('absensi').select(select).eq('nama', nama)
+  byName = await applyFilters(byName)
+  const { data, error } = await byName
+  if (error) throw error
+  return data || (tanggal ? null : [])
+}
+
+async function fetchAbsensiSingleForUser(options) {
+  const rows = await fetchAbsensiRowsForUser(options)
+  return Array.isArray(rows) ? (rows[0] || null) : rows
+}
 
 export async function renderDashboard() {
   const content = document.getElementById('content')
@@ -23,14 +53,14 @@ export async function renderDashboard() {
     todayDate.setUTCDate(todayDate.getUTCDate() - 1)
     const tanggalKemarinStr = todayDate.toISOString().split('T')[0]
 
-    const { data: absenKemarin, error: errKemarin } = await supabase
-      .from('absensi')
-      .select('*')
-      .eq('nama', user.nama_lengkap || user.email)
-      .eq('tanggal', tanggalKemarinStr)
-      .maybeSingle()
+    const absenKemarin = await fetchAbsensiSingleForUser({
+      userId: user.id,
+      nama: user.nama_lengkap || user.email,
+      tanggal: tanggalKemarinStr,
+      select: '*'
+    })
 
-    if (!errKemarin && absenKemarin?.waktu_masuk && !absenKemarin?.waktu_pulang) {
+    if (absenKemarin?.waktu_masuk && !absenKemarin?.waktu_pulang) {
       await supabase
         .from('absensi')
         .update({ status_absensi: 'OPEN', status_kehadiran: 'MENUNGGU_VERIFIKASI' })
@@ -80,13 +110,14 @@ export async function renderDashboard() {
   const isAdmin = canApproveAttendance(user)
 
   // Get total jam kerja (personal user login)
-  const { data: absensiMonth } = await supabase
-    .from('absensi')
-    .select('waktu_masuk, waktu_pulang, status_masuk, status_absensi, status_kehadiran')
-    .eq('status_absensi', 'COMPLETE')
-    .eq('nama', fullName)
-    .gte('tanggal', dateFrom)
-    .lte('tanggal', dateTo)
+  const absensiMonthAll = await fetchAbsensiRowsForUser({
+    userId: user.id,
+    nama: fullName,
+    dateFrom,
+    dateTo,
+    select: 'tanggal, waktu_masuk, waktu_pulang, status_masuk, status_absensi, status_kehadiran'
+  })
+  const absensiMonth = (absensiMonthAll || []).filter(a => a.status_absensi === 'COMPLETE')
 
   let totalJamKerja = 0
   absensiMonth?.forEach(a => {
@@ -201,12 +232,12 @@ export async function renderDashboard() {
   }
 
   // ===== DASHBOARD PERSONAL STAFF =====
-  const { data: absensiHariIni } = await supabase
-    .from('absensi')
-    .select('waktu_masuk, waktu_pulang, status_absensi, status_kehadiran')
-    .eq('nama', fullName)
-    .eq('tanggal', todayLocal)
-    .maybeSingle()
+  const absensiHariIni = await fetchAbsensiSingleForUser({
+    userId: user.id,
+    nama: fullName,
+    tanggal: todayLocal,
+    select: 'waktu_masuk, waktu_pulang, status_absensi, status_kehadiran'
+  })
 
   const { data: shiftHariIni } = await supabase
     .from('jadwal')
@@ -219,12 +250,10 @@ export async function renderDashboard() {
   const totalTerlambatBulanIni = absensiMonth?.filter(a => a.status_masuk === 'Terlambat').length || 0
   const totalLupaPulangBulanIni = absensiMonth?.filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG').length || 0
 
-  const { data: riwayatTerbaru } = await supabase
-    .from('absensi')
-    .select('tanggal, waktu_masuk, waktu_pulang, status_absensi, status_kehadiran')
-    .eq('nama', fullName)
-    .order('tanggal', { ascending: false })
-    .limit(5)
+  const riwayatTerbaru = (absensiMonthAll || [])
+    .slice()
+    .sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)))
+    .slice(0, 5)
 
   const personalHtml = `
     <div style="margin-bottom: 20px;">
@@ -250,35 +279,63 @@ export async function renderDashboard() {
   if (isAdmin) {
     const { data: globalAbsensi } = await supabase
       .from('absensi')
-      .select('nama, status_masuk, status_absensi, status_kehadiran, waktu_masuk, waktu_pulang')
-      .eq('status_absensi', 'COMPLETE')
+      .select('user_id, nama, tanggal, status_masuk, status_absensi, status_kehadiran, waktu_masuk, waktu_pulang, menit_pulang_cepat')
       .gte('tanggal', dateFrom)
       .lte('tanggal', dateTo)
 
-    const hadirGlobal = globalAbsensi?.filter(a => a.waktu_masuk).length || 0
-    const terlambatGlobal = globalAbsensi?.filter(a => a.status_masuk === 'Terlambat').length || 0
-    const lupaPulangGlobal = globalAbsensi?.filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG').length || 0
+    const { data: globalJadwal } = await supabase
+      .from('jadwal')
+      .select('user_id, tanggal, shift_code, status_override')
+      .gte('tanggal', dateFrom)
+      .lte('tanggal', dateTo)
+
+    const todayValue = todayLocal
+    const completedAbsensi = (globalAbsensi || []).filter(a => a.status_absensi === 'COMPLETE')
+    const hadirGlobal = completedAbsensi.filter(a => a.waktu_masuk).length
+    const terlambatGlobal = completedAbsensi.filter(a => a.status_masuk === 'Terlambat' || a.status_kehadiran === 'TERLAMBAT').length
+    const pulangCepatGlobal = completedAbsensi.filter(a => a.status_kehadiran === 'PULANG_CEPAT' || Number(a.menit_pulang_cepat || 0) > 0).length
+    const lupaPulangGlobal = (globalAbsensi || []).filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG').length
+    const openApprovalGlobal = (globalAbsensi || []).filter(a => a.status_absensi === 'OPEN').length
+    const cutiGlobal = (globalJadwal || []).filter(j => j.status_override === 'cuti').length
+    const izinGlobal = (globalJadwal || []).filter(j => j.status_override === 'izin').length
+    const sakitGlobal = (globalJadwal || []).filter(j => j.status_override === 'sakit').length
+    const offGlobal = (globalJadwal || []).filter(j => j.status_override === 'off' || j.shift_code === '8').length
+    const attendanceKeys = new Set((globalAbsensi || []).map(a => `${a.user_id || a.nama}|${a.tanggal}`))
+    const alphaGlobal = (globalJadwal || []).filter(j => {
+      if (!j.user_id || !j.tanggal || j.tanggal > todayValue) return false
+      if (['cuti', 'izin', 'sakit', 'off'].includes(j.status_override) || j.shift_code === '8') return false
+      return !attendanceKeys.has(`${j.user_id}|${j.tanggal}`)
+    }).length
 
     const rankMap = {}
-    ;(globalAbsensi || []).forEach(a => {
+    completedAbsensi.forEach(a => {
       if (!a.nama) return
       if (!rankMap[a.nama]) rankMap[a.nama] = { hadir: 0 }
       if (a.waktu_masuk) rankMap[a.nama].hadir += 1
     })
     const ranking = Object.entries(rankMap).sort((a, b) => b[1].hadir - a[1].hadir).slice(0, 5)
+    const rankingHtml = ranking.length
+      ? ranking.map(([nama, v], i) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>#${i + 1} ${nama}</span><strong>${v.hadir} hadir</strong></div>`).join('')
+      : '<div style="font-size:.82rem;color:var(--text-muted);padding:10px 0;">Belum ada data kehadiran lengkap bulan ini.</div>'
 
     adminGlobalHtml = `
       <div style="margin-bottom: 20px;">
         <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">HR Analytics Global</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Total Hadir</div><div style="font-size:1.2rem;font-weight:800">${hadirGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Total Terlambat</div><div style="font-size:1.2rem;font-weight:800">${terlambatGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Lupa Absen Pulang</div><div style="font-size:1.2rem;font-weight:800">${lupaPulangGlobal}</div></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Hadir</div><div style="font-size:1.2rem;font-weight:800">${hadirGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Terlambat</div><div style="font-size:1.2rem;font-weight:800">${terlambatGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Pulang Cepat</div><div style="font-size:1.2rem;font-weight:800">${pulangCepatGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Cuti</div><div style="font-size:1.2rem;font-weight:800">${cutiGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Izin</div><div style="font-size:1.2rem;font-weight:800">${izinGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Sakit</div><div style="font-size:1.2rem;font-weight:800">${sakitGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Off</div><div style="font-size:1.2rem;font-weight:800">${offGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Alpha</div><div style="font-size:1.2rem;font-weight:800">${alphaGlobal}</div></div>
+          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Pending Approval</div><div style="font-size:1.2rem;font-weight:800">${openApprovalGlobal}</div></div>
         </div>
       </div>
-      <div class="card fade-up" style="padding:16px;margin-bottom:20px;" id="adminGlobalStats" data-hadir="${hadirGlobal}" data-terlambat="${terlambatGlobal}" data-lupa="${lupaPulangGlobal}">
+      <div class="card fade-up" style="padding:16px;margin-bottom:20px;" id="adminGlobalStats" data-hadir="${hadirGlobal}" data-terlambat="${terlambatGlobal}" data-pulang-cepat="${pulangCepatGlobal}" data-cuti="${cutiGlobal}" data-izin="${izinGlobal}" data-sakit="${sakitGlobal}" data-off="${offGlobal}" data-alpha="${alphaGlobal}" data-pending="${openApprovalGlobal}">
         <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Ranking Staff (Top 5 Kehadiran)</div>
-        ${ranking.map(([nama, v], i) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>#${i + 1} ${nama}</span><strong>${v.hadir} hadir</strong></div>`).join('')}
+        ${rankingHtml}
       </div>
       <div class="card fade-up" style="padding:16px;margin-bottom:20px;">
         <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Grafik Global Kehadiran</div>
@@ -286,7 +343,6 @@ export async function renderDashboard() {
       </div>
     `
   }
-
   content.innerHTML = `
     <div class="page-header" style="margin-bottom: 20px;">
       <h2 style="margin: 0;"><i class="fa fa-tachometer-alt"></i> Dashboard</h2>
@@ -418,12 +474,19 @@ async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
       const statsEl = document.getElementById('adminGlobalStats')
       const hadir = Number(statsEl?.dataset?.hadir || 0)
       const terlambat = Number(statsEl?.dataset?.terlambat || 0)
-      const lupa = Number(statsEl?.dataset?.lupa || 0)
+      const pulangCepat = Number(statsEl?.dataset?.pulangCepat || 0)
+      const cuti = Number(statsEl?.dataset?.cuti || 0)
+      const izin = Number(statsEl?.dataset?.izin || 0)
+      const sakit = Number(statsEl?.dataset?.sakit || 0)
+      const off = Number(statsEl?.dataset?.off || 0)
+      const alpha = Number(statsEl?.dataset?.alpha || 0)
+      const pending = Number(statsEl?.dataset?.pending || 0)
+      Chart.getChart(ctx)?.destroy()
       new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: ['Hadir', 'Terlambat', 'Lupa Pulang'],
-          datasets: [{ data: [hadir, terlambat, lupa], backgroundColor: ['#16a34a', '#d97706', '#dc2626'] }]
+          labels: ['Hadir', 'Terlambat', 'Pulang Cepat', 'Cuti', 'Izin', 'Sakit', 'Off', 'Alpha', 'Pending'],
+          datasets: [{ data: [hadir, terlambat, pulangCepat, cuti, izin, sakit, off, alpha, pending], backgroundColor: ['#16a34a', '#d97706', '#0ea5e9', '#22c55e', '#3b82f6', '#f59e0b', '#64748b', '#dc2626', '#8b5cf6'] }]
         },
         options: { responsive: true, plugins: { legend: { display: false } } }
       })
