@@ -48,23 +48,23 @@
       <p>HR & Attendance Management System</p>
     </div>
 
-    <div class="login-field">
-      <label for="email">Email</label>
-      <input type="email" id="email" placeholder="email@company.com" autocomplete="email"
-        onkeydown="if(event.key==='Enter') document.getElementById('password').focus()"/>
-    </div>
+    <form id="loginForm" onsubmit="login(); return false;">
+      <div class="login-field">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="email@company.com" autocomplete="username"/>
+      </div>
 
-    <div class="login-field">
-      <label for="password">Password</label>
-      <input type="password" id="password" placeholder="Password" autocomplete="current-password"
-        onkeydown="if(event.key==='Enter') login()"/>
-    </div>
+      <div class="login-field">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Password" autocomplete="current-password"/>
+      </div>
 
-    <p id="loginError" style="display:none;color:var(--danger);font-size:.82rem;margin-top:8px; padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid); border-radius:var(--r-md);line-height:1.5;"></p>
+      <p id="loginError" style="display:none;color:var(--danger);font-size:.82rem;margin-top:8px; padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid); border-radius:var(--r-md);line-height:1.5;"></p>
 
-    <button class="btn-login" id="btnLogin" onclick="login()">
-      <i class="fa fa-sign-in-alt"></i> Masuk
-    </button>
+      <button class="btn-login" id="btnLogin" type="submit">
+        <i class="fa fa-sign-in-alt"></i> Masuk
+      </button>
+    </form>
 
     <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200);">
       <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:8px;">Karyawan baru? Belum punya akun?</p>
