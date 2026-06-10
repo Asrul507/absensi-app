@@ -264,6 +264,19 @@ export function getTodayLocal() {
   return getTodayLokal()
 }
 
+export function getTanggalKemarinLocal(todayValue = getTodayLokal()) {
+  const today = parseDateOnlyLocal(todayValue)
+  if (!today) return null
+
+  const date = new Date(today.year, today.month - 1, today.day)
+  date.setDate(date.getDate() - 1)
+  return formatDateOnlyLocal(date)
+}
+
+export function buildTimestampLocal(tanggal, jamHHMM) {
+  return buildTimestampLokal(tanggal, jamHHMM)
+}
+
 export function getCurrentMonthStartLocal(todayValue = getTodayLokal()) {
   const today = parseDateOnlyLocal(todayValue)
   if (!today) return null
@@ -332,4 +345,13 @@ export async function getTimezoneFromLokasi() {
     await supabase.from('lokasi_absen').select('id').limit(1)
   } catch {}
   return TZ_NAME
+}
+
+if (typeof window !== 'undefined') {
+  window.getTodayLokal = window.getTodayLokal || getTodayLokal
+  window.getTodayLocal = window.getTodayLocal || getTodayLocal
+  window.getTanggalKemarinLocal = window.getTanggalKemarinLocal || getTanggalKemarinLocal
+  window.buildTimestampLokal = window.buildTimestampLokal || buildTimestampLokal
+  window.buildTimestampLocal = window.buildTimestampLocal || buildTimestampLocal
+  window.parseAbsensiTimestamp = window.parseAbsensiTimestamp || parseAbsensiTimestamp
 }

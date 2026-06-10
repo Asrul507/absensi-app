@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js'
-import { getTodayLokal, buildTimestampLokal, parseAbsensiTimestamp } from './timezone.js'
+import { getTodayLokal, getTanggalKemarinLocal, buildTimestampLokal, parseAbsensiTimestamp } from './timezone.js'
 // PATCH: tambah import getShiftDetailByJamMasuk sebagai fallback saat shift_code null
 import { getShiftDetailByCode, getShiftDetailByJamMasuk } from './shift-resolver.js'
 
@@ -216,9 +216,14 @@ export async function getTodayAbsen(userOrName, todayOverride = null, nowDate = 
   // Jika kemarin adalah shift malam dan belum pulang, gunakan record kemarin.
   if (dataKemarin && dataKemarin.waktu_masuk && !dataKemarin.waktu_pulang) {
     const shiftKemarin = dataKemarin.shift_id
-      ? await getShiftById(dataKemarin.shift_id)
-      : await getTodayShift(userId, kemarin)
-    if (isShiftMalam(shiftKemarin) && isStillInNightShiftWindow(shiftKemarin, nowDate)) {
+      ? await getShiftDetailByCode(dataKemarin.shift_id)
+      : dataKemarin.shift_code
+        ? await getShiftDetailByCode(dataKemarin.shift_code)
+        : dataKemarin.jam_jadwal_masuk
+          ? await getShiftDetailByJamMasuk(dataKemarin.jam_jadwal_masuk)
+          : await getTodayShift(userId, kemarin)
+
+    if (isOvernightShiftStillActive(shiftKemarin, nowDate, today)) {
       return dataKemarin
     }
   }

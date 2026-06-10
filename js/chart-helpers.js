@@ -4,29 +4,49 @@ import { toJamLokal, getDurasiMenit } from './timezone.js'
 /* ===============================================================
    CHART INSTANCE TRACKER (DIPERKETAT: FIX CONFLICT CANVAS)
 =============================================================== */
-const activeCharts = {}
+const activeCharts = (typeof window !== 'undefined')
+  ? (window.appCharts = window.appCharts || {})
+  : {}
+
+function getCanvasElement(canvasId) {
+  if (!canvasId || typeof document === 'undefined') return null
+  return document.getElementById(canvasId)
+}
 
 function destroyExistingChart(canvasId) {
-  // 1. Hancurkan dari tracking memori objek internal kita jika ada
-  if (activeCharts[canvasId]) {
-    try {
-      activeCharts[canvasId].destroy()
-    } catch (e) { 
-      console.warn("Gagal destroy chart internal:", e) 
-    }
-    activeCharts[canvasId] = null
-  }
-  
-  // 2. SOLUSI UTAMA: Paksa deteksi objek grafik native yang masih mengunci canvas HTML
+  if (typeof Chart === 'undefined') return
+
+  const canvas = getCanvasElement(canvasId)
+
   try {
-    const existingChartInstance = Chart.getChart(canvasId)
-    if (existingChartInstance) {
-      existingChartInstance.destroy() // Hancurkan total grafik yang mengganjal
-      console.log(`Sukses mengosongkan sisa memori grafik pada canvas: ${canvasId}`)
-    }
-  } catch (e) { 
-    console.warn("Gagal destroy objek native chart:", e) 
+    activeCharts[canvasId]?.destroy()
+  } catch (e) {
+    console.warn('Gagal destroy chart tersimpan:', e)
+  } finally {
+    delete activeCharts[canvasId]
   }
+
+  try {
+    const existingChart = canvas ? Chart.getChart(canvas) : Chart.getChart(canvasId)
+    existingChart?.destroy()
+  } catch (e) {
+    console.warn('Gagal destroy chart pada canvas:', e)
+  }
+}
+
+function createTrackedChart(canvasId, config) {
+  if (typeof Chart === 'undefined') return null
+
+  const canvas = getCanvasElement(canvasId)
+  if (!canvas) return null
+
+  destroyExistingChart(canvasId)
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  activeCharts[canvasId] = new Chart(ctx, config)
+  return activeCharts[canvasId]
 }
 
 /* ===============================================================
@@ -63,17 +83,15 @@ export const chartDefaultOptions = {
 export function createTotalJamKerjaChart(canvasId, totalJam) {
   if (typeof Chart === 'undefined') return
 
-  const ctx = document.getElementById(canvasId)?.getContext('2d')
-  if (!ctx) return
-
-  destroyExistingChart(canvasId)
+  const canvas = getCanvasElement(canvasId)
+  if (!canvas) return
 
   const jam = Math.floor(totalJam)
   const menit = Math.round((totalJam - jam) * 60)
   const jamText = `${String(jam).padStart(2, '0')}:${String(menit).padStart(2, '0')}`
   const percentage = Math.min((totalJam / 160) * 100, 100)
 
-  activeCharts[canvasId] = new Chart(ctx, {
+  createTrackedChart(canvasId, {
     type: 'doughnut',
     data: {
       labels: ['Tercapai', 'Sisa'],
@@ -113,8 +131,7 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
 
   destroyExistingChart(canvasId) // Reset & bersihkan Canvas terlebih dahulu
 
-  const ctx = document.getElementById(canvasId)?.getContext('2d')
-  if (!ctx) return
+  if (!getCanvasElement(canvasId)) return
 
   const { data: absensiData } = await supabase
     .from('absensi')
@@ -186,6 +203,14 @@ export async function createAktivitasChart(canvasId, userId, dateFrom, dateTo) {
   const metaPulang = activeDates.map(d => dateMap[d].jamPulangStr)
   const metaRadMasuk = activeDates.map(d => dateMap[d].radiusMasuk)
   const metaRadPulang = activeDates.map(d => dateMap[d].radiusPulang)
+
+  const canvas = getCanvasElement(canvasId)
+  if (!canvas) return
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  destroyExistingChart(canvasId)
 
   const gradient = ctx.createLinearGradient(0, 0, 0, 250)
   gradient.addColorStop(0, 'rgba(37, 99, 235, 0.45)')   
@@ -285,9 +310,14 @@ export async function createAbsensiChart(canvasId1, canvasId2, canvasId3, userId
   const totalAbsen = absensiData?.length || 1
 
   const renderDoughnutMini = (canvasId, labels, dataVals, colors) => {
-    const ctx = document.getElementById(canvasId)?.getContext('2d')
+    const canvas = getCanvasElement(canvasId)
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
     if (!ctx) return
-    
+
+    destroyExistingChart(canvasId)
+
     activeCharts[canvasId] = new Chart(ctx, {
       type: 'doughnut',
       data: {

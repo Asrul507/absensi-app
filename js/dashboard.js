@@ -467,9 +467,9 @@ export async function renderDashboard() {
 async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
   setTimeout(() => {
     createTotalJamKerjaChart('jamKerjaChart', totalJamKerja)
-    createAktivitasChart('aktivitasChart', userId, dateFrom, dateTo)
-    createAbsensiChart('absensiChartKehadiran', 'absensiChartMasuk', 'absensiChartPulang', userId, dateFrom, dateTo)
-    if (canApproveAttendance(window.currentUser) && document.getElementById('adminGlobalChart')) {
+    createAktivitasChart('aktivitasChart', userId, dateFrom, dateTo).catch(err => console.warn('Gagal render chart aktivitas:', err))
+    createAbsensiChart('absensiChartKehadiran', 'absensiChartMasuk', 'absensiChartPulang', userId, dateFrom, dateTo).catch(err => console.warn('Gagal render chart absensi:', err))
+    if (typeof Chart !== 'undefined' && canApproveAttendance(window.currentUser) && document.getElementById('adminGlobalChart')) {
       const ctx = document.getElementById('adminGlobalChart')
       const statsEl = document.getElementById('adminGlobalStats')
       const hadir = Number(statsEl?.dataset?.hadir || 0)
@@ -481,8 +481,10 @@ async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
       const off = Number(statsEl?.dataset?.off || 0)
       const alpha = Number(statsEl?.dataset?.alpha || 0)
       const pending = Number(statsEl?.dataset?.pending || 0)
+      window.appCharts = window.appCharts || {}
+      window.appCharts.adminGlobalChart?.destroy()
       Chart.getChart(ctx)?.destroy()
-      new Chart(ctx, {
+      window.appCharts.adminGlobalChart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: ['Hadir', 'Terlambat', 'Pulang Cepat', 'Cuti', 'Izin', 'Sakit', 'Off', 'Alpha', 'Pending'],
