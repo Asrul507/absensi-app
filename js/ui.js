@@ -191,6 +191,64 @@ function hitungKeterangan(absen, shift) {
 }
 
 
+const ABSENSI_INIT_TIMEOUT_MS = 11000
+const GEO_FALLBACK = Object.freeze({
+  status: 'error',
+  pesan: 'Gagal mendapatkan lokasi. Silakan aktifkan izin lokasi dan coba lagi.',
+  lat: null,
+  lng: null,
+  areas: []
+})
+
+function normalizeGeoResult(geo) {
+  return {
+    ...GEO_FALLBACK,
+    ...(geo && typeof geo === 'object' ? geo : {}),
+    areas: Array.isArray(geo?.areas) ? geo.areas : []
+  }
+}
+
+function withAbsensiTimeout(promise, timeoutMs, fallbackValue, label) {
+  return new Promise((resolve) => {
+    let settled = false
+    const done = (value) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(value)
+    }
+    const timer = setTimeout(() => {
+      console.warn(`[Absensi] ${label} timeout, memakai fallback.`)
+      done(fallbackValue)
+    }, timeoutMs)
+
+    Promise.resolve(promise)
+      .then(done)
+      .catch(err => {
+        console.warn(`[Absensi] ${label} fallback:`, err)
+        done(fallbackValue)
+      })
+  })
+}
+
+async function getAbsensiInitialContext() {
+  const fallbackIso = new Date().toISOString()
+  const results = await Promise.allSettled([
+    withAbsensiTimeout(getServerTimeIso(), ABSENSI_INIT_TIMEOUT_MS, fallbackIso, 'Server time'),
+    withAbsensiTimeout(dapatkanLokasiAbsenAktif(), ABSENSI_INIT_TIMEOUT_MS, { ...GEO_FALLBACK }, 'Geolocation')
+  ])
+
+  const serverIso = results[0].status === 'fulfilled' && results[0].value ? results[0].value : fallbackIso
+  const geo = normalizeGeoResult(results[1].status === 'fulfilled' ? results[1].value : GEO_FALLBACK)
+
+  if (results[0].status === 'rejected') console.warn('[Absensi] Server time fallback:', results[0].reason)
+  if (results[1].status === 'rejected') console.warn('[Absensi] Geolocation fallback:', results[1].reason)
+
+  return { serverIsoInitial: serverIso, geo }
+}
+
+
+
 export async function renderAbsensi(user) {
   const content = document.getElementById('content')
 
@@ -202,30 +260,47 @@ export async function renderAbsensi(user) {
     </div>
   `
 
-  // ── SERVER TIME + GPS: timestamp final tidak boleh ikut jam device ────────
-  const [serverIsoInitial, geo] = await Promise.all([
-    getServerTimeIso(),
-    dapatkanLokasiAbsenAktif()
-  ])
+  // ── SERVER TIME + GPS: jangan biarkan salah satu proses membuat UI stuck ──
+  const { serverIsoInitial, geo } = await getAbsensiInitialContext()
   const serverNowInitial = serverIsoInitial ? new Date(serverIsoInitial) : new Date()
-  const todayServer = serverIsoInitial ? getTanggalLokalFromIso(serverIsoInitial) : getTodayLokal()
+  const todayServer = getTanggalLokalFromIso(serverIsoInitial) || getTodayLokal()
 
   let dropdownOptions = ''
   let statusBadge     = ''
-  let latAbsen        = geo.lat || null
-  let lngAbsen        = geo.lng || null
+  let locationNotice  = ''
+  let latAbsen        = geo.lat ?? null
+  let lngAbsen        = geo.lng ?? null
 
   if (geo.status === 'success' && geo.areas.length > 0) {
     statusBadge = `<span class="badge badge-success" style="padding:6px 12px; font-size:.72rem; border-radius:999px; font-weight:800; display:inline-block; margin-top:6px; background:#dcfce7; color:#15803d; border:1px solid #bbf7d0;"><i class="fa fa-location-dot"></i> Berada Di Area Kerja</span>`
     dropdownOptions = geo.areas.map(a => `<option value="${a.nama_titik}">${a.nama_titik} (${a.jarak_meter}m)</option>`).join('')
   } else {
-    statusBadge = `<span class="badge badge-danger" style="padding:6px 12px; font-size:.72rem; border-radius:999px; font-weight:800; display:inline-block; margin-top:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;"><i class="fa fa-building-circle-exclamation"></i> Luar Radius (Testing Mode)</span>`
+    statusBadge = `<span class="badge badge-danger" style="padding:6px 12px; font-size:.72rem; border-radius:999px; font-weight:800; display:inline-block; margin-top:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;"><i class="fa fa-building-circle-exclamation"></i> Lokasi tidak terbaca / luar radius</span>`
     dropdownOptions = `<option value="Luar Radius (Testing)">[LUAR RADIUS / TESTING]</option>`
+    locationNotice = geo.status === 'success'
+      ? `
+      <div style="margin:10px auto 0;max-width:380px;text-align:left;border:1.5px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:12px;padding:10px 12px;font-size:.76rem;line-height:1.45;">
+        <strong><i class="fa fa-building-circle-exclamation"></i> Di luar radius absen.</strong><br>
+        Koordinat terbaca, tetapi tidak cocok dengan titik absen aktif.
+      </div>`
+      : `
+      <div style="margin:10px auto 0;max-width:380px;text-align:left;border:1.5px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:12px;padding:10px 12px;font-size:.76rem;line-height:1.45;">
+        <strong><i class="fa fa-location-crosshairs"></i> Lokasi belum terbaca.</strong><br>
+        Pastikan izin lokasi aktif, GPS menyala, dan buka website dengan HTTPS.
+      </div>`
   }
 
-  // ── DATA: Ambil absensi hari ini dan jadwal shift ────────────────────────
-  const absen      = await getTodayAbsen(user, todayServer, serverNowInitial)
-  const todayShift = await getTodayShift(user.id, todayServer, serverNowInitial)
+  // ── DATA: Ambil absensi hari ini dan jadwal shift dengan fallback aman ───
+  let absen = null
+  let todayShift = null
+  try {
+    ;[absen, todayShift] = await Promise.all([
+      getTodayAbsen(user, todayServer, serverNowInitial),
+      getTodayShift(user.id, todayServer, serverNowInitial)
+    ])
+  } catch (err) {
+    console.warn('[Absensi] Gagal memuat data absensi/jadwal:', err)
+  }
 
   const shiftSpecial = ['CUTI', 'SAKIT', 'IZIN', 'OFF'].includes(todayShift?.nama_shift)
   const isPreviousShiftAttendance = Boolean(absen?.tanggal && todayServer && absen.tanggal !== todayServer && absen?.waktu_masuk && !absen?.waktu_pulang)
@@ -263,6 +338,7 @@ export async function renderAbsensi(user) {
         <div style="font-size:1rem;font-weight:800;color:${statusColor};">${statusLabel}</div>
 
         <div style="margin-bottom:4px;">${statusBadge}</div>
+        ${locationNotice}
 
         <div style="margin-top:8px;">
           <div id="absensiLiveClock" style="font-size:1.45rem;font-weight:900;font-family:monospace;color:var(--text);">--:--:--</div>

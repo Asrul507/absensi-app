@@ -1,6 +1,8 @@
 import { supabase } from './supabase.js'
 import { showToast, setButtonLoading } from './feedback.js'
 
+const DEBUG_AUTH = false
+
 /* ================= LOGIN ================= */
 export async function login(email, password) {
   const btn = document.getElementById('btnLogin')
@@ -11,8 +13,10 @@ export async function login(email, password) {
     password
   })
 
-  console.log('LOGIN RESULT:', data)
-  console.log('LOGIN ERROR:', error)
+  if (DEBUG_AUTH) {
+    console.log('LOGIN RESULT:', data)
+    console.log('LOGIN ERROR:', error)
+  }
 
   setButtonLoading(btn, false, '<i class="fa fa-sign-in-alt"></i> Masuk')
 
