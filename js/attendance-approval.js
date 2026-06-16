@@ -2,6 +2,7 @@ import { supabase } from './supabase.js'
 import { toJamLokal, getDurasiMenit, buildTimestampLokal, toTanggalJamLokal } from './timezone.js'
 import { getShiftDetailByCode } from './shift-resolver.js'
 import { getServerTimeIso } from './server-time.js'
+import { assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, getProfileForAccessByName } from './access-control.js'
 
 export const STATUS_ABSENSI = {
   OPEN: 'OPEN',
@@ -207,6 +208,7 @@ export async function renderAttendanceApproval(user) {
     <div class="page-header">
       <h2><i class="fa fa-clipboard-check"></i> Approval Absensi</h2>
     </div>
+    ${!canAccessAllDepartments(user) ? `<div class="card fade-up" style="padding:12px 14px;margin-bottom:12px;color:var(--text-muted);font-size:.82rem;font-weight:700;"><i class="fa fa-building"></i> ${buildDepartmentScopeInfo(user)}</div>` : ''}
     <div class="card fade-up" style="padding:14px;margin-bottom:14px;">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
         <input id="approvalSearch" placeholder="Cari nama..." oninput="window.loadAttendanceApproval()" style="flex:1;min-width:180px;padding:10px;border:1.5px solid var(--border);border-radius:var(--r-md);">
@@ -224,6 +226,20 @@ window.loadAttendanceApproval = async function () {
   if (!container) return
 
   const search = document.getElementById('approvalSearch')?.value?.trim() || ''
+  let accessibleProfiles = []
+  try {
+    accessibleProfiles = await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: 'id, nama_lengkap, departemen, role, status_akun' })
+  } catch (err) {
+    container.innerHTML = `<div class="card" style="padding:18px;color:var(--danger);">Gagal memuat cakupan departemen.</div>`
+    return
+  }
+
+  const accessibleIds = accessibleProfiles.map(p => p.id).filter(Boolean)
+  if (!canAccessAllDepartments(window.currentUser) && !accessibleIds.length) {
+    container.innerHTML = `<div class="card" style="text-align:center;padding:28px;color:var(--text-muted);"><i class="fa fa-building" style="font-size:2rem;color:var(--primary);"></i><p style="font-weight:800;margin-top:8px;">Tidak ada data untuk departemen Anda.</p></div>`
+    return
+  }
+
   let query = supabase
     .from('absensi')
     .select('*')
@@ -231,6 +247,7 @@ window.loadAttendanceApproval = async function () {
     .order('tanggal', { ascending: false })
     .order('waktu_masuk', { ascending: true })
 
+  if (!canAccessAllDepartments(window.currentUser)) query = query.in('user_id', accessibleIds)
   if (search) query = query.ilike('nama', `%${search}%`)
 
   const { data, error } = await query
@@ -241,7 +258,7 @@ window.loadAttendanceApproval = async function () {
 
   const rows = data || []
   if (!rows.length) {
-    container.innerHTML = `<div class="card" style="text-align:center;padding:28px;color:var(--text-muted);"><i class="fa fa-circle-check" style="font-size:2rem;color:var(--success);"></i><p style="font-weight:800;margin-top:8px;">Tidak ada absensi OPEN.</p></div>`
+    container.innerHTML = `<div class="card" style="text-align:center;padding:28px;color:var(--text-muted);"><i class="fa fa-circle-check" style="font-size:2rem;color:var(--success);"></i><p style="font-weight:800;margin-top:8px;">${canAccessAllDepartments(window.currentUser) ? 'Tidak ada absensi OPEN.' : 'Tidak ada data untuk departemen Anda.'}</p></div>`
     return
   }
 
@@ -278,7 +295,7 @@ window.loadAttendanceApproval = async function () {
         <textarea id="note-${row.id}" placeholder="Catatan approval (opsional)" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;min-height:58px;"></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
           <button class="btn-primary btn-sm" onclick="window.approveAttendance('${row.id}', '${suggested}', this)"><i class="fa fa-check"></i> Approve (${suggested.replaceAll('_',' ')})</button>
-          <button class="btn-secondary btn-sm" onclick="window.approveAttendance('${row.id}', 'HADIR', this)"><i class="fa fa-pen"></i> Perbaiki & Approve</button>
+          <button class="btn-secondary btn-sm" onclick="window.approveAttendance('${row.id}', 'HADIR', this)"><i class="fa fa-pen"></i> Simpan Edit & Approve</button>
           <button class="btn-danger btn-sm" onclick="window.rejectAttendance('${row.id}', this)"><i class="fa fa-times"></i> Reject</button>
         </div>
       </div>`
@@ -296,20 +313,28 @@ function denyAttendanceApprovalAccess() {
 window.approveAttendance = async function (id, finalStatus, actionButton = null) {
   if (!canApproveAttendance()) { denyAttendanceApprovalAccess(); return }
   setAttendanceApprovalButtons(id, true)
+  const originalButtonHtml = actionButton?.innerHTML || ''
   if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   const note = document.getElementById(`note-${id}`)?.value || ''
   const masuk = document.getElementById(`editMasuk-${id}`)?.value || null
   const pulang = document.getElementById(`editPulang-${id}`)?.value || null
-  const serverIso = await getServerTimeIso()
 
-  const { data: currentRow, error: currentError } = await supabase
+  try {
+    const serverIso = await getServerTimeIso()
+
+    const { data: currentRow, error: currentError } = await supabase
     .from('absensi')
     .select('*')
     .eq('id', id)
     .eq('status_absensi', STATUS_ABSENSI.OPEN)
     .maybeSingle()
-  if (currentError) { alert('Gagal memuat absensi: ' + currentError.message); setAttendanceApprovalButtons(id, false); return }
-  if (!currentRow) { alert('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
+    if (currentError) throw new Error('Gagal memuat absensi: ' + currentError.message)
+    if (!currentRow) throw new Error('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
+
+    const targetProfile = currentRow.user_id
+      ? await getProfileForAccess(currentRow.user_id)
+      : await getProfileForAccessByName(currentRow.nama)
+    assertSameDepartment(window.currentUser, targetProfile)
 
   const nextRow = { ...currentRow }
   if (masuk) nextRow.waktu_masuk = localInputToMakassarIso(masuk)
@@ -329,7 +354,7 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
   if (nextRow.waktu_masuk !== currentRow.waktu_masuk) payload.waktu_masuk = nextRow.waktu_masuk
   if (nextRow.waktu_pulang !== currentRow.waktu_pulang) payload.waktu_pulang = nextRow.waktu_pulang
 
-  console.log('[APPROVAL ABSENSI] before approve update', { id, payload, ignoredManualFinalStatus: finalStatus })
+  console.log('[APPROVAL ABSENSI] before approve update', { id, payload, manualActionLabel: finalStatus })
   const updateResult = await supabase
     .from('absensi')
     .update(payload)
@@ -339,8 +364,8 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve update response', updateResult)
 
-  if (updateResult.error) { alert('Gagal approve: ' + updateResult.error.message); setAttendanceApprovalButtons(id, false); return }
-  if (!updateResult.data) { alert('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
+    if (updateResult.error) throw new Error('Gagal approve: ' + updateResult.error.message)
+    if (!updateResult.data) throw new Error('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
 
   const verifyResult = await supabase
     .from('absensi')
@@ -349,23 +374,42 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve verify from DB', verifyResult)
 
-  if (verifyResult.error) { alert('Gagal cek ulang approval: ' + verifyResult.error.message); setAttendanceApprovalButtons(id, false); return }
+    if (verifyResult.error) throw new Error('Gagal cek ulang approval: ' + verifyResult.error.message)
   if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.COMPLETE) {
-    alert('Approval belum tersimpan sebagai COMPLETE. Silakan coba lagi.')
-    setAttendanceApprovalButtons(id, false)
-    return
+      throw new Error('Approval belum tersimpan sebagai COMPLETE. Silakan coba lagi.')
   }
 
-  await window.loadAttendanceApproval()
+    await window.loadAttendanceApproval()
+  } catch (err) {
+    alert(err.message || 'Gagal approve absensi.')
+    setAttendanceApprovalButtons(id, false)
+    if (actionButton && originalButtonHtml) actionButton.innerHTML = originalButtonHtml
+  }
 }
 
 window.rejectAttendance = async function (id, actionButton = null) {
   if (!canApproveAttendance()) { denyAttendanceApprovalAccess(); return }
   setAttendanceApprovalButtons(id, true)
+  const originalButtonHtml = actionButton?.innerHTML || ''
   if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   const note = document.getElementById(`note-${id}`)?.value || ''
-  const serverIso = await getServerTimeIso()
-  const payload = {
+
+  try {
+    const serverIso = await getServerTimeIso()
+    const { data: currentRow, error: currentError } = await supabase
+      .from('absensi')
+      .select('id,user_id,nama,status_absensi')
+      .eq('id', id)
+      .eq('status_absensi', STATUS_ABSENSI.OPEN)
+      .maybeSingle()
+    if (currentError) throw new Error('Gagal memuat absensi: ' + currentError.message)
+    if (!currentRow) throw new Error('Reject gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
+    const targetProfile = currentRow.user_id
+      ? await getProfileForAccess(currentRow.user_id)
+      : await getProfileForAccessByName(currentRow.nama)
+    assertSameDepartment(window.currentUser, targetProfile)
+
+    const payload = {
     status_absensi: STATUS_ABSENSI.REJECTED,
     approved_by: window.currentUser?.id || null,
     approved_at: serverIso,
@@ -382,8 +426,8 @@ window.rejectAttendance = async function (id, actionButton = null) {
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] reject update response', updateResult)
 
-  if (updateResult.error) { alert('Gagal reject: ' + updateResult.error.message); setAttendanceApprovalButtons(id, false); return }
-  if (!updateResult.data) { alert('Reject gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
+    if (updateResult.error) throw new Error('Gagal reject: ' + updateResult.error.message)
+    if (!updateResult.data) throw new Error('Reject gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
 
   const verifyResult = await supabase
     .from('absensi')
@@ -392,12 +436,15 @@ window.rejectAttendance = async function (id, actionButton = null) {
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] reject verify from DB', verifyResult)
 
-  if (verifyResult.error) { alert('Gagal cek ulang reject: ' + verifyResult.error.message); setAttendanceApprovalButtons(id, false); return }
+    if (verifyResult.error) throw new Error('Gagal cek ulang reject: ' + verifyResult.error.message)
   if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.REJECTED) {
-    alert('Reject belum tersimpan sebagai REJECTED. Silakan coba lagi.')
-    setAttendanceApprovalButtons(id, false)
-    return
+      throw new Error('Reject belum tersimpan sebagai REJECTED. Silakan coba lagi.')
   }
 
-  await window.loadAttendanceApproval()
+    await window.loadAttendanceApproval()
+  } catch (err) {
+    alert(err.message || 'Gagal reject absensi.')
+    setAttendanceApprovalButtons(id, false)
+    if (actionButton && originalButtonHtml) actionButton.innerHTML = originalButtonHtml
+  }
 }

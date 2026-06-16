@@ -29,6 +29,7 @@ import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 import { showToast, confirmAction } from './feedback.js'
 import { logAuditEvent } from './audit-trail.js'
 import { renderAttendanceApproval, canApproveAttendance } from './attendance-approval.js'
+import { assertSameDepartment, canAccessAllDepartments, canManageUserByDepartment, getAccessibleProfiles, getUserDepartment } from './access-control.js'
 
 /* ================= GLOBAL VARIABLES ================= */
 window.currentUser  = null
@@ -269,11 +270,15 @@ async function refreshNotificationBadge() {
   let pendingApproval = 0
 
   if (canApproveAttendance(user)) {
-    const [{ count: c1 }, { count: c2 }, { count: c3 }] = await Promise.all([
-      supabase.from('pengajuan').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('perbaikan_absen').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('absensi').select('*', { count: 'exact', head: true }).eq('status_absensi', 'OPEN')
-    ])
+    const scopedProfiles = await getAccessibleProfiles(user, { activeOnly: false, select: 'id, nama_lengkap, departemen, role, status_akun' })
+    const scopedIds = scopedProfiles.map(p => p.id).filter(Boolean)
+    const scopeQuery = (query) => (!canAccessAllDepartments(user) ? (scopedIds.length ? query.in('user_id', scopedIds) : null) : query)
+    const pendingQueries = [
+      scopeQuery(supabase.from('pengajuan').select('*', { count: 'exact', head: true }).eq('status', 'pending')),
+      scopeQuery(supabase.from('perbaikan_absen').select('*', { count: 'exact', head: true }).eq('status', 'pending')),
+      scopeQuery(supabase.from('absensi').select('*', { count: 'exact', head: true }).eq('status_absensi', 'OPEN'))
+    ]
+    const [{ count: c1 }, { count: c2 }, { count: c3 }] = await Promise.all(pendingQueries.map(q => q || Promise.resolve({ count: 0 })))
     pendingPengajuan = c1 || 0
     pendingPerbaikan = c2 || 0
     pendingApproval = c3 || 0
@@ -321,10 +326,13 @@ async function loadNotificationItems() {
   if (!user) return []
 
   if (canApproveAttendance(user)) {
+    const scopedProfiles = await getAccessibleProfiles(user, { activeOnly: false, select: 'id, nama_lengkap, departemen, role, status_akun' })
+    const scopedIds = scopedProfiles.map(p => p.id).filter(Boolean)
+    const scopeQuery = (query) => (!canAccessAllDepartments(user) ? (scopedIds.length ? query.in('user_id', scopedIds) : null) : query)
     const [p1, p2, p3] = await Promise.all([
-      supabase.from('pengajuan').select('id,nama,jenis,status,created_at').eq('status','pending').order('created_at',{ascending:false}).limit(5),
-      supabase.from('perbaikan_absen').select('id,nama,jenis,status,created_at').eq('status','pending').order('created_at',{ascending:false}).limit(5),
-      supabase.from('absensi').select('id,nama,tanggal,status_absensi,created_at').eq('status_absensi','OPEN').order('tanggal',{ascending:false}).limit(5)
+      scopeQuery(supabase.from('pengajuan').select('id,nama,jenis,status,created_at,user_id').eq('status','pending').order('created_at',{ascending:false}).limit(5)) || Promise.resolve({ data: [] }),
+      scopeQuery(supabase.from('perbaikan_absen').select('id,nama,jenis,status,created_at,user_id').eq('status','pending').order('created_at',{ascending:false}).limit(5)) || Promise.resolve({ data: [] }),
+      scopeQuery(supabase.from('absensi').select('id,nama,tanggal,status_absensi,created_at,user_id').eq('status_absensi','OPEN').order('tanggal',{ascending:false}).limit(5)) || Promise.resolve({ data: [] })
     ])
     const a=(p1.data||[]).map(i=>({type:'pengajuan',title:`${i.nama||'Karyawan'} mengajukan ${i.jenis||'-'}`,created_at:i.created_at,route:'pengajuan'}))
     const b=(p2.data||[]).map(i=>({type:'perbaikan',title:`${i.nama||'Karyawan'} request ${i.jenis||'-'}`,created_at:i.created_at,route:'perbaikan-absen'}))
@@ -608,6 +616,7 @@ window.uploadFotoProfil = async function (input) {
 async function renderUsers() {
   const content    = document.getElementById('content')
   const viewerRole = window.currentUser.role
+  const isAllDepartmentViewer = canAccessAllDepartments(window.currentUser)
 
   content.innerHTML = `
     <div class="page-header">
@@ -627,6 +636,8 @@ async function renderUsers() {
         </div>
       ` : ''}
     </div>
+
+    ${viewerRole !== 'staff' ? `<div class="card fade-up" style="padding:12px 14px;margin-bottom:12px;color:var(--text-muted);font-size:.82rem;font-weight:700;"><i class="fa fa-building"></i> ${isAllDepartmentViewer ? 'Anda mengelola semua departemen.' : `Anda mengelola departemen: ${getUserDepartment(window.currentUser) || '-'}.`}</div>` : ''}
 
     <div style="display:flex;gap:8px;margin-bottom:16px;">
       <button id="tabAktif" class="btn-primary btn-sm" onclick="switchTab('aktif')">
@@ -665,8 +676,12 @@ async function renderUsers() {
     </div>
   `
 
-  const { data: users }   = await supabase.from('profiles').select('*').order('nama_lengkap')
-  const { data: pending } = await supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap')
+  const users = viewerRole === 'staff'
+    ? await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
+    : await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
+  let pendingQuery = supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap')
+  if (!canAccessAllDepartments(window.currentUser) && viewerRole !== 'staff') pendingQuery = pendingQuery.eq('departemen', getUserDepartment(window.currentUser))
+  const { data: pending } = viewerRole !== 'staff' ? await pendingQuery : { data: [] }
 
   let cutiTahunanRows = []
   try {
@@ -942,7 +957,7 @@ window.openFormTambah = async function() {
         </select>
       </div>
       <div class="field"><label>Jabatan</label><input id="pJabatan" placeholder="Jabatan"></div>
-      <div class="field"><label>Departemen</label><input id="pDept" placeholder="Departemen"></div>
+      <div class="field"><label>Departemen</label><input id="pDept" placeholder="Departemen" value="${canAccessAllDepartments(window.currentUser) ? '' : getUserDepartment(window.currentUser)}" ${canAccessAllDepartments(window.currentUser) ? '' : 'disabled'}></div>
       <div class="field"><label>No. HP</label><input id="pHp" placeholder="08xx"></div>
       <div class="field"><label>Tanggal Bergabung</label><input type="date" id="pTgl" value="${getTodayLokal()}"></div>
       <div class="field"><label>Sisa Cuti Awal</label><input type="number" id="pSisaCuti" min="0" value="0"></div>
@@ -976,11 +991,14 @@ window.savePendingKaryawan = async function() {
   const kontrakPayload = readKontrakForm('p')
   if (!validateKontrakPayload(kontrakPayload)) return
 
+  const inputDept = canAccessAllDepartments(window.currentUser) ? document.getElementById('pDept').value.trim() : getUserDepartment(window.currentUser)
+  if (!canAccessAllDepartments(window.currentUser) && !inputDept) { showToast('Departemen admin belum diatur.', 'warning'); return }
+
   const { error } = await supabase.from('pending_profiles').insert([{
     nama_lengkap:      nama,
     email:             document.getElementById('pEmail')?.value.trim() || null,
     jabatan:           document.getElementById('pJabatan').value.trim(),
-    departemen:        document.getElementById('pDept').value.trim(),
+    departemen:        inputDept,
     no_hp:             document.getElementById('pHp').value.trim(),
     tanggal_bergabung: document.getElementById('pTgl').value || null,
     tanggal_lahir:     document.getElementById('pLahir').value || null,
@@ -1017,8 +1035,8 @@ function renderUserList(users) {
     let bisaEdit = false
     if (me.role === 'super_admin') {
       bisaEdit = true
-    } else if (me.role === 'admin') {
-      if (u.role === 'staff' || u.id === me.id) bisaEdit = true
+    } else if (['admin', 'spv', 'supervisor'].includes(me.role)) {
+      if ((u.role === 'staff' || u.role === 'admin' || u.id === me.id) && canManageUserByDepartment(me, u)) bisaEdit = true
     } else if (me.role === 'staff') {
       if (u.id === me.id) bisaEdit = true
     }
@@ -1056,7 +1074,7 @@ function renderUserList(users) {
             </button>
           ` : ''}
 
-          ${(me.role === 'super_admin' || (me.role === 'admin' && u.role === 'staff')) ? `
+          ${(me.role === 'super_admin' || (['admin', 'spv', 'supervisor'].includes(me.role) && u.role === 'staff' && canManageUserByDepartment(me, u))) ? `
             <button class="action-btn ${isAktif?'delete':''}" title="${isAktif?'Non-aktifkan':'Aktifkan'}"
               onclick="toggleStatusUser('${u.id}','${u.status_akun||'Aktif'}'); event.stopPropagation();">
               <i class="fa fa-${isAktif?'ban':'check'}"></i>
@@ -1113,8 +1131,9 @@ window.openEditKaryawan = async function(id) {
   if (!target) return
 
   const me = window.currentUser
+  try { assertSameDepartment(me, target) } catch (err) { showToast(err.message, 'error'); return }
   const isMe = me.id === target.id
-  const canEditAllFields = (me.role === 'super_admin') || (['admin', 'hr'].includes(me.role) && target.role === 'staff')
+  const canEditAllFields = (me.role === 'super_admin') || (['admin', 'hr', 'spv', 'supervisor'].includes(me.role) && target.role === 'staff' && canManageUserByDepartment(me, target))
 
   let opsiLokasi = ''
   try {
@@ -1236,6 +1255,8 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
   const titikRadiusBaru = selectEl ? (selectEl.value || null) : null
 
   try {
+    const targetProfile = (window._allUsers || []).find(u => u.id === id) || null
+    assertSameDepartment(window.currentUser, targetProfile)
     if (canEditAll) {
       const kontrakPayload = readKontrakForm('edit')
       if (!validateKontrakPayload(kontrakPayload)) return
@@ -1406,6 +1427,8 @@ function renderPendingList(list) {
 }
 
 window.deletePending = async function(id, nama) {
+  const pendingTarget = (window._pendingList || []).find(p => p.id === id) || null
+  try { assertSameDepartment(window.currentUser, pendingTarget) } catch (err) { showToast(err.message, 'error'); return }
   if (!(await confirmAction(`Hapus data "${nama}" dari daftar tunggu pendaftaran?`, 'Ya, hapus'))) return
   await supabase.from('pending_profiles').delete().eq('id', id)
   window._pendingList = window._pendingList.filter(p => p.id !== id)
@@ -1463,12 +1486,14 @@ window.handleUploadKaryawanExcel = function(input) {
           durasiKontrak: get('Durasi Kontrak', 'durasi_kontrak') || 12,
           satuanDurasiKontrak: get('Satuan Durasi Kontrak', 'satuan_durasi_kontrak') || 'bulan'
         })
-        const valid = !!nama && !!kontrakPayload.kontrak_mulai && !!kontrakPayload.durasi_kontrak
+        const dept = get('Departemen', 'departemen', 'dept')
+        const deptAllowed = canAccessAllDepartments(window.currentUser) || String(dept || '').trim().toLowerCase() === getUserDepartment(window.currentUser).toLowerCase()
+        const valid = !!nama && !!kontrakPayload.kontrak_mulai && !!kontrakPayload.durasi_kontrak && deptAllowed
         return {
           _index: i + 2, // baris Excel (header = 1)
           nama_lengkap:      nama,
           jabatan:           get('Jabatan', 'jabatan', 'position'),
-          departemen:        get('Departemen', 'departemen', 'dept'),
+          departemen:        canAccessAllDepartments(window.currentUser) ? dept : getUserDepartment(window.currentUser),
           no_hp:             get('No HP', 'no_hp', 'hp', 'phone'),
           tanggal_bergabung: get('Tanggal Bergabung', 'tanggal_bergabung') || null,
           tanggal_lahir:     get('Tanggal Lahir', 'tanggal_lahir') || null,
@@ -1477,7 +1502,7 @@ window.handleUploadKaryawanExcel = function(input) {
           titik_radius:      get('Titik Radius', 'titik_radius') || null,
           ...kontrakPayload,
           valid,
-          errMsg: !nama ? 'Kolom "Nama Lengkap" kosong' : !kontrakPayload.kontrak_mulai ? 'Kontrak Mulai wajib diisi' : !kontrakPayload.durasi_kontrak ? 'Durasi Kontrak wajib diisi' : ''
+          errMsg: !nama ? 'Kolom "Nama Lengkap" kosong' : !deptAllowed ? 'Departemen berbeda' : !kontrakPayload.kontrak_mulai ? 'Kontrak Mulai wajib diisi' : !kontrakPayload.durasi_kontrak ? 'Durasi Kontrak wajib diisi' : ''
         }
       })
 
@@ -1563,7 +1588,7 @@ window.batalUploadKaryawan = function() {
 }
 
 window.konfirmasiUploadKaryawan = async function() {
-  const rows = (window._uploadKaryawanParsed || []).filter(r => r.valid)
+  const rows = (window._uploadKaryawanParsed || []).filter(r => r.valid && (canAccessAllDepartments(window.currentUser) || String(r.departemen || '').trim().toLowerCase() === getUserDepartment(window.currentUser).toLowerCase()))
   if (!rows.length) return
 
   const payload = rows.map(r => ({
@@ -1598,6 +1623,8 @@ window.konfirmasiUploadKaryawan = async function() {
 
 /* ================= TOGGLE AKTIF / NON-AKTIF KARYAWAN ================= */
 window.toggleStatusUser = async function(userId, statusSekarang) {
+  const targetProfile = (window._allUsers || []).find(u => u.id === userId) || null
+  try { assertSameDepartment(window.currentUser, targetProfile) } catch (err) { showToast(err.message, 'error'); return }
   const statusBaru = statusSekarang === 'Aktif' ? 'Non-Aktif' : 'Aktif'
   if (!(await confirmAction(`Ubah status karyawan menjadi ${statusBaru}?`, 'Ya, ubah'))) return
   

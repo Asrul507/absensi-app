@@ -27,15 +27,27 @@ import {
   validateRentangPengajuan
 } from './services/leave-service.js'
 import { showToast, setButtonLoading } from './feedback.js'
+import { assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess } from './access-control.js'
 
 
 export async function renderPengajuan(user) {
   const content = document.getElementById('content')
   const isAdmin = canManageCutiTahunan(user)
 
+  let accessibleProfiles = []
+  if (isAdmin) {
+    try {
+      accessibleProfiles = await getAccessibleProfiles(user, { activeOnly: false, select: PROFILE_CUTI_SELECT })
+    } catch (err) {
+      content.innerHTML = `<div class="card"><p class="text-danger">❌ Gagal memuat cakupan departemen</p></div>`
+      return
+    }
+  }
+
   let query = supabase.from('pengajuan').select('*').order('created_at', { ascending: false })
   if (!isAdmin) query = query.eq('user_id', user.id)
-  const { data: list, error } = await query
+  else if (!canAccessAllDepartments(user)) query = accessibleProfiles.length ? query.in('user_id', accessibleProfiles.map(p => p.id)) : null
+  const { data: list, error } = query ? await query : { data: [], error: null }
   if (error) {
     content.innerHTML = `<div class="card"><p class="text-danger">❌ Gagal load data</p></div>`
     return
@@ -55,10 +67,8 @@ export async function renderPengajuan(user) {
   const eligible = statusCutiTahunan === STATUS_CUTI_TAHUNAN.AKTIF
   let adminCutiTahunanRows = []
   if (isAdmin) {
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select(PROFILE_CUTI_SELECT)
-      .order('nama_lengkap')
+    const profiles = accessibleProfiles
+    const profilesError = null
     if (!profilesError) {
       try {
         adminCutiTahunanRows = await syncEligibleCutiTahunanForProfiles(profiles || [])
@@ -104,6 +114,8 @@ export async function renderPengajuan(user) {
       </div>
     </div>
     ` : ''}
+
+    ${isAdmin ? `<div class="card fade-up" style="padding:12px 14px;margin-bottom:12px;color:var(--text-muted);font-size:.82rem;font-weight:700;"><i class="fa fa-building"></i> ${buildDepartmentScopeInfo(user)}</div>` : ''}
 
     ${isAdmin ? renderCutiTahunanAdminSection(adminCutiTahunanRows) : ''}
 
@@ -558,6 +570,8 @@ window.submitApprovalWithComment = async function(id, type, catatan, actionButto
         .maybeSingle()
       if (loadError) throw loadError
       if (!pengajuan) throw new Error('Pengajuan tidak ditemukan atau sudah diproses.')
+      const targetProfile = await getProfileForAccess(pengajuan.user_id)
+      assertSameDepartment(window.currentUser, targetProfile)
 
       const { user_id, jenis, tanggal_mulai, jumlah_hari } = pengajuan
       const rentang = await validatePengajuanRequest({ userId: user_id, jenis, tanggalMulai: tanggal_mulai, jumlahHari: jumlah_hari, excludeId: id, allowPast: true })
@@ -647,6 +661,8 @@ window.submitApprovalWithComment = async function(id, type, catatan, actionButto
       const { data: beforeReject, error: beforeRejectError } = await supabase.from('pengajuan').select('*').eq('id', id).eq('status', 'pending').maybeSingle()
       if (beforeRejectError) throw beforeRejectError
       if (!beforeReject) throw new Error('Pengajuan tidak ditemukan atau sudah diproses.')
+      const targetProfile = await getProfileForAccess(beforeReject.user_id)
+      assertSameDepartment(window.currentUser, targetProfile)
       const { data: rejectedRow, error: rejectError } = await supabase.from('pengajuan').update({
         status: 'rejected',
         catatan_approval: catatan,

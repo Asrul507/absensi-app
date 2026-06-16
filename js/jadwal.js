@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js'
 import { showToast } from './feedback.js'
 import { getAllShiftOptions } from './shift-resolver.js'
+import { assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, isDepartmentScopedRole } from './access-control.js'
 
 const SHIFT_COLORS = [
   { bg: '#e0f2fe', color: '#0369a1', badge: '#0ea5e9' },
@@ -11,6 +12,27 @@ const SHIFT_COLORS = [
 ]
 const OFF_SHIFT_STYLE = { bg: '#f1f5f9', color: '#64748b', badge: '#94a3b8' }
 let SHIFT_INFO = {}
+
+function assertImportDepartment(currentUser, targetUser) {
+  try {
+    assertSameDepartment(currentUser, targetUser)
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+function buildImportResultHtml(successCount, rejectedRows, bulanInfo) {
+  const rejectedCount = rejectedRows.length
+  const rejectedHtml = rejectedCount
+    ? `<div style="margin-top:8px;color:#92400e;">Ditolak: <strong>${rejectedCount}</strong> baris.</div>
+       <ul style="margin:6px 0 0 16px;padding:0;color:#92400e;max-height:140px;overflow:auto;">
+         ${rejectedRows.slice(0, 20).map(r => `<li>Baris ${r.rowNumber}: ${r.name} — ${r.reason}</li>`).join('')}
+         ${rejectedRows.length > 20 ? `<li>...dan ${rejectedRows.length - 20} baris lain.</li>` : ''}
+       </ul>`
+    : ''
+  return `✅ Import selesai untuk periode: <strong>${bulanInfo}</strong><br>Berhasil: <strong>${successCount}</strong> jadwal.${rejectedHtml}`
+}
 
 function formatShiftTime(shift) {
   if (!shift || shift.jam_masuk === '-' || shift.jam_pulang === '-') return 'Libur / Tidak Bekerja'
@@ -49,7 +71,7 @@ export async function renderJadwalManagement(user) {
     return
   }
 
-  const isAdmin = currentUserObj.role === 'admin' || currentUserObj.role === 'super_admin'
+  const isAdmin = canAccessAllDepartments(currentUserObj) || isDepartmentScopedRole(currentUserObj)
 
   const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
   const now = new Date()
@@ -182,6 +204,8 @@ export async function renderJadwalManagement(user) {
       </div>
     </div>
 
+    ${isAdmin ? `<div class="card fade-up" style="padding:12px 14px;margin-bottom:12px;color:var(--text-muted);font-size:.82rem;font-weight:700;"><i class="fa fa-building"></i> ${buildDepartmentScopeInfo(currentUserObj)}</div>` : ''}
+
     <!-- Toggle Mode Input -->
     ${isAdmin ? `
     <div class="card fade-up" style="padding:16px 18px; margin-bottom:14px;">
@@ -277,13 +301,13 @@ export async function renderJadwalManagement(user) {
   // Isi dropdown karyawan untuk input satu per satu
   if (isAdmin) {
     try {
-      const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').eq('status_akun', 'Aktif').order('nama_lengkap')
+      const profiles = await getAccessibleProfiles(currentUserObj, { select: 'id, nama_lengkap, departemen, role, status_akun' })
       const sel = document.getElementById('inputJadwalUser')
       if (sel && profiles?.length) {
         profiles.forEach(p => {
           const opt = document.createElement('option')
           opt.value = p.id
-          opt.textContent = p.nama_lengkap
+          opt.textContent = canAccessAllDepartments(currentUserObj) ? p.nama_lengkap : `${p.nama_lengkap} · ${p.departemen || '-'}`
           sel.appendChild(opt)
         })
       }
@@ -357,6 +381,14 @@ window.simpanJadwalSatu = async function() {
   }
   if (!tanggal) {
     if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = '⚠ Pilih tanggal terlebih dahulu.' }
+    return
+  }
+
+  try {
+    const targetProfile = await getProfileForAccess(userId)
+    assertSameDepartment(window.currentUser, targetProfile)
+  } catch (err) {
+    if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = '⚠ ' + err.message }
     return
   }
 
@@ -436,11 +468,14 @@ window.loadDaftarJadwalMaster = async function() {
     const startStr = `${y}-${String(m).padStart(2,'0')}-01`
     const endStr   = `${y}-${String(m).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`
 
-    const { data: profiles } = await supabase.from('profiles').select('id, nama_lengkap').eq('status_akun', 'Aktif').order('nama_lengkap')
-    const { data: jadwalData } = await supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
+    const profiles = await getAccessibleProfiles(window.currentUser, { select: 'id, nama_lengkap, departemen, role, status_akun' })
+    const accessibleIds = profiles.map(p => p.id).filter(Boolean)
+    let jadwalQuery = supabase.from('jadwal').select('*').gte('tanggal', startStr).lte('tanggal', endStr)
+    if (!canAccessAllDepartments(window.currentUser)) jadwalQuery = accessibleIds.length ? jadwalQuery.in('user_id', accessibleIds) : null
+    const { data: jadwalData } = jadwalQuery ? await jadwalQuery : { data: [] }
 
     if (!profiles?.length) {
-      container.innerHTML = `<div class="card" style="padding:20px;text-align:center;font-size:.85rem;color:var(--text-muted);">Tidak ada karyawan terdaftar.</div>`
+      container.innerHTML = `<div class="card" style="padding:20px;text-align:center;font-size:.85rem;color:var(--text-muted);">${canAccessAllDepartments(window.currentUser) ? 'Tidak ada karyawan terdaftar.' : 'Tidak ada data untuk departemen Anda.'}</div>`
       return
     }
 
@@ -546,26 +581,39 @@ window.uploadJadwalExcel = async function() {
 
       // Kelompokkan baris per bulan-tahun (file bisa berisi multi-bulan sekaligus)
       // Setiap baris punya bulan & tahun sendiri → fleksibel
-      const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap').eq('status_akun', 'Aktif')
+      const { data: users, error: errUser } = await supabase.from('profiles').select('id, nama_lengkap, departemen, role, status_akun').eq('status_akun', 'Aktif')
       if (errUser) throw errUser
 
       const userMap = {}
-      users.forEach(u => { userMap[u.nama_lengkap.trim().toLowerCase()] = u.id })
+      users.forEach(u => { userMap[u.nama_lengkap.trim().toLowerCase()] = u })
 
       const bulkPayload = []
+      const rejectedRows = []
       const bulanList   = new Set() // untuk log info bulan yang diproses
 
-      jsonData.forEach(row => {
+      jsonData.forEach((row, index) => {
+        const rowNumber = index + 2
         const excelName = row['nama'] || row['Nama']
-        if (!excelName) return
-        const matchedUserId = userMap[excelName.trim().toLowerCase()]
-        if (!matchedUserId) return
+        if (!excelName) {
+          rejectedRows.push({ rowNumber, name: '-', reason: 'nama kosong' })
+          return
+        }
+        const matchedUser = userMap[excelName.trim().toLowerCase()]
+        if (!matchedUser) {
+          rejectedRows.push({ rowNumber, name: excelName, reason: 'user tidak ditemukan' })
+          return
+        }
+        if (!canAccessAllDepartments(window.currentUser) && !assertImportDepartment(window.currentUser, matchedUser)) {
+          rejectedRows.push({ rowNumber, name: excelName, reason: 'departemen berbeda' })
+          return
+        }
+        const matchedUserId = matchedUser.id
 
         // Tentukan bulan & tahun baris ini
         const rowBulan = parseInt(row['bulan'] || row['Bulan'] || selMonth || 0)
         const rowTahun = parseInt(row['tahun'] || row['Tahun'] || selYear  || 0)
 
-        if (!rowBulan || !rowTahun) return // skip baris tanpa info bulan/tahun
+        if (!rowBulan || !rowTahun) { rejectedRows.push({ rowNumber, name: excelName, reason: 'bulan/tahun tidak valid' }); return } // skip baris tanpa info bulan/tahun
 
         const totalDays = new Date(rowTahun, rowBulan, 0).getDate()
         bulanList.add(`${rowTahun}-${String(rowBulan).padStart(2,'0')}`)
@@ -578,7 +626,7 @@ window.uploadJadwalExcel = async function() {
         }
       })
 
-      if (!bulkPayload.length) throw new Error('Tidak ada baris valid. Pastikan kolom bulan, tahun, dan nama terisi, serta nama karyawan sesuai data di sistem.')
+      if (!bulkPayload.length) throw new Error(rejectedRows.length ? 'Tidak ada baris valid. Semua baris ditolak.' : 'Tidak ada baris valid. Pastikan kolom bulan, tahun, dan nama terisi, serta nama karyawan sesuai data di sistem.')
 
       const bulanInfo = [...bulanList].join(', ')
       if (statusText) statusText.innerHTML = `<i class="fa fa-cloud-upload-alt"></i> Mengunggah ${bulkPayload.length} jadwal untuk periode ${bulanInfo}...`
@@ -588,7 +636,7 @@ window.uploadJadwalExcel = async function() {
 
       if (statusText) {
         statusText.style.color = 'var(--success)'
-        statusText.innerHTML = `✅ Sukses! ${bulkPayload.length} jadwal tersimpan untuk periode: <strong>${bulanInfo}</strong>`
+        statusText.innerHTML = buildImportResultHtml(bulkPayload.length, rejectedRows, bulanInfo)
       }
       fileInput.value = ''
 

@@ -2,6 +2,7 @@ import { supabase } from './supabase.js'
 import { toJamLokal, getTodayLokal, getDurasiMenit } from './timezone.js'
 import { showToast } from './feedback.js'
 import { canApproveAttendance, formatAttendanceStatus, RADIUS_STATUS } from './attendance-approval.js'
+import { canAccessAllDepartments, getAccessibleProfiles } from './access-control.js'
 
 export async function renderRekapInOut(user) {
   const content = document.getElementById('content')
@@ -99,16 +100,16 @@ async function loadNamaListRekap() {
   if (!container) return
 
   try {
-    const { data: profiles, error } = await supabase
-      .from('profiles')
-      .select('id, nama_lengkap')
-      .eq('status_akun', 'Aktif')
-      .order('nama_lengkap', { ascending: true })
-
-    if (error) throw error
+    const profiles = canAccessAllDepartments(window.currentUser)
+      ? (await supabase
+          .from('profiles')
+          .select('id, nama_lengkap, departemen')
+          .eq('status_akun', 'Aktif')
+          .order('nama_lengkap', { ascending: true })).data || []
+      : await getAccessibleProfiles(window.currentUser, { select: 'id, nama_lengkap, departemen, role, status_akun' })
 
     if (!profiles?.length) {
-      container.innerHTML = `<div class="empty-state" style="padding: 28px;"><i class="fa fa-inbox"></i><p>Tidak ada karyawan aktif</p></div>`
+      container.innerHTML = `<div class="empty-state" style="padding: 28px;"><i class="fa fa-inbox"></i><p>Tidak ada data untuk departemen Anda.</p></div>`
       return
     }
 
@@ -165,6 +166,17 @@ window.applyRekapInOutFilter = async function (user) {
       .eq('status_absensi', 'COMPLETE')
       .order('tanggal', { ascending: false })
 
+    if (isAdmin && !canAccessAllDepartments(user)) {
+      const profiles = await getAccessibleProfiles(user, { activeOnly: false, select: 'id, nama_lengkap, departemen, role, status_akun' })
+      const ids = profiles.map(p => p.id).filter(Boolean)
+      query = ids.length ? query.in('user_id', ids) : null
+    }
+
+    if (!query) {
+      renderRekapInOutTable([], isAdmin)
+      return
+    }
+
     if (window._selectedRekapKaryawan) {
       query = query.eq('nama', window._selectedRekapKaryawan)
     } else if (!isAdmin) {
@@ -187,9 +199,7 @@ window.applyRekapInOutFilter = async function (user) {
 
   } catch (err) {
     console.error('Error load rekap in/out:', err)
-    document.getElementById('rekapInOutDetail').innerHTML = `
-      <div class="card"><p style="color: var(--danger);">Error: ${err.message}</p></div>
-    `
+    document.getElementById('rekapInOutDetail').innerHTML = `<div class="card"><p style="color: var(--danger);">Error: ${err.message}</p></div>`
   }
 }
 
