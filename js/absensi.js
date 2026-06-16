@@ -1,18 +1,8 @@
 import { supabase } from './supabase.js'
+import { ATTENDANCE_CONFIG } from './config.js'
 import { getTodayLokal, getTanggalKemarinLocal, buildTimestampLokal, parseAbsensiTimestamp } from './timezone.js'
 // PATCH: tambah import getShiftDetailByJamMasuk sebagai fallback saat shift_code null
 import { getShiftDetailByCode, getShiftDetailByJamMasuk } from './shift-resolver.js'
-
-/* ===============================================================
-   CONFIGURATION
-   Ganti nilai ini sesuai kebijakan perusahaan
-=============================================================== */
-export const ATTENDANCE_CONFIG = {
-  GRACE_PERIOD_MINUTES: 5,        // Toleransi keterlambatan (menit)
-  MAX_ALLOWED_LATE_MINUTES: 30,   // Jika > 30 menit = consider as "tidak masuk"
-  CHECKOUT_GRACE_HOURS: 20,        // Grace period lupa pulang setelah jam pulang shift
-}
-
 
 export function addDaysYmd(ymd, days) {
   const [year, month, day] = String(ymd || '').split('-').map(Number)

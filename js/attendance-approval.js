@@ -278,7 +278,7 @@ window.loadAttendanceApproval = async function () {
         <textarea id="note-${row.id}" placeholder="Catatan approval (opsional)" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;min-height:58px;"></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
           <button class="btn-primary btn-sm" onclick="window.approveAttendance('${row.id}', '${suggested}', this)"><i class="fa fa-check"></i> Approve (${suggested.replaceAll('_',' ')})</button>
-          <button class="btn-secondary btn-sm" onclick="window.approveAttendance('${row.id}', 'HADIR', this)"><i class="fa fa-pen"></i> Perbaiki & Approve</button>
+          <button class="btn-secondary btn-sm" onclick="window.approveAttendance('${row.id}', 'HADIR', this)"><i class="fa fa-pen"></i> Simpan Edit & Approve</button>
           <button class="btn-danger btn-sm" onclick="window.rejectAttendance('${row.id}', this)"><i class="fa fa-times"></i> Reject</button>
         </div>
       </div>`
@@ -296,20 +296,23 @@ function denyAttendanceApprovalAccess() {
 window.approveAttendance = async function (id, finalStatus, actionButton = null) {
   if (!canApproveAttendance()) { denyAttendanceApprovalAccess(); return }
   setAttendanceApprovalButtons(id, true)
+  const originalButtonHtml = actionButton?.innerHTML || ''
   if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   const note = document.getElementById(`note-${id}`)?.value || ''
   const masuk = document.getElementById(`editMasuk-${id}`)?.value || null
   const pulang = document.getElementById(`editPulang-${id}`)?.value || null
-  const serverIso = await getServerTimeIso()
 
-  const { data: currentRow, error: currentError } = await supabase
+  try {
+    const serverIso = await getServerTimeIso()
+
+    const { data: currentRow, error: currentError } = await supabase
     .from('absensi')
     .select('*')
     .eq('id', id)
     .eq('status_absensi', STATUS_ABSENSI.OPEN)
     .maybeSingle()
-  if (currentError) { alert('Gagal memuat absensi: ' + currentError.message); setAttendanceApprovalButtons(id, false); return }
-  if (!currentRow) { alert('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
+    if (currentError) throw new Error('Gagal memuat absensi: ' + currentError.message)
+    if (!currentRow) throw new Error('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
 
   const nextRow = { ...currentRow }
   if (masuk) nextRow.waktu_masuk = localInputToMakassarIso(masuk)
@@ -329,7 +332,7 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
   if (nextRow.waktu_masuk !== currentRow.waktu_masuk) payload.waktu_masuk = nextRow.waktu_masuk
   if (nextRow.waktu_pulang !== currentRow.waktu_pulang) payload.waktu_pulang = nextRow.waktu_pulang
 
-  console.log('[APPROVAL ABSENSI] before approve update', { id, payload, ignoredManualFinalStatus: finalStatus })
+  console.log('[APPROVAL ABSENSI] before approve update', { id, payload, manualActionLabel: finalStatus })
   const updateResult = await supabase
     .from('absensi')
     .update(payload)
@@ -339,8 +342,8 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve update response', updateResult)
 
-  if (updateResult.error) { alert('Gagal approve: ' + updateResult.error.message); setAttendanceApprovalButtons(id, false); return }
-  if (!updateResult.data) { alert('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
+    if (updateResult.error) throw new Error('Gagal approve: ' + updateResult.error.message)
+    if (!updateResult.data) throw new Error('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
 
   const verifyResult = await supabase
     .from('absensi')
@@ -349,23 +352,29 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] approve verify from DB', verifyResult)
 
-  if (verifyResult.error) { alert('Gagal cek ulang approval: ' + verifyResult.error.message); setAttendanceApprovalButtons(id, false); return }
+    if (verifyResult.error) throw new Error('Gagal cek ulang approval: ' + verifyResult.error.message)
   if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.COMPLETE) {
-    alert('Approval belum tersimpan sebagai COMPLETE. Silakan coba lagi.')
-    setAttendanceApprovalButtons(id, false)
-    return
+      throw new Error('Approval belum tersimpan sebagai COMPLETE. Silakan coba lagi.')
   }
 
-  await window.loadAttendanceApproval()
+    await window.loadAttendanceApproval()
+  } catch (err) {
+    alert(err.message || 'Gagal approve absensi.')
+    setAttendanceApprovalButtons(id, false)
+    if (actionButton && originalButtonHtml) actionButton.innerHTML = originalButtonHtml
+  }
 }
 
 window.rejectAttendance = async function (id, actionButton = null) {
   if (!canApproveAttendance()) { denyAttendanceApprovalAccess(); return }
   setAttendanceApprovalButtons(id, true)
+  const originalButtonHtml = actionButton?.innerHTML || ''
   if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   const note = document.getElementById(`note-${id}`)?.value || ''
-  const serverIso = await getServerTimeIso()
-  const payload = {
+
+  try {
+    const serverIso = await getServerTimeIso()
+    const payload = {
     status_absensi: STATUS_ABSENSI.REJECTED,
     approved_by: window.currentUser?.id || null,
     approved_at: serverIso,
@@ -382,8 +391,8 @@ window.rejectAttendance = async function (id, actionButton = null) {
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] reject update response', updateResult)
 
-  if (updateResult.error) { alert('Gagal reject: ' + updateResult.error.message); setAttendanceApprovalButtons(id, false); return }
-  if (!updateResult.data) { alert('Reject gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.'); setAttendanceApprovalButtons(id, false); return }
+    if (updateResult.error) throw new Error('Gagal reject: ' + updateResult.error.message)
+    if (!updateResult.data) throw new Error('Reject gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
 
   const verifyResult = await supabase
     .from('absensi')
@@ -392,12 +401,15 @@ window.rejectAttendance = async function (id, actionButton = null) {
     .maybeSingle()
   console.log('[APPROVAL ABSENSI] reject verify from DB', verifyResult)
 
-  if (verifyResult.error) { alert('Gagal cek ulang reject: ' + verifyResult.error.message); setAttendanceApprovalButtons(id, false); return }
+    if (verifyResult.error) throw new Error('Gagal cek ulang reject: ' + verifyResult.error.message)
   if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.REJECTED) {
-    alert('Reject belum tersimpan sebagai REJECTED. Silakan coba lagi.')
-    setAttendanceApprovalButtons(id, false)
-    return
+      throw new Error('Reject belum tersimpan sebagai REJECTED. Silakan coba lagi.')
   }
 
-  await window.loadAttendanceApproval()
+    await window.loadAttendanceApproval()
+  } catch (err) {
+    alert(err.message || 'Gagal reject absensi.')
+    setAttendanceApprovalButtons(id, false)
+    if (actionButton && originalButtonHtml) actionButton.innerHTML = originalButtonHtml
+  }
 }

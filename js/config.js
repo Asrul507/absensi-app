@@ -16,7 +16,7 @@ export const ATTENDANCE_CONFIG = {
   /* ===== THRESHOLD TERLAMBAT ===== */
   // Jika terlambat > threshold, dianggap tidak masuk
   // (Gunakan untuk absensi yang bukan incomplete shift)
-  MAX_ALLOWED_LATE_MINUTES: 60,
+  MAX_ALLOWED_LATE_MINUTES: 30,
 
   /* ===== NOTIFIKASI RULES ===== */
   // Notify karyawan jika lupa absen pulang
@@ -43,6 +43,9 @@ export const ATTENDANCE_CONFIG = {
   // Toleransi pulang lebih awal (menit)
   // Jika pulang <= grace period sebelum jam pulang resmi, tetap valid
   EARLY_CHECKOUT_GRACE_MINUTES: 5,
+
+  // Batas toleransi lupa absen pulang setelah jam pulang shift (jam)
+  CHECKOUT_GRACE_HOURS: 20,
 }
 
 /* ===============================================================
