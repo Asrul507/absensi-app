@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { showToast } from './feedback.js'
+import { canAccessAllDepartments, getAccessibleProfiles } from './access-control.js'
 
 /* ===============================================================
    HELPER: Konversi menit ke HH:MM:SS
@@ -16,7 +17,7 @@ function minutesToHMS(minutes) {
 =============================================================== */
 export async function renderRekap(user) {
   const content = document.getElementById('content')
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.role === 'spv' || user.role === 'supervisor'
 
   content.innerHTML = `
     <div class="page-header">
@@ -135,11 +136,24 @@ window.applyRekapFilter = async function (user) {
   const dari = document.getElementById('filterDari')?.value
   const sampai = document.getElementById('filterSampai')?.value
   const tab = window._currentRekapTab || 'absensi'
+  let accessibleIds = []
 
   try {
+    if (isAdmin && !canAccessAllDepartments(user)) {
+      const profiles = await getAccessibleProfiles(user, { activeOnly: false, select: 'id, nama_lengkap, departemen, role, status_akun' })
+      accessibleIds = profiles.map(p => p.id).filter(Boolean)
+    }
     if (tab === 'absensi') {
       let query = supabase.from('absensi').select('*').eq('status_absensi', 'COMPLETE').order('tanggal', { ascending: false })
+      if (isAdmin && !canAccessAllDepartments(user)) {
+        query = accessibleIds.length ? query.in('user_id', accessibleIds) : null
+      }
 
+      if (!query) {
+        window._currentRekapData = []
+        renderRekapTable([], isAdmin)
+        return
+      }
       if (!isAdmin) {
         query = query.eq('user_id', user.id)
       } else if (namaPencarian) {
@@ -176,7 +190,15 @@ window.applyRekapFilter = async function (user) {
 
       if (!isAdmin) {
         queryPengajuan = queryPengajuan.eq('user_id', user.id)
-      } else if (namaPencarian) {
+      } else if (!canAccessAllDepartments(user)) {
+        queryPengajuan = accessibleIds.length ? queryPengajuan.in('user_id', accessibleIds) : null
+      }
+      if (!queryPengajuan) {
+        window._currentPengajuanData = []
+        renderPengajuanTable([], tab, isAdmin)
+        return
+      }
+      if (isAdmin && namaPencarian) {
         queryPengajuan = queryPengajuan.ilike('nama', `%${namaPencarian}%`)
       }
 

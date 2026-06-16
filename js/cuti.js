@@ -12,7 +12,7 @@ export const STATUS_CUTI_TAHUNAN = {
 
 export const JATAH_CUTI_TAHUNAN = 12
 export const JENIS_KONTRAK_CUTI_ELIGIBLE = ['kontrak', 'tetap']
-export const PROFILE_CUTI_SELECT = 'id, nama_lengkap, email, tanggal_bergabung, role, status_akun, jenis_kontrak, kontrak_mulai, durasi_kontrak, satuan_durasi_kontrak, masa_kontrak, kontrak_berakhir, status_kontrak'
+export const PROFILE_CUTI_SELECT = 'id, nama_lengkap, email, tanggal_bergabung, role, status_akun, departemen, jenis_kontrak, kontrak_mulai, durasi_kontrak, satuan_durasi_kontrak, masa_kontrak, kontrak_berakhir, status_kontrak'
 
 export function canManageCutiTahunan(userOrRole) {
   const role = typeof userOrRole === 'string' ? userOrRole : userOrRole?.role

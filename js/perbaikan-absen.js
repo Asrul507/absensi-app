@@ -24,6 +24,7 @@ import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
 import { buildAttendanceDateTime, recalculateAttendanceStatus, STATUS_ABSENSI, STATUS_KEHADIRAN } from './attendance-approval.js'
+import { assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, getProfileForAccessByName } from './access-control.js'
 
 function validateTanggalPerbaikan(tanggal) {
   return validateCorrectionDateLocal(tanggal)
@@ -103,6 +104,8 @@ export async function renderPerbaikanAbsen(user) {
     <div class="page-header">
       <h2><i class="fa fa-pencil-alt"></i> Perbaikan Absen</h2>
     </div>
+
+    ${isAdmin ? `<div class="card fade-up" style="padding:12px 14px;margin-bottom:12px;color:var(--text-muted);font-size:.82rem;font-weight:700;"><i class="fa fa-building"></i> ${buildDepartmentScopeInfo(user)}</div>` : ''}
 
     <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
       <button id="tabBuat" class="btn-primary btn-sm" onclick="switchPerbaikanTab('buat')">
@@ -493,11 +496,21 @@ async function loadApprovalRequest() {
   if (!el) return
 
   try {
-    const { data, error } = await supabase
+    const accessibleProfiles = await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: 'id, nama_lengkap, departemen, role, status_akun' })
+    const accessibleIds = accessibleProfiles.map(p => p.id).filter(Boolean)
+    if (!canAccessAllDepartments(window.currentUser) && !accessibleIds.length) {
+      el.innerHTML = `<div class="empty-state" style="padding:52px 24px;"><i class="fa fa-building"></i><p>Tidak ada data untuk departemen Anda.</p></div>`
+      return
+    }
+
+    let query = supabase
       .from('perbaikan_absen')
       .select('*')
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
+    if (!canAccessAllDepartments(window.currentUser)) query = query.in('user_id', accessibleIds)
+
+    const { data, error } = await query
 
     if (error) throw error
 
@@ -505,7 +518,7 @@ async function loadApprovalRequest() {
       el.innerHTML = `
         <div class="empty-state" style="padding: 52px 24px;">
           <i class="fa fa-check-circle"></i>
-          <p>Tidak ada request yang menunggu approval</p>
+          <p>${canAccessAllDepartments(window.currentUser) ? 'Tidak ada request yang menunggu approval' : 'Tidak ada data untuk departemen Anda.'}</p>
         </div>
       `
       return
@@ -621,6 +634,10 @@ window.confirmApprovePerbaikan = async function (id, catatan, actionButton = nul
 
     if (fetchErr) throw fetchErr
     if (!req) throw new Error('Request perbaikan sudah diproses atau tidak lagi berstatus pending.')
+    const targetProfile = req.user_id
+      ? await getProfileForAccess(req.user_id)
+      : await getProfileForAccessByName(req.nama)
+    assertSameDepartment(window.currentUser, targetProfile)
 
     // 2. Tandai request sebagai approved
     const beforeState = { ...req }
@@ -822,6 +839,10 @@ window.confirmRejectPerbaikan = async function (id, catatan, actionButton = null
     const { data: beforeReject, error: beforeRejectErr } = await supabase.from('perbaikan_absen').select('*').eq('id', id).eq('status', 'pending').maybeSingle()
     if (beforeRejectErr) throw beforeRejectErr
     if (!beforeReject) throw new Error('Request perbaikan sudah diproses atau tidak lagi berstatus pending.')
+    const targetProfile = beforeReject.user_id
+      ? await getProfileForAccess(beforeReject.user_id)
+      : await getProfileForAccessByName(beforeReject.nama)
+    assertSameDepartment(window.currentUser, targetProfile)
     const { data: rejectData, error } = await supabase
       .from('perbaikan_absen')
       .update({
