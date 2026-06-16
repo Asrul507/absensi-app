@@ -223,7 +223,7 @@ export async function renderPerbaikanAbsen(user) {
   `
 
   window._currentPerbaikanUser     = user
-  window._isAdminPerbaikan         = user.role === 'admin' || user.role === 'super_admin'
+  window._isAdminPerbaikan         = canApprovePerbaikan(user)
   window._currentShiftCodeHariIni  = null
 
   await hydrateShiftOptionsUI()
@@ -608,6 +608,7 @@ window.confirmApprovePerbaikan = async function (id, catatan, actionButton = nul
     return
   }
   setPerbaikanApprovalButtons(id, true)
+  const originalButtonHtml = actionButton?.innerHTML || ''
   if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
   try {
     // 1. Ambil detail request
@@ -771,6 +772,7 @@ window.confirmApprovePerbaikan = async function (id, catatan, actionButton = nul
     console.error('confirmApprovePerbaikan error:', err)
     showToast('Error saat memproses approval: ' + err.message, 'error')
     setPerbaikanApprovalButtons(id, false)
+    if (actionButton && originalButtonHtml) actionButton.innerHTML = originalButtonHtml
   }
 }
 
@@ -813,6 +815,7 @@ window.confirmRejectPerbaikan = async function (id, catatan, actionButton = null
   }
   if (!catatan.trim()) { showToast('Alasan penolakan wajib diisi', 'warning'); return }
   setPerbaikanApprovalButtons(id, true)
+  const originalButtonHtml = actionButton?.innerHTML || ''
   if (actionButton) actionButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...'
 
   try {
@@ -846,6 +849,7 @@ window.confirmRejectPerbaikan = async function (id, catatan, actionButton = null
   } catch (err) {
     showToast('Error: ' + err.message, 'error')
     setPerbaikanApprovalButtons(id, false)
+    if (actionButton && originalButtonHtml) actionButton.innerHTML = originalButtonHtml
   }
 }
 
