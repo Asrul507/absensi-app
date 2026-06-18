@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+//#!/usr/bin/env node
 /**
  * Create demo multi-tenant HRIS data for development/staging only.
  *
@@ -10,7 +10,7 @@
  *   ALLOW_PRODUCTION_DEMO=true
  */
 
-const SUPABASE_URL = process.env.SUPABASE_URL
+/*const SUPABASE_URL = process.env.SUPABASE_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const IS_PRODUCTION = String(process.env.NODE_ENV || '').toLowerCase() === 'production'
 const ALLOW_PRODUCTION_DEMO = String(process.env.ALLOW_PRODUCTION_DEMO || '').toLowerCase() === 'true'
