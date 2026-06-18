@@ -4,6 +4,7 @@ import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } fr
 import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
 import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
 import { getSisaCuti } from './services/leave-service.js'
+import { applyTenantFilter } from './access-control.js'
 
 async function fetchAbsensiRowsForUser({ userId, nama, dateFrom = null, dateTo = null, tanggal = null, select = '*' } = {}) {
   async function applyFilters(query) {
@@ -15,7 +16,7 @@ async function fetchAbsensiRowsForUser({ userId, nama, dateFrom = null, dateTo =
   }
 
   if (userId) {
-    let byUser = supabase.from('absensi').select(select).eq('user_id', userId)
+    let byUser = applyTenantFilter(supabase.from('absensi').select(select).eq('user_id', userId), { userColumn: 'user_id' })
     byUser = await applyFilters(byUser)
     const { data, error } = await byUser
     if (error) throw error
@@ -23,7 +24,7 @@ async function fetchAbsensiRowsForUser({ userId, nama, dateFrom = null, dateTo =
   }
 
   if (!nama) return tanggal ? null : []
-  let byName = supabase.from('absensi').select(select).eq('nama', nama)
+  let byName = applyTenantFilter(supabase.from('absensi').select(select).eq('nama', nama), { userColumn: 'user_id' })
   byName = await applyFilters(byName)
   const { data, error } = await byName
   if (error) throw error
@@ -171,8 +172,8 @@ export async function renderDashboard() {
     try {
       const hariIniStr = getTodayLokal()
       
-      const { data: absenHariIni } = await supabase.from('absensi').select('*').eq('tanggal', hariIniStr)
-      const { data: jadwalHariIni } = await supabase.from('jadwal').select('*').eq('tanggal', hariIniStr)
+      const { data: absenHariIni } = await applyTenantFilter(supabase.from('absensi').select('*').eq('tanggal', hariIniStr), { user })
+      const { data: jadwalHariIni } = await applyTenantFilter(supabase.from('jadwal').select('*').eq('tanggal', hariIniStr), { user })
       
       let tepatWaktu = 0, terlambat = 0, sedangKerja = 0, liburAtauCuti = 0, openApproval = 0, outRadius = 0, lupaAbsen = 0
       

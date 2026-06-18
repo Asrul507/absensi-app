@@ -2,7 +2,7 @@ import { supabase } from './supabase.js'
 import { toJamLokal, getDurasiMenit, buildTimestampLokal, toTanggalJamLokal } from './timezone.js'
 import { getShiftDetailByCode } from './shift-resolver.js'
 import { getServerTimeIso } from './server-time.js'
-import { assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, getProfileForAccessByName } from './access-control.js'
+import { applyTenantFilter, assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, getProfileForAccessByName, isAdmin, isAdminAll, isAdminHR, isSuperAdmin } from './access-control.js'
 
 export const STATUS_ABSENSI = {
   OPEN: 'OPEN',
@@ -28,10 +28,8 @@ export const RADIUS_STATUS = {
   OUT_RADIUS: 'OUT_RADIUS'
 }
 
-const APPROVER_ROLES = ['admin', 'super_admin', 'spv', 'supervisor']
-
 export function canApproveAttendance(user = window.currentUser) {
-  return APPROVER_ROLES.includes(user?.role)
+  return isSuperAdmin(user) || isAdminAll(user) || isAdminHR(user) || isAdmin(user)
 }
 
 export function isCompleteAttendance(row) {
@@ -240,12 +238,12 @@ window.loadAttendanceApproval = async function () {
     return
   }
 
-  let query = supabase
+  let query = applyTenantFilter(supabase
     .from('absensi')
     .select('*')
     .eq('status_absensi', STATUS_ABSENSI.OPEN)
     .order('tanggal', { ascending: false })
-    .order('waktu_masuk', { ascending: true })
+    .order('waktu_masuk', { ascending: true }), { user: window.currentUser })
 
   if (!canAccessAllDepartments(window.currentUser)) query = query.in('user_id', accessibleIds)
   if (search) query = query.ilike('nama', `%${search}%`)
