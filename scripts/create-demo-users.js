@@ -10,8 +10,8 @@
  *   ALLOW_PRODUCTION_DEMO=true
  */
 
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+const SUPABASE_URL = "https://bllqpxhcykzshpzbdogy.supabase.co/rest/v1/"
+const SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsbHFweGhjeWt6c2hwemJkb2d5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODQ2ODc1MSwiZXhwIjoyMDk0MDQ0NzUxfQ.JDmewWvS4GZycxMnSedNUOPWmuyBIanIo6acd-fOqJQ"
 const IS_PRODUCTION = String(process.env.NODE_ENV || '').toLowerCase() === 'production'
 const ALLOW_PRODUCTION_DEMO = String(process.env.ALLOW_PRODUCTION_DEMO || '').toLowerCase() === 'true'
 
