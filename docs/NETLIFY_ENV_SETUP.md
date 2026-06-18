@@ -8,11 +8,15 @@ Isi di **Netlify → Site configuration → Environment variables**:
 
 | Key | Nilai |
 | --- | --- |
-| `SUPABASE_URL` | `https://bllqpxhcykzshpzbdogy.supabase.co` |
+| `SUPABASE_URL` | base URL project Supabase, contoh placeholder `https://PROJECT.supabase.co` |
 | `SUPABASE_ANON_KEY` | public anon key Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | service role key Supabase, server-side only |
 
 Jangan memakai URL dengan suffix `/rest/v1`. Client Supabase butuh base URL project saja.
+
+## Secret scanning Netlify
+
+`netlify.toml` mengatur `SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,SUPABASE_ANON_KEY"` karena keduanya memang dipakai di frontend/public. Jangan tambahkan `SUPABASE_SERVICE_ROLE_KEY` ke omit list; jika key admin itu bocor ke repository atau build output, deploy harus tetap gagal.
 
 ## Redeploy setelah ENV berubah
 

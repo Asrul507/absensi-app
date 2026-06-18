@@ -8,13 +8,13 @@ Konfigurasi Supabase dipusatkan di `js/supabase.js`. Project ini **bukan Vite/bu
 
 Konfigurasi yang dipakai saat deploy static:
 
-- `supabaseUrl` / project URL: diset di `js/supabase.js`.
-- `supabaseKey` / anon public key: diset di `js/supabase.js`.
+- `supabaseUrl` / project URL: dibaca dari `window.__ENV__.SUPABASE_URL` jika tersedia, dengan fallback public di `js/supabase.js`.
+- `supabaseKey` / anon public key: dibaca dari `window.__ENV__.SUPABASE_ANON_KEY` jika tersedia, dengan fallback anon public di `js/supabase.js`.
 
 Catatan keamanan:
 
 1. Frontend static hanya boleh memakai Supabase `anon` public key.
-2. Jangan pernah menyimpan `service_role` key di repository atau frontend.
+2. Jangan pernah menyimpan service role key di repository atau frontend.
 3. Batasi akses tabel melalui Row Level Security (RLS) berdasarkan `auth.uid()` dan role pada tabel `profiles`.
 4. Jika ingin memakai Netlify environment variables seperti `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY`, tambahkan build step yang mengganti/men-generate config sebelum deploy. Tanpa build step, variable tersebut tidak otomatis tersedia di browser.
 

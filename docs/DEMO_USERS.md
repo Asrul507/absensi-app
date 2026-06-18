@@ -12,8 +12,8 @@ Demo client: **Kantor A** (`kantora` / `@kantora`). Password semua user demo: `D
 Buat user demo dengan script server-side, bukan dari browser:
 
 ```bash
-SUPABASE_URL="https://bllqpxhcykzshpzbdogy.supabase.co" \
-SUPABASE_SERVICE_ROLE_KEY="..." \
+SUPABASE_URL="https://PROJECT.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="<server-side-service-role-key>" \
 node scripts/create-demo-users.js
 ```
 

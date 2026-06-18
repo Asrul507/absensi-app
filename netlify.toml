@@ -2,7 +2,5 @@
   publish = "."
   functions = "netlify/functions"
 
-# Supabase URL dan anon key memang dipakai oleh frontend static.
-# Jangan masukkan SUPABASE_SERVICE_ROLE_KEY ke daftar omit; service role harus tetap terdeteksi jika bocor ke repo/build output.
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,SUPABASE_ANON_KEY"
