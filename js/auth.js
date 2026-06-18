@@ -4,6 +4,53 @@ import { normalizeRole } from './access-control.js'
 
 const DEBUG_AUTH = false
 
+const LEGACY_CALLBACK_URL = 'https://hrpro01.netlify.app/callback.html'
+
+function getSignupRedirectCandidates() {
+  const origin = String(window.location.origin || '').trim()
+  const candidates = []
+  if (origin && origin !== 'null') candidates.push(`${origin}/callback.html`)
+  candidates.push(LEGACY_CALLBACK_URL)
+  return [...new Set(candidates)]
+}
+
+function isRetryableSignupError(error) {
+  const msg = String(error?.message || '').toLowerCase()
+  return error?.name === 'AuthRetryableFetchError' || String(error?.status || '') === '500' || msg.includes('500') || msg.includes('fetch') || msg.includes('unexpected failure')
+}
+
+async function signUpWithRedirectFallback({ email, password, metadata, pending }) {
+  const redirects = getSignupRedirectCandidates()
+  let lastError = null
+
+  for (const emailRedirectTo of redirects) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo,
+        data: metadata
+      }
+    })
+
+    if (!error) return { data, error: null, emailRedirectTo }
+
+    lastError = error
+    console.error('REGISTER AUTH ERROR:', { pending, signupMetadata: metadata, emailRedirectTo, error })
+
+    const msg = String(error.message || '')
+    if (msg.includes('already registered') || msg.includes('User already registered')) {
+      return { data: null, error, emailRedirectTo }
+    }
+
+    if (!isRetryableSignupError(error)) {
+      return { data: null, error, emailRedirectTo }
+    }
+  }
+
+  return { data: null, error: lastError, emailRedirectTo: redirects[redirects.length - 1] }
+}
+
 /* ================= LOGIN ================= */
 async function fetchClientByCode(clientCode) {
   const cleanClientCode = String(clientCode || '').trim().toLowerCase()
@@ -229,24 +276,21 @@ export async function registerKaryawan(
     }
 
     // ================= SIGNUP =================
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await signUpWithRedirectFallback({
       email,
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/callback.html`,
-        data: signupMetadata
-      }
+      metadata: signupMetadata,
+      pending
     })
 
     // ================= ERROR =================
     if (error) {
-      console.error('REGISTER AUTH ERROR:', { pending, signupMetadata, error })
       const msg = String(error.message || '')
       if (msg.includes('already registered') || msg.includes('User already registered')) {
         throw new Error('Email ini sudah terdaftar. Silakan login atau gunakan email lain.')
       }
-      if (error.name === 'AuthRetryableFetchError' || msg.includes('500') || msg.toLowerCase().includes('fetch')) {
-        throw new Error('Server auth sedang bermasalah atau konfigurasi email belum benar. Coba lagi beberapa saat atau hubungi admin.')
+      if (isRetryableSignupError(error)) {
+        throw new Error('Gagal mengirim email verifikasi dari Supabase Auth. Pastikan Site URL/Redirect URL Supabase mengizinkan domain aplikasi ini dan email SMTP aktif. Coba lagi beberapa saat atau hubungi admin.')
       }
       throw error
     }
@@ -308,8 +352,8 @@ export async function registerKaryawan(
     console.error('REGISTER KARYAWAN ERROR:', err)
     const msg = String(err?.message || '')
     showRegError(
-      err?.name === 'AuthRetryableFetchError' || msg.includes('500') || msg.toLowerCase().includes('fetch')
-        ? 'Server auth sedang bermasalah atau konfigurasi email belum benar. Coba lagi beberapa saat atau hubungi admin.'
+      isRetryableSignupError(err)
+        ? 'Gagal mengirim email verifikasi dari Supabase Auth. Pastikan Site URL/Redirect URL Supabase mengizinkan domain aplikasi ini dan email SMTP aktif. Coba lagi beberapa saat atau hubungi admin.'
         : (msg || 'Terjadi kesalahan saat registrasi')
     )
     return false
