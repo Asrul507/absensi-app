@@ -24,10 +24,10 @@ const CLIENT = {
 }
 const DEPARTMENTS = ['Housekeeping', 'HRD', 'Security', 'Engineering']
 const USERS = [
-  { email: 'gm@kantora.demo', role: 'admin_all', department: 'HRD', nama_lengkap: 'GM Kantor A', jabatan: 'General Manager' },
-  { email: 'hrd@kantora.demo', role: 'admin_hr', department: 'HRD', nama_lengkap: 'HRD Kantor A', jabatan: 'HRD' },
-  { email: 'hkmanager@kantora.demo', role: 'admin', department: 'Housekeeping', nama_lengkap: 'HK Manager Kantor A', jabatan: 'Housekeeping Manager' },
-  { email: 'staff@kantora.demo', role: 'staff', department: 'Housekeeping', nama_lengkap: 'Staff Housekeeping Kantor A', jabatan: 'Staff Housekeeping' }
+  { username: 'gm', email: 'gm@kantora.local', role: 'admin_all', department: 'HRD', nama_lengkap: 'GM Kantor A', jabatan: 'General Manager' },
+  { username: 'hrd', email: 'hrd@kantora.local', role: 'admin_hr', department: 'HRD', nama_lengkap: 'HRD Kantor A', jabatan: 'HRD' },
+  { username: 'hkmanager', email: 'hkmanager@kantora.local', role: 'admin', department: 'Housekeeping', nama_lengkap: 'HK Manager Kantor A', jabatan: 'Housekeeping Manager' },
+  { username: 'staff01', email: 'staff01@kantora.local', role: 'staff', department: 'Housekeeping', nama_lengkap: 'Staff Housekeeping Kantor A', jabatan: 'Staff Housekeeping' }
 ]
 
 function assertSafeEnvironment() {
@@ -95,6 +95,7 @@ async function findAuthUserByEmail(email) {
 
 async function createUserWithoutEmailVerification(user) {
   const metadata = {
+    username: user.username,
     nama_lengkap: user.nama_lengkap,
     role: user.role,
     client_id: user.client_id,
@@ -158,6 +159,9 @@ async function main() {
     await upsertRest('profiles', [{
       id: authUser.id,
       email: user.email,
+      username: user.username,
+      email_internal: user.email,
+      must_change_password: true,
       nama_lengkap: user.nama_lengkap,
       role: user.role,
       client_id: client.id,
@@ -174,7 +178,7 @@ async function main() {
   }
 
   console.log('\n✅ Demo users Kantor A siap digunakan.')
-  console.log('Login: <email> / Demo123! / @kantora')
+  console.log('Login: gm|hrd|hkmanager|staff01 / Demo123! / @kantora')
 }
 
 main().catch(error => {
