@@ -4,9 +4,34 @@ import { showToast, setButtonLoading } from './feedback.js'
 const DEBUG_AUTH = false
 
 /* ================= LOGIN ================= */
-export async function login(email, password) {
+export async function login(email, password, clientCode = '') {
   const btn = document.getElementById('btnLogin')
   setButtonLoading(btn, true, '<i class="fa fa-spinner fa-spin"></i> Memproses...')
+
+  const cleanClientCode = String(clientCode || '').trim().toLowerCase()
+  if (!cleanClientCode) {
+    setButtonLoading(btn, false, '<i class="fa fa-sign-in-alt"></i> Masuk')
+    showLoginError('Kode kantor wajib diisi.')
+    return false
+  }
+
+  const { data: selectedClient, error: clientError } = await supabase
+    .from('clients')
+    .select('id,nama_client,kode_client,domain_login,status')
+    .or(`kode_client.eq.${cleanClientCode},domain_login.eq.${cleanClientCode}`)
+    .maybeSingle()
+
+  if (clientError || !selectedClient) {
+    setButtonLoading(btn, false, '<i class="fa fa-sign-in-alt"></i> Masuk')
+    showLoginError('Kode kantor tidak ditemukan. Periksa kembali kode/domain login kantor Anda.')
+    return false
+  }
+
+  if (selectedClient.status !== 'active') {
+    setButtonLoading(btn, false, '<i class="fa fa-sign-in-alt"></i> Masuk')
+    showLoginError('Kantor/client ini sedang nonaktif. Hubungi administrator.')
+    return false
+  }
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -30,6 +55,35 @@ export async function login(email, password) {
     )
     return false
   }
+
+  const authUser = data?.user
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id,role,client_id,department_id,nama_lengkap')
+    .eq('id', authUser?.id)
+    .maybeSingle()
+
+  const role = String(profile?.role || 'staff').toLowerCase()
+  const isSuperAdmin = role === 'super_admin'
+  if (profileError || !profile) {
+    await supabase.auth.signOut()
+    showLoginError('Profil akun tidak ditemukan. Hubungi HR/admin.')
+    return false
+  }
+  if (!isSuperAdmin && String(profile.client_id || '') !== String(selectedClient.id)) {
+    await supabase.auth.signOut()
+    showLoginError('Akun ini tidak terdaftar pada kantor/client yang dipilih.')
+    return false
+  }
+
+  sessionStorage.setItem('tenantContext', JSON.stringify({
+    user_id: profile.id,
+    role,
+    client_id: profile.client_id,
+    department_id: profile.department_id,
+    nama_client: selectedClient.nama_client,
+    kode_client: selectedClient.kode_client
+  }))
   return true
 }
 
@@ -133,6 +187,8 @@ export async function registerKaryawan(
           email,
           nama_lengkap: pending.nama_lengkap,
           role: pending.role || 'staff',
+          client_id: pending.client_id || null,
+          department_id: pending.department_id || null,
           jabatan: pending.jabatan || '',
           departemen: pending.departemen || '',
           no_hp: pending.no_hp || '',
@@ -216,7 +272,9 @@ export async function signup(email, password, role = 'staff', extraData = {}) {
       foto_url: '',
       sisa_cuti: 0,
       jatah_cuti: 0,
-      titik_radius: extraData.titik_radius || null
+      titik_radius: extraData.titik_radius || null,
+      client_id: extraData.client_id || null,
+      department_id: extraData.department_id || null
     }])
     if (profileError) { showToast(profileError.message, 'error'); return false }
   }
