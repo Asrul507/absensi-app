@@ -29,7 +29,8 @@ import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 import { showToast, confirmAction } from './feedback.js'
 import { logAuditEvent } from './audit-trail.js'
 import { renderAttendanceApproval, canApproveAttendance } from './attendance-approval.js'
-import { assertSameDepartment, canAccessAllDepartments, canManageUserByDepartment, getAccessibleProfiles, getUserDepartment } from './access-control.js'
+import { assertSameDepartment, canAccessAllDepartments, canManageUserByDepartment, getAccessibleProfiles, getUserDepartment, normalizeRole, isSuperAdmin, isAdminAll, isAdminHR, isAdmin, isStaff, applyTenantFilter } from './access-control.js'
+import { renderSettingsApp } from './settings-app.js'
 
 /* ================= GLOBAL VARIABLES ================= */
 window.currentUser  = null
@@ -100,20 +101,22 @@ async function checkUser() {
     }
 
     // Set user ke scope global window
-    window.currentUser = profile
+    window.currentUser = { ...profile, role: normalizeRole(profile.role) }
     showAppPage()
     // Inisialisasi timezone dari titik radius lokasi
     await initTimezone()
 
     const userNameEl = document.getElementById('userName')
     if (userNameEl) userNameEl.innerText = profile.nama_lengkap || user.email
+    const clientNameEl = document.getElementById('activeClientName')
+    if (clientNameEl) clientNameEl.innerText = profile.clients?.nama_client || profile.nama_client || (window.currentUser.role === 'super_admin' ? 'All Clients' : 'Client')
 
     // Sinkronisasi foto profil dari DB Supabase
     await syncAvatarFromDB(profile)
 
     // Render komponen navigasi sesuai hak akses
-    renderMenu(profile.role)
-    renderBottomNav(profile.role)
+    renderMenu(window.currentUser.role)
+    renderBottomNav(window.currentUser.role)
     await refreshNotificationBadge()
     startNotificationPolling()
     navigate('dashboard')
@@ -183,7 +186,8 @@ window.login = async function () {
   const password = document.getElementById('password').value
   const errEl    = document.getElementById('loginError')
   if (errEl) errEl.style.display = 'none'
-  const ok = await doLogin(email, password)
+  const clientCode = document.getElementById('clientCode')?.value.trim() || ''
+  const ok = await doLogin(email, password, clientCode)
   if (ok) await checkUser()
 }
 
@@ -240,6 +244,7 @@ function renderMenu(role) {
       <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Rekap Bulanan In/Out</a>
       <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Rekap Absensi</a>
       <a href="#" id="menu-laporan-keseluruhan" onclick="navigate('laporan-keseluruhan'); closeSidebar(); return false;"><i class="fa fa-file-lines"></i> Laporan Keseluruhan <span class="sidebar-badge-info">NEW</span></a>
+      ${role === 'super_admin' ? `<div class="sidebar-section-title">SETTINGS APP</div><a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Client & Department</a>` : ''}
     `;
   }
 
@@ -415,12 +420,12 @@ function renderBottomNav(role) {
     </button>`).join('')
 }
 
-const ADMIN_ROLES = ['admin', 'super_admin', 'hr', 'spv', 'supervisor']
+const ADMIN_ROLES = ['super_admin', 'admin_all', 'admin_hr', 'admin']
 const STAFF_PAGES = ['dashboard', 'absensi', 'perbaikan-absen', 'pengajuan', 'kalender', 'daftar-absensi', 'rekap-inout', 'rekap', 'profile']
-const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'daftar-absensi', 'rekap-inout', 'rekap', 'laporan-keseluruhan', 'profile']
+const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'daftar-absensi', 'rekap-inout', 'rekap', 'laporan-keseluruhan', 'profile', 'settings-app']
 
 function isAdminRole(role) {
-  return ADMIN_ROLES.includes(role)
+  return ADMIN_ROLES.includes(normalizeRole(role))
 }
 
 function canAccessPage(user, page) {
@@ -458,6 +463,7 @@ window.navigate = async function (page) {
     case 'users':     await renderUsers(); break
     case 'admin-lokasi': renderPengaturanLokasi(); break
     case 'laporan-keseluruhan': renderLaporanKeseluruhan(window.currentUser); break
+    case 'settings-app': renderSettingsApp(window.currentUser); break
     default:
       document.getElementById('content').innerHTML = `<div class="card"><h2>${page}</h2></div>`
   }
@@ -966,7 +972,7 @@ window.openFormTambah = async function() {
       <div class="field"><label>Role Hak Akses</label>
         <select id="pRole">
           <option value="staff">Staff Karyawan</option>
-          ${currentViewerRole === 'super_admin' ? `<option value="admin">Admin</option><option value="hr">HR</option><option value="super_admin">Super Admin</option>` : ''}
+          ${currentViewerRole === 'super_admin' ? `<option value="admin">Admin Department</option><option value="admin_hr">Admin HR</option><option value="admin_all">Admin All</option><option value="super_admin">Super Admin</option>` : ''}
         </select>
       </div>
       <div class="field">
@@ -1008,6 +1014,8 @@ window.savePendingKaryawan = async function() {
     foto_url:          document.getElementById('pFotoUrl')?.value.trim() || '',
     titik_radius:      document.getElementById('pTitikRadius').value || null,
     ...kontrakPayload,
+    client_id:         window.currentUser?.role === 'super_admin' ? null : (window.currentUser?.client_id || null),
+    department_id:     window.currentUser?.department_id || null,
     created_by:        window.currentUser?.id || null
   }])
 
@@ -1035,7 +1043,7 @@ function renderUserList(users) {
     let bisaEdit = false
     if (me.role === 'super_admin') {
       bisaEdit = true
-    } else if (['admin', 'spv', 'supervisor'].includes(me.role)) {
+    } else if (['admin'].includes(normalizeRole(me.role))) {
       if ((u.role === 'staff' || u.role === 'admin' || u.id === me.id) && canManageUserByDepartment(me, u)) bisaEdit = true
     } else if (me.role === 'staff') {
       if (u.id === me.id) bisaEdit = true
@@ -1074,7 +1082,7 @@ function renderUserList(users) {
             </button>
           ` : ''}
 
-          ${(me.role === 'super_admin' || (['admin', 'spv', 'supervisor'].includes(me.role) && u.role === 'staff' && canManageUserByDepartment(me, u))) ? `
+          ${(me.role === 'super_admin' || (['admin'].includes(normalizeRole(me.role)) && u.role === 'staff' && canManageUserByDepartment(me, u))) ? `
             <button class="action-btn ${isAktif?'delete':''}" title="${isAktif?'Non-aktifkan':'Aktifkan'}"
               onclick="toggleStatusUser('${u.id}','${u.status_akun||'Aktif'}'); event.stopPropagation();">
               <i class="fa fa-${isAktif?'ban':'check'}"></i>
@@ -1133,7 +1141,7 @@ window.openEditKaryawan = async function(id) {
   const me = window.currentUser
   try { assertSameDepartment(me, target) } catch (err) { showToast(err.message, 'error'); return }
   const isMe = me.id === target.id
-  const canEditAllFields = (me.role === 'super_admin') || (['admin', 'hr', 'spv', 'supervisor'].includes(me.role) && target.role === 'staff' && canManageUserByDepartment(me, target))
+  const canEditAllFields = (me.role === 'super_admin') || (['admin','admin_hr'].includes(normalizeRole(me.role)) && target.role === 'staff' && canManageUserByDepartment(me, target))
 
   let opsiLokasi = ''
   try {
@@ -1497,8 +1505,8 @@ window.handleUploadKaryawanExcel = function(input) {
           no_hp:             get('No HP', 'no_hp', 'hp', 'phone'),
           tanggal_bergabung: get('Tanggal Bergabung', 'tanggal_bergabung') || null,
           tanggal_lahir:     get('Tanggal Lahir', 'tanggal_lahir') || null,
-          role:              ['staff','spv','admin','hr','super_admin'].includes(get('Role','role').toLowerCase())
-                               ? get('Role','role').toLowerCase() : 'staff',
+          role:              ['staff','admin','admin_hr','admin_all','super_admin'].includes(normalizeRole(get('Role','role')))
+                               ? normalizeRole(get('Role','role')) : 'staff',
           titik_radius:      get('Titik Radius', 'titik_radius') || null,
           ...kontrakPayload,
           valid,
@@ -1608,6 +1616,8 @@ window.konfirmasiUploadKaryawan = async function() {
     kontrak_berakhir:  r.kontrak_berakhir || null,
     status_kontrak:    r.status_kontrak || 'aktif',
     status:            'waiting',
+    client_id:         window.currentUser?.role === 'super_admin' ? null : (window.currentUser?.client_id || null),
+    department_id:     window.currentUser?.department_id || null,
     created_by:        window.currentUser?.id || null
   }))
 

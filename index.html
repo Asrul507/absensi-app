@@ -59,6 +59,11 @@
         <input type="password" id="password" placeholder="Password" autocomplete="current-password"/>
       </div>
 
+      <div class="login-field">
+        <label for="clientCode">Kode Kantor / Domain Login</label>
+        <input type="text" id="clientCode" placeholder="default atau @default" autocomplete="organization" required/>
+      </div>
+
       <p id="loginError" style="display:none;color:var(--danger);font-size:.82rem;margin-top:8px; padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid); border-radius:var(--r-md);line-height:1.5;"></p>
 
       <button class="btn-login" id="btnLogin" type="submit">
@@ -90,6 +95,8 @@
     <div class="topbar-right">
       <div id="topbarAvatar" onclick="if(window.currentUser?.foto_url) { window.previewImageFullScreen(window.currentUser.foto_url); } else { navigate('profile'); }" title="Klik untuk lihat foto / Masuk ke profil">?</div>
       
+      <span id="activeClientName" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; font-size:.75rem;font-weight:800;color:rgba(255,255,255,.9);background:rgba(255,255,255,.14);padding:5px 8px;border-radius:999px;"></span>
+
       <span id="userName" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; font-size:.82rem;font-weight:700;color:rgba(255,255,255,.95);" onclick="navigate('profile')" style="cursor:pointer;"></span>
       
       <button id="notifBtn" onclick="openNotificationCenter()" aria-label="Notifikasi"
