@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js'
 import { getTodayLokal, toBulanTahunLokal, toTanggalPanjangLokal } from './timezone.js'
 import { getAllShiftOptions } from './shift-resolver.js'
+import { applyTenantFilter, canAccessAllDepartments } from './access-control.js'
 
 const SHIFT_COLORS = ['#3b82f6', '#f59e0b', '#6366f1', '#22c55e', '#ec4899']
 let KAL_SHIFT_INFO = {}
@@ -21,7 +22,7 @@ function buildShiftInfo(options) {
 
 export async function renderKalenderHR() {
   const user    = window.currentUser
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  const isAdmin = canAccessAllDepartments(user) || user.role === 'admin'
   const today   = new Date()
   window._kalYear  = today.getFullYear()
   window._kalMonth = today.getMonth()
@@ -41,7 +42,7 @@ async function buildKalender(isAdmin, user) {
 
   buildShiftInfo(await getAllShiftOptions())
 
-  let query = supabase.from('jadwal').select('*').gte('tanggal', start).lte('tanggal', end)
+  let query = applyTenantFilter(supabase.from('jadwal').select('*').gte('tanggal', start).lte('tanggal', end), { user })
   if (!isAdmin) query = query.eq('user_id', user.id)
   const { data: jadwal } = await query
 
@@ -121,7 +122,7 @@ async function buildKalender(isAdmin, user) {
   window.kalNext = async () => { window._kalMonth++; if(window._kalMonth>11){window._kalMonth=0;window._kalYear++} await buildKalender(isAdmin,user) }
 
   window.openKalDetail = async function(tanggal) {
-    let q = supabase.from('jadwal').select('*,profiles:user_id(nama_lengkap)').eq('tanggal',tanggal)
+    let q = applyTenantFilter(supabase.from('jadwal').select('*,profiles:user_id(nama_lengkap)').eq('tanggal',tanggal), { user })
     if (!isAdmin) q = q.eq('user_id', user.id)
     const { data } = await q
 
