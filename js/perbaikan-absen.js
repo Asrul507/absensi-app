@@ -24,16 +24,14 @@ import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
 import { buildAttendanceDateTime, recalculateAttendanceStatus, STATUS_ABSENSI, STATUS_KEHADIRAN } from './attendance-approval.js'
-import { assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, getProfileForAccessByName } from './access-control.js'
+import { applyTenantFilter, assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, getProfileForAccessByName, isAdmin, isAdminAll, isAdminHR, isSuperAdmin } from './access-control.js'
 
 function validateTanggalPerbaikan(tanggal) {
   return validateCorrectionDateLocal(tanggal)
 }
 
-const APPROVER_ROLES_PERBAIKAN = ['admin', 'super_admin', 'spv', 'supervisor']
-
 function canApprovePerbaikan(user = window.currentUser) {
-  return APPROVER_ROLES_PERBAIKAN.includes(user?.role)
+  return isSuperAdmin(user) || isAdminAll(user) || isAdminHR(user) || isAdmin(user)
 }
 
 function setPerbaikanApprovalButtons(id, disabled) {
@@ -380,7 +378,9 @@ window.submitPerbaikanAbsen = async function (user, ev) {
     jenis,
     keterangan,
     status:     'pending',
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    client_id:   user.client_id || null,
+    department_id: user.department_id || null
   }
 
   if (jenis === 'lupa_masuk' || jenis === 'lupa_pulang') {

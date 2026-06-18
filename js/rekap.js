@@ -1,6 +1,6 @@
 import { supabase } from './supabase.js'
 import { showToast } from './feedback.js'
-import { canAccessAllDepartments, getAccessibleProfiles } from './access-control.js'
+import { applyTenantFilter, canAccessAllDepartments, getAccessibleProfiles, normalizeRole } from './access-control.js'
 
 /* ===============================================================
    HELPER: Konversi menit ke HH:MM:SS
@@ -17,7 +17,7 @@ function minutesToHMS(minutes) {
 =============================================================== */
 export async function renderRekap(user) {
   const content = document.getElementById('content')
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.role === 'spv' || user.role === 'supervisor'
+  const isAdmin = ['super_admin', 'admin_all', 'admin_hr', 'admin'].includes(normalizeRole(user.role))
 
   content.innerHTML = `
     <div class="page-header">
@@ -144,7 +144,7 @@ window.applyRekapFilter = async function (user) {
       accessibleIds = profiles.map(p => p.id).filter(Boolean)
     }
     if (tab === 'absensi') {
-      let query = supabase.from('absensi').select('*').eq('status_absensi', 'COMPLETE').order('tanggal', { ascending: false })
+      let query = applyTenantFilter(supabase.from('absensi').select('*').eq('status_absensi', 'COMPLETE').order('tanggal', { ascending: false }), { user })
       if (isAdmin && !canAccessAllDepartments(user)) {
         query = accessibleIds.length ? query.in('user_id', accessibleIds) : null
       }
@@ -181,12 +181,12 @@ window.applyRekapFilter = async function (user) {
       renderRekapTable(rekap, isAdmin)
     } else {
       // Load pengajuan data (izin/sakit/cuti) yang sudah approved
-      let queryPengajuan = supabase
+      let queryPengajuan = applyTenantFilter(supabase
         .from('pengajuan')
         .select('id, nama, user_id, tanggal_pengajuan, tanggal_mulai, tanggal_selesai, jumlah_hari, jenis, status, alasan')
         .eq('jenis', tab)
         .eq('status', 'approved')
-        .order('tanggal_pengajuan', { ascending: false })
+        .order('tanggal_pengajuan', { ascending: false }), { user })
 
       if (!isAdmin) {
         queryPengajuan = queryPengajuan.eq('user_id', user.id)
