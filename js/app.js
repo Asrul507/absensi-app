@@ -109,7 +109,10 @@ async function checkUser() {
     const userNameEl = document.getElementById('userName')
     if (userNameEl) userNameEl.innerText = profile.nama_lengkap || user.email
     const clientNameEl = document.getElementById('activeClientName')
-    if (clientNameEl) clientNameEl.innerText = profile.clients?.nama_client || profile.nama_client || (window.currentUser.role === 'super_admin' ? 'All Clients' : 'Client')
+    if (clientNameEl) {
+      const tenantContext = JSON.parse(sessionStorage.getItem('tenantContext') || '{}')
+      clientNameEl.innerText = tenantContext.nama_client || profile.clients?.nama_client || profile.nama_client || (window.currentUser.role === 'super_admin' ? 'Global Admin' : 'Client')
+    }
 
     // Sinkronisasi foto profil dari DB Supabase
     await syncAvatarFromDB(profile)
@@ -685,8 +688,7 @@ async function renderUsers() {
   const users = viewerRole === 'staff'
     ? await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
     : await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
-  let pendingQuery = supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap')
-  if (!canAccessAllDepartments(window.currentUser) && viewerRole !== 'staff') pendingQuery = pendingQuery.eq('departemen', getUserDepartment(window.currentUser))
+  let pendingQuery = applyTenantFilter(supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap'), { user: window.currentUser, userColumn: null, legacyDepartmentColumn: 'departemen' })
   const { data: pending } = viewerRole !== 'staff' ? await pendingQuery : { data: [] }
 
   let cutiTahunanRows = []
@@ -814,7 +816,7 @@ async function renderPersonalia() {
     return
   }
 
-  const { data: users, error } = await supabase.from('profiles').select('*').order('nama_lengkap')
+  const { data: users, error } = await applyTenantFilter(supabase.from('profiles').select('*').order('nama_lengkap'), { user: window.currentUser, userColumn: 'id', legacyDepartmentColumn: 'departemen' })
   if (error) {
     content.innerHTML = `<div class="card"><p class="text-danger">Gagal memuat data kontrak: ${error.message}</p></div>`
     return
@@ -907,7 +909,7 @@ window.saveKontrakKaryawan = async function(id, isExtend = false) {
       await closeActiveCutiRowsForUser(id)
     }
 
-    const { error } = await supabase.from('profiles').update(payload).eq('id', id)
+    const { error } = await applyTenantFilter(supabase.from('profiles').update(payload).eq('id', id), { user: window.currentUser, userColumn: 'id', legacyDepartmentColumn: 'departemen' })
     if (error) throw error
 
     await logAuditEvent({
@@ -927,22 +929,68 @@ window.saveKontrakKaryawan = async function(id, isExtend = false) {
   }
 }
 
+
+async function fetchClientOptionsForEmployeeForm() {
+  if (window.currentUser?.role === 'super_admin') {
+    const { data, error } = await supabase.from('clients').select('id,nama_client,kode_client,status').order('nama_client')
+    if (error) throw error
+    return data || []
+  }
+  return window.currentUser?.client_id ? [{ id: window.currentUser.client_id, nama_client: window.currentUser.clients?.nama_client || window.currentUser.nama_client || 'Client Anda', kode_client: '' }] : []
+}
+
+async function fetchDepartmentOptionsForClient(clientId) {
+  if (!clientId) return []
+  const { data, error } = await supabase
+    .from('departments')
+    .select('id,nama_department,status')
+    .eq('client_id', clientId)
+    .eq('status', 'active')
+    .order('nama_department')
+  if (error) throw error
+  return data || []
+}
+
+function renderDepartmentOptions(departments = [], selectedId = '') {
+  return `<option value="">-- Pilih Department --</option>${departments.map(d => `<option value="${d.id}" ${String(d.id) === String(selectedId) ? 'selected' : ''}>${d.nama_department}</option>`).join('')}`
+}
+
 /* ================= OPEN FORM TAMBAH KARYAWAN ================= */
 window.openFormTambah = async function() {
+  const role = normalizeRole(window.currentUser?.role)
+  if (role === 'admin' || role === 'staff') {
+    showToast('Hanya Super Admin, Admin All, dan Admin HR yang dapat menambah karyawan.', 'warning')
+    return
+  }
+
   let opsiLokasi = ''
+  let clients = []
+  let departments = []
   try {
-    const { data: lokasiList, error } = await supabase.from('lokasi_absen').select('*')
-    if (!error && lokasiList) {
-      opsiLokasi = lokasiList.map(l => {
+    const [lokasiResult, clientOptions] = await Promise.all([
+      supabase.from('lokasi_absen').select('*'),
+      fetchClientOptionsForEmployeeForm()
+    ])
+    if (!lokasiResult.error && lokasiResult.data) {
+      opsiLokasi = lokasiResult.data.map(l => {
         const namaTitik = l.nama_titik || l.nama_lokasi || l.nama || ''
         return `<option value="${namaTitik}">${namaTitik}</option>`
       }).join('')
     }
+    clients = clientOptions
+    const initialClientId = role === 'super_admin' ? (clients[0]?.id || '') : window.currentUser?.client_id
+    departments = await fetchDepartmentOptionsForClient(initialClientId)
   } catch (e) {
-    console.error('Gagal menarik daftar lokasi:', e)
+    console.error('Gagal menyiapkan form tambah karyawan:', e)
+    showToast('Gagal memuat data client/department/lokasi.', 'error')
+    return
   }
 
-  const currentViewerRole = window.currentUser?.role || 'admin'
+  const initialClientId = role === 'super_admin' ? (clients[0]?.id || '') : window.currentUser?.client_id
+  const currentViewerRole = window.currentUser?.role || 'admin_hr'
+  const clientField = role === 'super_admin'
+    ? `<select id="pClient" onchange="window.reloadEmployeeDepartments(this.value)">${clients.map(c => `<option value="${c.id}" ${c.id === initialClientId ? 'selected' : ''}>${c.nama_client} (${c.kode_client || '-'})</option>`).join('')}</select>`
+    : `<input id="pClientName" value="${clients[0]?.nama_client || window.currentUser?.clients?.nama_client || 'Client Anda'}" disabled><input type="hidden" id="pClient" value="${initialClientId || ''}">`
 
   window.showUserModal(`
     <div class="modal-header">
@@ -955,6 +1003,8 @@ window.openFormTambah = async function() {
         <input id="pNama" placeholder="Nama lengkap karyawan">
       </div>
       <div class="field"><label>Email Login</label><input type="email" id="pEmail" placeholder="nama@company.com"></div>
+      <div class="field"><label>Nama Kantor / Client <span class="req">*</span></label>${clientField}</div>
+      <div class="field"><label>Department <span class="req">*</span></label><select id="pDepartment">${renderDepartmentOptions(departments)}</select></div>
       <div class="field"><label>Status Akun</label>
         <select id="pStatusAkun">
           <option value="Aktif">Aktif</option>
@@ -963,7 +1013,6 @@ window.openFormTambah = async function() {
         </select>
       </div>
       <div class="field"><label>Jabatan</label><input id="pJabatan" placeholder="Jabatan"></div>
-      <div class="field"><label>Departemen</label><input id="pDept" placeholder="Departemen" value="${canAccessAllDepartments(window.currentUser) ? '' : getUserDepartment(window.currentUser)}" ${canAccessAllDepartments(window.currentUser) ? '' : 'disabled'}></div>
       <div class="field"><label>No. HP</label><input id="pHp" placeholder="08xx"></div>
       <div class="field"><label>Tanggal Bergabung</label><input type="date" id="pTgl" value="${getTodayLokal()}"></div>
       <div class="field"><label>Sisa Cuti Awal</label><input type="number" id="pSisaCuti" min="0" value="0"></div>
@@ -991,20 +1040,39 @@ window.openFormTambah = async function() {
   `)
 }
 
+window.reloadEmployeeDepartments = async function(clientId) {
+  const select = document.getElementById('pDepartment')
+  if (!select) return
+  select.innerHTML = '<option value="">Memuat department...</option>'
+  try {
+    select.innerHTML = renderDepartmentOptions(await fetchDepartmentOptionsForClient(clientId))
+  } catch (err) {
+    console.error('Gagal memuat department:', err)
+    select.innerHTML = '<option value="">Gagal memuat department</option>'
+  }
+}
+
 window.savePendingKaryawan = async function() {
   const nama = document.getElementById('pNama').value.trim()
   if (!nama) { showToast('Nama wajib diisi', 'warning'); return }
   const kontrakPayload = readKontrakForm('p')
   if (!validateKontrakPayload(kontrakPayload)) return
 
-  const inputDept = canAccessAllDepartments(window.currentUser) ? document.getElementById('pDept').value.trim() : getUserDepartment(window.currentUser)
-  if (!canAccessAllDepartments(window.currentUser) && !inputDept) { showToast('Departemen admin belum diatur.', 'warning'); return }
+  const role = normalizeRole(window.currentUser?.role)
+  if (role === 'admin' || role === 'staff') { showToast('Anda tidak berhak menambah karyawan.', 'warning'); return }
+  const selectedClientId = role === 'super_admin' ? document.getElementById('pClient')?.value : window.currentUser?.client_id
+  const selectedDepartmentId = document.getElementById('pDepartment')?.value || null
+  if (!selectedClientId) { showToast('Client wajib dipilih.', 'warning'); return }
+  if (!selectedDepartmentId) { showToast('Department wajib dipilih.', 'warning'); return }
+  const departments = await fetchDepartmentOptionsForClient(selectedClientId)
+  const selectedDepartment = departments.find(d => String(d.id) === String(selectedDepartmentId))
+  if (!selectedDepartment) { showToast('Department tidak valid untuk client yang dipilih.', 'warning'); return }
 
   const { error } = await supabase.from('pending_profiles').insert([{
     nama_lengkap:      nama,
     email:             document.getElementById('pEmail')?.value.trim() || null,
     jabatan:           document.getElementById('pJabatan').value.trim(),
-    departemen:        inputDept,
+    departemen:        selectedDepartment.nama_department,
     no_hp:             document.getElementById('pHp').value.trim(),
     tanggal_bergabung: document.getElementById('pTgl').value || null,
     tanggal_lahir:     document.getElementById('pLahir').value || null,
@@ -1014,8 +1082,8 @@ window.savePendingKaryawan = async function() {
     foto_url:          document.getElementById('pFotoUrl')?.value.trim() || '',
     titik_radius:      document.getElementById('pTitikRadius').value || null,
     ...kontrakPayload,
-    client_id:         window.currentUser?.role === 'super_admin' ? null : (window.currentUser?.client_id || null),
-    department_id:     window.currentUser?.department_id || null,
+    client_id:         selectedClientId,
+    department_id:     selectedDepartmentId,
     created_by:        window.currentUser?.id || null
   }])
 
@@ -1596,6 +1664,10 @@ window.batalUploadKaryawan = function() {
 }
 
 window.konfirmasiUploadKaryawan = async function() {
+  const tenantContext = JSON.parse(sessionStorage.getItem('tenantContext') || '{}')
+  const uploadClientId = window.currentUser?.role === 'super_admin' ? tenantContext.client_id : window.currentUser?.client_id
+  const uploadDepartmentId = window.currentUser?.role === 'super_admin' ? null : window.currentUser?.department_id
+  if (!uploadClientId) { showToast('Pilih konteks client terlebih dahulu sebelum upload massal.', 'warning'); return }
   const rows = (window._uploadKaryawanParsed || []).filter(r => r.valid && (canAccessAllDepartments(window.currentUser) || String(r.departemen || '').trim().toLowerCase() === getUserDepartment(window.currentUser).toLowerCase()))
   if (!rows.length) return
 
@@ -1616,8 +1688,8 @@ window.konfirmasiUploadKaryawan = async function() {
     kontrak_berakhir:  r.kontrak_berakhir || null,
     status_kontrak:    r.status_kontrak || 'aktif',
     status:            'waiting',
-    client_id:         window.currentUser?.role === 'super_admin' ? null : (window.currentUser?.client_id || null),
-    department_id:     window.currentUser?.department_id || null,
+    client_id:         uploadClientId,
+    department_id:     uploadDepartmentId,
     created_by:        window.currentUser?.id || null
   }))
 

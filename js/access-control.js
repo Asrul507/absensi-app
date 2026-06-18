@@ -51,7 +51,11 @@ export function canAccessDepartment(targetDepartmentId, user = window.currentUse
 
 export function getUserScope(user = window.currentUser) {
   const role = normalizeRole(user?.role)
-  if (role === 'super_admin') return { role, type: 'global' }
+  const tenantContext = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('tenantContext') || '{}') : {}
+  if (role === 'super_admin') {
+    if (tenantContext?.mode === 'client' && tenantContext?.client_id) return { role, type: 'client', client_id: tenantContext.client_id, super_admin_context: true }
+    return { role, type: 'global' }
+  }
   if (role === 'admin_all' || role === 'admin_hr') return { role, type: 'client', client_id: user?.client_id || null }
   if (role === 'admin') return { role, type: 'department', client_id: user?.client_id || null, department_id: user?.department_id || null, departemen: getUserDepartment(user) }
   return { role, type: 'self', client_id: user?.client_id || null, user_id: user?.id || null }

@@ -1,11 +1,12 @@
 import { supabase } from './supabase.js'
 import { showToast, confirmAction, setButtonLoading } from './feedback.js'
 import { resetShiftMasterCache } from './shift-resolver.js'
+import { applyTenantFilter } from './access-control.js'
 
 export async function renderShiftManagement() {
   const content = document.getElementById('content')
 
-  const { data: shifts, error } = await supabase.from('shift').select('*').order('jam_masuk')
+  const { data: shifts, error } = await applyTenantFilter(supabase.from('shift').select('*').order('jam_masuk'))
 
   content.innerHTML = `
     <div class="page-header">
@@ -68,7 +69,7 @@ export async function renderShiftManagement() {
     const btn = document.querySelector('#shiftModal .btn-primary')
     setButtonLoading(btn, true)
 
-    const { error } = await supabase.from('shift').insert([{ nama_shift: nama, jam_masuk: masuk, jam_pulang: pulang, keterangan: ket }])
+    const { error } = await supabase.from('shift').insert([{ nama_shift: nama, jam_masuk: masuk, jam_pulang: pulang, keterangan: ket, client_id: window.currentUser?.client_id || null, department_id: window.currentUser?.department_id || null }])
     setButtonLoading(btn, false)
     if (error) { showToast('Gagal tambah shift: ' + error.message, 'error'); return }
     resetShiftMasterCache()

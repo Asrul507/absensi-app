@@ -27,7 +27,7 @@ import {
   validateRentangPengajuan
 } from './services/leave-service.js'
 import { showToast, setButtonLoading } from './feedback.js'
-import { assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess } from './access-control.js'
+import { applyTenantFilter, assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess } from './access-control.js'
 
 
 export async function renderPengajuan(user) {
@@ -44,7 +44,7 @@ export async function renderPengajuan(user) {
     }
   }
 
-  let query = supabase.from('pengajuan').select('*').order('created_at', { ascending: false })
+  let query = applyTenantFilter(supabase.from('pengajuan').select('*').order('created_at', { ascending: false }), { user })
   if (!isAdmin) query = query.eq('user_id', user.id)
   else if (!canAccessAllDepartments(user)) query = accessibleProfiles.length ? query.in('user_id', accessibleProfiles.map(p => p.id)) : null
   const { data: list, error } = query ? await query : { data: [], error: null }
@@ -329,6 +329,8 @@ export async function renderPengajuan(user) {
       tanggal_selesai
     }
 
+    payload.client_id = user.client_id || payload.client_id || null
+    payload.department_id = user.department_id || payload.department_id || null
     const { data: insertedRows, error: insertError } = await supabase.from('pengajuan').insert([payload]).select('id').limit(1)
 
     setButtonLoading(btn, false, '<i class="fa fa-paper-plane"></i> Ajukan Sekarang')
