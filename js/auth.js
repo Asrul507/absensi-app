@@ -4,187 +4,104 @@ import { normalizeRole } from './access-control.js'
 
 const DEBUG_AUTH = false
 
-function getSignupRedirectUrl() {
-  const origin = String(window.location.origin || '').trim()
-  if (!origin || origin === 'null') {
-    throw new Error('Origin aplikasi tidak valid. Buka aplikasi melalui domain HTTP/HTTPS yang terdaftar di Supabase Auth.')
-  }
-  return `${origin}/callback.html`
+function normalizeClientCode(clientCode) {
+  const value = String(clientCode || '').trim().toLowerCase()
+  return value.startsWith('@') ? value.slice(1) : value
 }
 
-function isRetryableSignupError(error) {
-  const msg = String(error?.message || '').toLowerCase()
-  return error?.name === 'AuthRetryableFetchError' || String(error?.status || '') === '500' || msg.includes('500') || msg.includes('fetch') || msg.includes('unexpected failure')
-}
-
-function handleAuthSignupError(error) {
-  const msg = String(error?.message || '')
-  if (msg.includes('already registered') || msg.includes('User already registered')) {
-    return new Error('Email ini sudah terdaftar. Silakan login atau gunakan email lain.')
-  }
-  if (isRetryableSignupError(error)) {
-    return new Error('Supabase Auth gagal mengirim email verifikasi. Periksa Auth Site URL, Redirect URL, SMTP, dan email template Supabase.')
-  }
-  return error instanceof Error ? error : new Error(msg || 'Registrasi Auth gagal diproses.')
-}
-
-async function signUpWithRedirectFallback({ email, password, metadata, pending }) {
-  const emailRedirectTo = getSignupRedirectUrl()
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo,
-      data: metadata
-    }
-  })
-
-  if (error) {
-    console.error('REGISTER AUTH ERROR:', { pending, signupMetadata: metadata, emailRedirectTo, error })
-    return { data: null, error, emailRedirectTo }
-  }
-
-  if (!data?.user?.id) {
-    const missingUserError = new Error('Supabase Auth tidak mengembalikan user id. Registrasi dibatalkan agar pending/profile tetap aman.')
-    console.error('REGISTER AUTH ERROR:', { pending, signupMetadata: metadata, emailRedirectTo, error: missingUserError })
-    return { data: null, error: missingUserError, emailRedirectTo }
-  }
-
-  if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-    const duplicateError = new Error('Email ini sudah terdaftar. Silakan login atau gunakan email lain.')
-    console.error('REGISTER AUTH ERROR:', { pending, signupMetadata: metadata, emailRedirectTo, error: duplicateError })
-    return { data: null, error: duplicateError, emailRedirectTo }
-  }
-
-  return { data, error: null, emailRedirectTo }
-}
-
-/* ================= LOGIN ================= */
 async function fetchClientByCode(clientCode) {
-  const cleanClientCode = String(clientCode || '').trim().toLowerCase()
-  if (!cleanClientCode) return null
-  const escapedCode = cleanClientCode.replace(/[,()]/g, '')
+  const code = normalizeClientCode(clientCode)
+  if (!code) return null
   const { data, error } = await supabase
     .from('clients')
     .select('id,nama_client,kode_client,domain_login,status')
-    .or(`kode_client.eq.${escapedCode},domain_login.eq.${escapedCode}`)
+    .or(`kode_client.eq.${code},domain_login.eq.@${code},domain_login.eq.${code}`)
     .maybeSingle()
   if (error) throw error
   return data || null
 }
 
-async function fetchDefaultClient() {
-  return fetchClientByCode('@default')
-}
-
-async function fetchOrCreateDepartment({ clientId, departmentId, departemen }) {
-  if (departmentId) return departmentId
-  const namaDepartment = String(departemen || '').trim()
-  if (!clientId || !namaDepartment) return null
-
-  const { data: existing, error: existingError } = await supabase
-    .from('departments')
-    .select('id')
-    .eq('client_id', clientId)
-    .eq('nama_department', namaDepartment)
-    .maybeSingle()
-  if (existingError) throw existingError
-  if (existing?.id) return existing.id
-
-  const { data: inserted, error: insertError } = await supabase
-    .from('departments')
-    .insert([{ client_id: clientId, nama_department: namaDepartment, status: 'active' }])
-    .select('id')
-    .maybeSingle()
-  if (insertError) {
-    console.warn('Gagal membuat department otomatis dari pending profile:', insertError)
-    return null
-  }
-  return inserted?.id || null
+function buildInternalEmail(username, clientCode = 'global') {
+  const cleanUsername = String(username || '').trim().toLowerCase()
+  const cleanCode = normalizeClientCode(clientCode) || 'global'
+  return `${cleanUsername}@${cleanCode}.local`
 }
 
 function buildTenantContext(profile, selectedClient = null, globalMode = false) {
   return {
     mode: globalMode ? 'global' : 'client',
     user_id: profile.id,
+    username: profile.username || null,
     role: normalizeRole(profile.role),
     client_id: globalMode ? null : (selectedClient?.id || profile.client_id || null),
     department_id: globalMode ? null : (profile.department_id || null),
-    nama_client: globalMode ? 'Global Admin' : (selectedClient?.nama_client || 'Client'),
+    nama_client: globalMode ? 'Global Admin / All Clients' : (selectedClient?.nama_client || 'Client'),
     kode_client: globalMode ? null : (selectedClient?.kode_client || null)
   }
 }
 
-export async function login(email, password, clientCode = '') {
+async function findSuperAdminProfileByUsername(username) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,username,email_internal,role,client_id,department_id,nama_lengkap,status_akun')
+    .eq('username', String(username || '').trim().toLowerCase())
+    .eq('role', 'super_admin')
+    .maybeSingle()
+  if (error) throw error
+  return data || null
+}
+
+export async function login(username, password, clientCode = '') {
   const btn = document.getElementById('btnLogin')
   setButtonLoading(btn, true, '<i class="fa fa-spinner fa-spin"></i> Memproses...')
 
-  const cleanClientCode = String(clientCode || '').trim().toLowerCase()
+  const cleanUsername = String(username || '').trim().toLowerCase()
+  const cleanClientCode = normalizeClientCode(clientCode)
   let selectedClient = null
 
   try {
-    if (cleanClientCode) {
-      selectedClient = await fetchClientByCode(cleanClientCode)
-      if (!selectedClient) {
-        showLoginError('Kode kantor tidak ditemukan. Periksa kembali kode/domain login kantor Anda.')
-        return false
-      }
-      if (selectedClient.status !== 'active') {
-        showLoginError('Kantor/client ini sedang nonaktif. Hubungi administrator.')
-        return false
-      }
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (DEBUG_AUTH) {
-      console.log('LOGIN RESULT:', data)
-      console.log('LOGIN ERROR:', error)
-    }
-
-    if (error) {
-      showLoginError(
-        error.message.includes('Email not confirmed')
-          ? 'Email belum diverifikasi. Cek inbox email kamu dan klik link verifikasi.'
-          : error.message.includes('Invalid login')
-            ? 'Email atau password salah.'
-            : error.message
-      )
+    if (!cleanUsername || !password) {
+      showLoginError('Username dan password wajib diisi.')
       return false
     }
+
+    let emailInternal = ''
+    if (cleanClientCode) {
+      selectedClient = await fetchClientByCode(cleanClientCode)
+      if (!selectedClient) { showLoginError('Kode kantor tidak ditemukan. Periksa kembali kode/domain login kantor Anda.'); return false }
+      if (selectedClient.status !== 'active') { showLoginError('Kantor/client ini sedang nonaktif. Hubungi administrator.'); return false }
+      emailInternal = buildInternalEmail(cleanUsername, selectedClient.kode_client)
+    } else {
+      const superProfile = await findSuperAdminProfileByUsername(cleanUsername)
+      if (!superProfile?.email_internal) { showLoginError('Kode kantor wajib diisi untuk akun kantor. Super admin dapat login tanpa kode kantor.'); return false }
+      emailInternal = superProfile.email_internal
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email: emailInternal, password })
+    if (DEBUG_AUTH) console.log('LOGIN RESULT:', { data, error })
+    if (error) { showLoginError(error.message.includes('Invalid login') ? 'Username, password, atau kode kantor salah.' : error.message); return false }
 
     const authUser = data?.user
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id,role,client_id,department_id,nama_lengkap')
+      .select('id,username,email_internal,role,client_id,department_id,nama_lengkap,status_akun')
       .eq('id', authUser?.id)
       .maybeSingle()
-
-    if (profileError || !profile) {
-      await supabase.auth.signOut()
-      showLoginError('Profil akun tidak ditemukan. Hubungi HR/admin.')
-      return false
-    }
+    if (profileError || !profile) { await supabase.auth.signOut(); showLoginError('Profil akun tidak ditemukan. Hubungi HR/admin.'); return false }
 
     const role = normalizeRole(profile.role)
     const isSuperAdmin = role === 'super_admin'
+    const status = String(profile.status_akun || 'Aktif').toLowerCase()
+    if (!['aktif','active'].includes(status)) { await supabase.auth.signOut(); showLoginError('Akun Anda nonaktif. Hubungi HR/admin.'); return false }
 
     if (!cleanClientCode) {
-      if (!isSuperAdmin) {
-        await supabase.auth.signOut()
-        showLoginError('Kode kantor wajib diisi untuk akun kantor.')
-        return false
-      }
+      if (!isSuperAdmin) { await supabase.auth.signOut(); showLoginError('Kode kantor wajib diisi untuk akun kantor.'); return false }
       sessionStorage.setItem('tenantContext', JSON.stringify(buildTenantContext({ ...profile, role }, null, true)))
       return true
     }
 
-    if (!isSuperAdmin && String(profile.client_id || '') !== String(selectedClient.id)) {
-      await supabase.auth.signOut()
-      showLoginError('Akun ini tidak terdaftar pada kantor/client yang dipilih.')
-      return false
-    }
-
+    if (!isSuperAdmin && String(profile.client_id || '') !== String(selectedClient.id)) { await supabase.auth.signOut(); showLoginError('Akun ini tidak terdaftar pada kantor/client yang dipilih.'); return false }
+    if (isSuperAdmin && !profile.client_id) profile.client_id = selectedClient.id
     sessionStorage.setItem('tenantContext', JSON.stringify(buildTenantContext({ ...profile, role }, selectedClient, false)))
     return true
   } catch (err) {
@@ -196,6 +113,19 @@ export async function login(email, password, clientCode = '') {
   }
 }
 
+export async function createEmployeeAccount(payload) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sesi login tidak ditemukan.')
+  const res = await fetch('/.netlify/functions/create-employee-account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify(payload)
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || !body.success) throw new Error(body.error || 'Gagal membuat akun karyawan.')
+  return body
+}
+
 /* ================= LOGOUT ================= */
 export async function logout() {
   await supabase.auth.signOut()
@@ -203,214 +133,18 @@ export async function logout() {
 }
 
 /* ===============================================================
-   DAFTAR KARYAWAN BARU
-   Dipanggil dari halaman registrasi (karyawan pilih nama sendiri)
+   SELF-REGISTER DEPRECATED
+   Akun karyawan kini hanya dibuat oleh super_admin/admin_hr melalui
+   Netlify Function server-side agar tidak ada email verification.
 =============================================================== */
-export async function registerKaryawan(
-  pendingId,
-  email,
-  password,
-  konfirmasi
-) {
-
-  // ================= VALIDASI =================
-  if (!email || !password) {
-    showRegError('Email dan password wajib diisi')
-    return false
-  }
-
-  if (password.length < 8) {
-    showRegError('Password minimal 8 karakter')
-    return false
-  }
-
-  if (password !== konfirmasi) {
-    showRegError('Password dan konfirmasi tidak cocok')
-    return false
-  }
-
-  if (!email.includes('@') || !email.includes('.')) {
-    showRegError('Format email tidak valid')
-    return false
-  }
-
-  // ================= LOADING BUTTON =================
-  const btn = document.getElementById('btnDaftar')
-
-  if (btn) {
-    btn.disabled = true
-    btn.innerHTML =
-      '<i class="fa fa-spinner fa-spin"></i> Mendaftarkan...'
-  }
-
-  try {
-
-    // ================= AMBIL DATA PENDING =================
-    const {
-      data: pending,
-      error: pendingErr
-    } = await supabase
-      .from('pending_profiles')
-      .select('*')
-      .eq('id', pendingId)
-      .eq('status', 'waiting')
-      .maybeSingle()
-
-    if (pendingErr || !pending) {
-      throw new Error('Data karyawan tidak ditemukan atau sudah terdaftar')
-    }
-
-    const defaultClient = pending.client_id ? null : await fetchDefaultClient()
-    const clientId = pending.client_id || defaultClient?.id || null
-    const role = normalizeRole(pending.role || 'staff')
-    let departmentId = pending.department_id || null
-
-    if (!clientId) {
-      throw new Error('Client untuk registrasi belum tersedia. Hubungi admin.')
-    }
-
-    departmentId = await fetchOrCreateDepartment({
-      clientId,
-      departmentId,
-      departemen: pending.departemen
-    })
-
-    const signupMetadata = {
-      pending_id: String(pendingId),
-      nama_lengkap: pending.nama_lengkap || '',
-      role,
-      client_id: clientId,
-      department_id: departmentId || null
-    }
-
-    // ================= SIGNUP =================
-    const { data, error } = await signUpWithRedirectFallback({
-      email,
-      password,
-      metadata: signupMetadata,
-      pending
-    })
-
-    // ================= ERROR =================
-    if (error) {
-      throw handleAuthSignupError(error)
-    }
-
-    const user = data?.user
-    if (!user?.id) {
-      throw new Error('Supabase Auth tidak mengembalikan user id. Pending registrasi tetap menunggu dan profile tidak dibuat.')
-    }
-
-    // ================= BUAT PROFILE =================
-    {
-      const profilePayload = {
-        id: user.id,
-        email,
-        nama_lengkap: pending.nama_lengkap,
-        role,
-        client_id: clientId,
-        department_id: departmentId,
-        jabatan: pending.jabatan || '',
-        departemen: pending.departemen || '',
-        no_hp: pending.no_hp || '',
-        tanggal_bergabung: pending.tanggal_bergabung || null,
-        tanggal_lahir: pending.tanggal_lahir || null,
-        jenis_kontrak: pending.jenis_kontrak || null,
-        kontrak_mulai: pending.kontrak_mulai || null,
-        durasi_kontrak: pending.durasi_kontrak || null,
-        satuan_durasi_kontrak: pending.satuan_durasi_kontrak || 'bulan',
-        masa_kontrak: pending.masa_kontrak || null,
-        kontrak_berakhir: pending.kontrak_berakhir || null,
-        status_kontrak: pending.status_kontrak || 'aktif',
-        status_akun: 'Menunggu Verifikasi',
-        foto_url: '',
-        sisa_cuti: pending.sisa_cuti || 0,
-        jatah_cuti: pending.jatah_cuti || 0,
-        titik_radius: pending.titik_radius || null
-      }
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert([profilePayload], { onConflict: 'id', ignoreDuplicates: true })
-
-      if (profileError) {
-        console.error('PROFILE ERROR:', profileError)
-        throw profileError
-      }
-
-      // ================= UPDATE PENDING =================
-      await supabase
-        .from('pending_profiles')
-        .update({
-          status: 'registered',
-          client_id: clientId,
-          department_id: departmentId
-        })
-        .eq('id', pendingId)
-        .eq('status', 'waiting')
-    }
-
-    return true
-
-  } catch (err) {
-    console.error('REGISTER KARYAWAN ERROR:', err)
-    const msg = String(err?.message || '')
-    showRegError(
-      isRetryableSignupError(err)
-        ? handleAuthSignupError(err).message
-        : (msg || 'Terjadi kesalahan saat registrasi')
-    )
-    return false
-  } finally {
-    // ================= RESET BUTTON =================
-    if (btn) {
-      btn.disabled = false
-      btn.innerHTML = '<i class="fa fa-user-plus"></i> Daftar & Kirim Verifikasi'
-    }
-  }
+export async function registerKaryawan() {
+  showRegError('Self-register sudah dinonaktifkan. Hubungi HRD/admin untuk dibuatkan akun username.')
+  return false
 }
 
-/* ===============================================================
-   SIGNUP LANGSUNG (untuk HRD buat akun tanpa pending flow)
-   Dipakai saat HRD ingin buat akun sekaligus dengan email
-=============================================================== */
-export async function signup(email, password, role = 'staff', extraData = {}) {
-  if (!email || !password) { showToast('Email & password wajib diisi', 'warning'); return false }
-  if (password.length < 6) { showToast('Password minimal 6 karakter', 'warning'); return false }
-
-  const { data, error } = await supabase.auth.signUp({ email, password })
-  if (error) { showToast(error.message, 'error'); return false }
-
-  const user = data.user
-  if (user) {
-    const { error: profileError } = await supabase.from('profiles').insert([{
-      id: user.id,
-      email,
-      nama_lengkap: extraData.nama_lengkap || email.split('@')[0],
-      role,
-      jabatan: extraData.jabatan || '',
-      departemen: extraData.departemen || '',
-      no_hp: extraData.no_hp || '',
-      tanggal_bergabung: extraData.tanggal_bergabung || null,
-      tanggal_lahir: extraData.tanggal_lahir || null,
-      jenis_kontrak: extraData.jenis_kontrak || null,
-      kontrak_mulai: extraData.kontrak_mulai || null,
-      durasi_kontrak: extraData.durasi_kontrak || null,
-      satuan_durasi_kontrak: extraData.satuan_durasi_kontrak || 'bulan',
-      masa_kontrak: extraData.masa_kontrak || null,
-      kontrak_berakhir: extraData.kontrak_berakhir || null,
-      status_kontrak: extraData.status_kontrak || 'aktif',
-      status_akun: 'Aktif',
-      foto_url: '',
-      sisa_cuti: 0,
-      jatah_cuti: 0,
-      titik_radius: extraData.titik_radius || null,
-      client_id: extraData.client_id || null,
-      department_id: extraData.department_id || null
-    }])
-    if (profileError) { showToast(profileError.message, 'error'); return false }
-  }
-  return true
+export async function signup() {
+  showToast('Pembuatan akun dari browser dinonaktifkan. Gunakan form Tambah Karyawan.', 'warning')
+  return false
 }
 
 /* ================= HELPERS ================= */
@@ -442,6 +176,10 @@ export async function updateUserPassword(newPassword) {
   if (error) {
     showToast('Gagal memperbarui password: ' + error.message, 'error')
     return false
+  }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user?.id) {
+    await supabase.from('profiles').update({ must_change_password: false, password_changed_at: new Date().toISOString() }).eq('id', user.id)
   }
   return true
 }

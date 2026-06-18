@@ -10,7 +10,7 @@
 
 import { supabase } from './supabase.js'
 import { getProfile } from './users.js'
-import { login as doLogin, logout, updateUserPassword } from './auth.js'
+import { login as doLogin, logout, updateUserPassword, createEmployeeAccount } from './auth.js'
 import { renderDashboard } from './dashboard.js'
 import { renderAbsensi } from './ui.js'
 import { renderShiftManagement } from './shift.js'
@@ -185,12 +185,12 @@ function updateTopbarAvatar(profile) {
 
 /* ================= AUTHENTICATION ACTIONS ================= */
 window.login = async function () {
-  const email    = document.getElementById('email').value.trim()
+  const username = document.getElementById('username')?.value.trim() || document.getElementById('email')?.value.trim() || ''
   const password = document.getElementById('password').value
   const errEl    = document.getElementById('loginError')
   if (errEl) errEl.style.display = 'none'
   const clientCode = document.getElementById('clientCode')?.value.trim() || ''
-  const ok = await doLogin(email, password, clientCode)
+  const ok = await doLogin(username, password, clientCode)
   if (ok) await checkUser()
 }
 
@@ -500,7 +500,7 @@ function renderProfile() {
 
       <div class="card fade-up-1">
         <div class="card-title"><i class="fa fa-id-card"></i> Informasi Pribadi</div>
-        ${infoRow('Email', u.email || '-')}
+        ${infoRow('Username', u.username || '-')}
         ${infoRow('Jabatan', u.jabatan || '-')}
         ${infoRow('Departemen', u.departemen || '-')}
         ${infoRow('No. HP', u.no_hp || '-')}
@@ -666,7 +666,7 @@ async function renderUsers() {
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <div class="search-box" style="flex:2;min-width:180px;margin:0;">
           <i class="fa fa-search"></i>
-          <input id="searchUser" placeholder="Cari nama atau email..." oninput="filterUsers()">
+          <input id="searchUser" placeholder="Cari nama atau username..." oninput="filterUsers()">
         </div>
         <select id="filterStatusUser" onchange="filterUsers()"
           style="flex:1;min-width:120px;padding:10px 12px;border:1.5px solid var(--border); border-radius:var(--r-md);font-size:.85rem;outline:none;font-family:inherit;background:var(--white);color:var(--text);">
@@ -720,7 +720,7 @@ async function renderUsers() {
     const st = document.getElementById('filterStatusUser').value
     if (window._currentTab === 'aktif') {
       renderUserList(window._allUsers.filter(u =>
-        ((u.nama_lengkap||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)) &&
+        ((u.nama_lengkap||'').toLowerCase().includes(q) || (u.username||'').toLowerCase().includes(q)) &&
         (!st || u.status_akun === st)
       ))
     } else {
@@ -1002,7 +1002,7 @@ window.openFormTambah = async function() {
         <label>Nama Lengkap <span class="req">*</span></label>
         <input id="pNama" placeholder="Nama lengkap karyawan">
       </div>
-      <div class="field"><label>Email Login</label><input type="email" id="pEmail" placeholder="nama@company.com"></div>
+      <div class="field"><label>Username Login</label><input type="text" id="pUsername" placeholder="staff01" autocapitalize="none"><label>Password Awal</label><input type="password" id="pPasswordAwal" placeholder="Password awal"></div>
       <div class="field"><label>Nama Kantor / Client <span class="req">*</span></label>${clientField}</div>
       <div class="field"><label>Department <span class="req">*</span></label><select id="pDepartment">${renderDepartmentOptions(departments)}</select></div>
       <div class="field"><label>Status Akun</label>
@@ -1035,7 +1035,7 @@ window.openFormTambah = async function() {
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
-      <button class="btn-primary" onclick="savePendingKaryawan()"><i class="fa fa-save"></i> Simpan ke Daftar Tunggu</button>
+      <button class="btn-primary" onclick="savePendingKaryawan()"><i class="fa fa-user-plus"></i> Buat Akun</button>
     </div>
   `)
 }
@@ -1054,12 +1054,16 @@ window.reloadEmployeeDepartments = async function(clientId) {
 
 window.savePendingKaryawan = async function() {
   const nama = document.getElementById('pNama').value.trim()
+  const username = document.getElementById('pUsername')?.value.trim().toLowerCase() || ''
+  const passwordAwal = document.getElementById('pPasswordAwal')?.value || ''
   if (!nama) { showToast('Nama wajib diisi', 'warning'); return }
+  if (!username) { showToast('Username login wajib diisi', 'warning'); return }
+  if (passwordAwal.length < 8) { showToast('Password awal minimal 8 karakter', 'warning'); return }
   const kontrakPayload = readKontrakForm('p')
   if (!validateKontrakPayload(kontrakPayload)) return
 
   const role = normalizeRole(window.currentUser?.role)
-  if (role === 'admin' || role === 'staff') { showToast('Anda tidak berhak menambah karyawan.', 'warning'); return }
+  if (!['super_admin', 'admin_hr'].includes(role)) { showToast('Hanya Super Admin dan Admin HR yang dapat membuat akun.', 'warning'); return }
   const selectedClientId = role === 'super_admin' ? document.getElementById('pClient')?.value : window.currentUser?.client_id
   const selectedDepartmentId = document.getElementById('pDepartment')?.value || null
   if (!selectedClientId) { showToast('Client wajib dipilih.', 'warning'); return }
@@ -1068,98 +1072,32 @@ window.savePendingKaryawan = async function() {
   const selectedDepartment = departments.find(d => String(d.id) === String(selectedDepartmentId))
   if (!selectedDepartment) { showToast('Department tidak valid untuk client yang dipilih.', 'warning'); return }
 
-  const { error } = await supabase.from('pending_profiles').insert([{
-    nama_lengkap:      nama,
-    email:             document.getElementById('pEmail')?.value.trim() || null,
-    jabatan:           document.getElementById('pJabatan').value.trim(),
-    departemen:        selectedDepartment.nama_department,
-    no_hp:             document.getElementById('pHp').value.trim(),
-    tanggal_bergabung: document.getElementById('pTgl').value || null,
-    tanggal_lahir:     document.getElementById('pLahir').value || null,
-    role:              document.getElementById('pRole').value,
-    status_akun:       document.getElementById('pStatusAkun')?.value || 'Aktif',
-    sisa_cuti:         Math.max(0, Number.parseInt(document.getElementById('pSisaCuti')?.value || '0', 10) || 0),
-    foto_url:          document.getElementById('pFotoUrl')?.value.trim() || '',
-    titik_radius:      document.getElementById('pTitikRadius').value || null,
-    ...kontrakPayload,
-    client_id:         selectedClientId,
-    department_id:     selectedDepartmentId,
-    created_by:        window.currentUser?.id || null
-  }])
-
-  if (error) { showToast('Gagal menyimpan: ' + error.message, 'error'); return }
-  window.closeUserModal()
-  showToast(`${nama} berhasil dimasukkan ke daftar tunggu`, 'success')
-  await renderUsers()
-}
-
-/* ================= RENDER USER LIST (AKTIF) ================= */
-function renderUserList(users) {
-  const el = document.getElementById('userListContainer')
-  if (!el) return
-  if (!users.length) {
-    el.innerHTML = `<div class="empty-state"><i class="fa fa-users"></i><p>Tidak ada karyawan ditemukan</p></div>`
-    return
+  try {
+    await createEmployeeAccount({
+      nama_lengkap: nama,
+      username,
+      password_awal: passwordAwal,
+      client_id: selectedClientId,
+      department_id: selectedDepartmentId,
+      departemen: selectedDepartment.nama_department,
+      jabatan: document.getElementById('pJabatan').value.trim(),
+      no_hp: document.getElementById('pHp').value.trim(),
+      tanggal_bergabung: document.getElementById('pTgl').value || null,
+      tanggal_lahir: document.getElementById('pLahir').value || null,
+      role: document.getElementById('pRole').value,
+      sisa_cuti: Math.max(0, Number.parseInt(document.getElementById('pSisaCuti')?.value || '0', 10) || 0),
+      foto_url: document.getElementById('pFotoUrl')?.value.trim() || '',
+      titik_radius: document.getElementById('pTitikRadius').value || null,
+      ...kontrakPayload
+    })
+    window.closeUserModal()
+    showToast(`${nama} berhasil dibuat tanpa email verification`, 'success')
+    await renderUsers()
+  } catch (error) {
+    showToast(error.message || 'Gagal membuat akun karyawan', 'error')
   }
-
-  const me = window.currentUser
-
-  el.innerHTML = users.map(u => {
-    const masaKerja = hitungMasaKerja(u.tanggal_bergabung)
-    const isAktif   = u.status_akun !== 'Non-Aktif'
-
-    let bisaEdit = false
-    if (me.role === 'super_admin') {
-      bisaEdit = true
-    } else if (['admin'].includes(normalizeRole(me.role))) {
-      if ((u.role === 'staff' || u.role === 'admin' || u.id === me.id) && canManageUserByDepartment(me, u)) bisaEdit = true
-    } else if (me.role === 'staff') {
-      if (u.id === me.id) bisaEdit = true
-    }
-
-    const avatarHtml = u.foto_url
-      ? `<img src="${u.foto_url}" style="width:40px;height:40px;border-radius:var(--r-md);object-fit:cover;flex-shrink:0;" onclick="window.previewImageFullScreen('${u.foto_url}')">`
-      : `<div class="user-avatar" style="${!isAktif?'background:var(--gray-300);':''}">${(u.nama_lengkap||'?')[0].toUpperCase()}</div>`
-
-    return `
-      <div class="user-item" style="cursor: pointer;">
-        <div style="display: flex; gap: 12px; flex: 1;" onclick="window.openDetailKaryawan('${u.id}')">
-          ${avatarHtml}
-          <div class="ui-info">
-            <div class="ui-name" style="color: var(--primary); font-weight:700;">${u.nama_lengkap || '-'}</div>
-            <div class="ui-email">${u.email || '-'}
-              <span class="badge badge-${u.role==='super_admin'?'red':u.role==='admin'?'blue':'gray'}" style="margin-left:4px;">${u.role}</span>
-            </div>
-            <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;">
-              <span>⏳ ${formatMasaKerja(masaKerja)}</span>
-              ${u.jabatan?`<span>💼 ${u.jabatan}</span>`:''}
-              <span>📍 ${u.titik_radius || 'Bebas Area'}</span>
-              <span>🌴 ${window._cutiTahunanMap?.[u.id]?.status || 'BELUM_ELIGIBLE'} · Sisa ${window._cutiTahunanMap?.[u.id]?.sisa_cuti || 0} hari</span>
-            </div>
-          </div>
-        </div>
-
-        <div style="display:flex; flex-direction:row; align-items:center; gap:8px;">
-          <span class="badge ${u.status_akun==='Aktif'?'badge-green':u.status_akun==='Menunggu Verifikasi'?'badge-yellow':'badge-red'}">
-            ${u.status_akun||'Aktif'}
-          </span>
-
-          ${bisaEdit ? `
-            <button class="action-btn" title="Edit" onclick="window.openEditKaryawan('${u.id}'); event.stopPropagation();" style="background: var(--gray-100); color: var(--text);">
-              <i class="fa fa-edit"></i>
-            </button>
-          ` : ''}
-
-          ${(me.role === 'super_admin' || (['admin'].includes(normalizeRole(me.role)) && u.role === 'staff' && canManageUserByDepartment(me, u))) ? `
-            <button class="action-btn ${isAktif?'delete':''}" title="${isAktif?'Non-aktifkan':'Aktifkan'}"
-              onclick="toggleStatusUser('${u.id}','${u.status_akun||'Aktif'}'); event.stopPropagation();">
-              <i class="fa fa-${isAktif?'ban':'check'}"></i>
-            </button>
-          ` : ''}
-        </div>
-      </div>`
-  }).join('')
 }
+
 
 /* ================= POPUP MODAL: DETAIL KARYAWAN ================= */
 window.openDetailKaryawan = function(id) {

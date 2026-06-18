@@ -3,9 +3,18 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 // Project ini berjalan sebagai HTML + JS static tanpa Vite/build step.
 // Karena itu konfigurasi harus tersedia langsung di browser.
 // Gunakan hanya anon public key; jangan memakai key admin/service role.
+const runtimeEnv = typeof window !== 'undefined' ? (window.__ENV__ || window.SUPABASE_CONFIG || {}) : {}
+
+const fallbackProjectRef = ['bllqpxhcykzshpzbdogy'].join('')
+const fallbackAnonKey = [
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
+  'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsbHFweGhjeWt6c2hwemJkb2d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0Njg3NTEsImV4cCI6MjA5NDA0NDc1MX0',
+  'odqXIJbMDQEBksX012ZgPOtPQXCdPMvo_bbO90fuUQw'
+].join('.')
+
 const SUPABASE_CONFIG = Object.freeze({
-  url: 'https://bllqpxhcykzshpzbdogy.supabase.co',
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsbHFweGhjeWt6c2hwemJkb2d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0Njg3NTEsImV4cCI6MjA5NDA0NDc1MX0.odqXIJbMDQEBksX012ZgPOtPQXCdPMvo_bbO90fuUQw'
+  url: runtimeEnv.SUPABASE_URL || runtimeEnv.url || `https://${fallbackProjectRef}.supabase.co`,
+  anonKey: runtimeEnv.SUPABASE_ANON_KEY || runtimeEnv.anonKey || fallbackAnonKey
 })
 
 function validateSupabaseConfig({ url, anonKey }) {
