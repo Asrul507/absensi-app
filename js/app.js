@@ -670,29 +670,17 @@ async function renderUsers() {
   const isAllDepartmentViewer = canAccessAllDepartments(window.currentUser)
   const canCreateEmployeeAccounts = ['super_admin', 'admin_hr'].includes(normalizeRole(viewerRole))
   window._allUsers = Array.isArray(window._allUsers) ? window._allUsers : []
-  window._pendingList = Array.isArray(window._pendingList) ? window._pendingList : []
-  window._currentTab = window._currentTab || 'aktif'
   window.filterUsers = function() {
     const q  = (document.getElementById('searchUser')?.value || '').toLowerCase()
     const st = document.getElementById('filterStatusUser')?.value || ''
-    const activeUsers = Array.isArray(window._allUsers) ? window._allUsers : []
-    const pendingUsers = Array.isArray(window._pendingList) ? window._pendingList : []
-    if (window._currentTab === 'aktif') {
-      renderUserList(activeUsers.filter(u =>
-        ((u.nama_lengkap||'').toLowerCase().includes(q) ||
-          (u.username||'').toLowerCase().includes(q) ||
-          (u.email_internal||'').toLowerCase().includes(q) ||
-          (u.email||'').toLowerCase().includes(q)) &&
-        (!st || u.status_akun === st)
-      ))
-    } else {
-      renderPendingList(pendingUsers.filter(p =>
-        ((p.nama_lengkap||'').toLowerCase().includes(q) ||
-          (p.username||'').toLowerCase().includes(q) ||
-          (p.email_internal||'').toLowerCase().includes(q)) &&
-        (!st || p.status_akun === st)
-      ))
-    }
+    const users = Array.isArray(window._allUsers) ? window._allUsers : []
+    renderUserList(users.filter(u =>
+      ((u.nama_lengkap||'').toLowerCase().includes(q) ||
+        (u.username||'').toLowerCase().includes(q) ||
+        (u.email_internal||'').toLowerCase().includes(q) ||
+        (u.email||'').toLowerCase().includes(q)) &&
+      (!st || normalizeAccountStatus(u.status_akun) === st)
+    ))
   }
 
   content.innerHTML = `
@@ -715,17 +703,6 @@ async function renderUsers() {
     </div>
 
     ${viewerRole !== 'staff' ? `<div class="card fade-up" style="padding:12px 14px;margin-bottom:12px;color:var(--text-muted);font-size:.82rem;font-weight:700;"><i class="fa fa-building"></i> ${isAllDepartmentViewer ? 'Anda mengelola semua departemen.' : `Anda mengelola departemen: ${getUserDepartment(window.currentUser) || '-'}.`}</div>` : ''}
-
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button id="tabAktif" class="btn-primary btn-sm" onclick="switchTab('aktif')">
-        <i class="fa fa-users"></i> Karyawan Aktif
-      </button>
-      ${viewerRole !== 'staff' ? `
-        <button id="tabPending" class="btn-secondary btn-sm" onclick="switchTab('pending')">
-          <i class="fa fa-hourglass-half"></i> Legacy Pending
-        </button>
-      ` : ''}
-    </div>
 
     <!-- Preview Upload Excel Karyawan -->
     <div id="previewUploadKaryawanWrap" style="display:none; margin-bottom:14px;"></div>
@@ -766,10 +743,6 @@ async function renderUsers() {
         ? await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
         : await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
     }
-    let pendingQuery = applyTenantFilter(supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap'), { user: window.currentUser, userColumn: null, legacyDepartmentColumn: 'departemen' })
-    const { data: pending, error: pendingError } = viewerRole !== 'staff' ? await pendingQuery : { data: [], error: null }
-    if (pendingError) throw pendingError
-
     let cutiTahunanRows = []
     try {
       cutiTahunanRows = await syncEligibleCutiTahunanForProfiles(users || [])
@@ -779,9 +752,7 @@ async function renderUsers() {
     window._cutiTahunanMap = {}
     ;(cutiTahunanRows || []).forEach(c => { window._cutiTahunanMap[c.user_id] = c })
 
-    window._allUsers    = users    || []
-    window._pendingList = pending  || []
-    window._currentTab  = 'aktif'
+    window._allUsers = users || []
 
     renderUserList(window._allUsers)
   } catch (err) {
@@ -791,20 +762,11 @@ async function renderUsers() {
       container.innerHTML = `
         <div class="card" style="padding:18px;border-left:4px solid var(--danger);">
           <div style="font-weight:900;color:var(--danger);margin-bottom:6px;"><i class="fa fa-triangle-exclamation"></i> Gagal memuat data karyawan</div>
-          <div style="color:var(--text-muted);font-size:.85rem;">${err?.message || 'Terjadi kesalahan saat mengambil data profiles / legacy pending_profiles.'}</div>
+          <div style="color:var(--text-muted);font-size:.85rem;">${err?.message || 'Terjadi kesalahan saat mengambil data profiles.'}</div>
         </div>
       `
     }
     showToast('Gagal memuat data karyawan', 'error')
-  }
-
-  window.switchTab = function(tab) {
-    window._currentTab = tab
-    document.getElementById('tabAktif').className   = tab==='aktif'   ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
-    const tabPending = document.getElementById('tabPending')
-    if (tabPending) tabPending.className = tab==='pending' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
-    if (tab === 'aktif') renderUserList(Array.isArray(window._allUsers) ? window._allUsers : [])
-    else renderPendingList(Array.isArray(window._pendingList) ? window._pendingList : [])
   }
 }
 
@@ -1193,6 +1155,18 @@ function safeText(value, fallback = '-') {
     .replace(/'/g, '&#39;')
 }
 
+function normalizeAccountStatus(status) {
+  const v = String(status || 'Aktif').trim().toLowerCase()
+  if (v === 'aktif' || v === 'active') return 'Aktif'
+  if (v === 'non-aktif' || v === 'nonaktif' || v === 'inactive' || v === 'disabled') return 'Non-Aktif'
+  if (v === 'menunggu verifikasi' || v === 'waiting' || v === 'pending') return 'Non-Aktif'
+  return 'Aktif'
+}
+
+function legacyLoginValue(value) {
+  return value || '(legacy belum diset)'
+}
+
 function getClientObject(user) {
   return Array.isArray(user?.clients) ? user.clients[0] : user?.clients
 }
@@ -1246,12 +1220,12 @@ function renderUserList(list) {
   }
 
   el.innerHTML = users.map(u => {
-    const statusAkun = u.status_akun || 'Aktif'
+    const statusAkun = normalizeAccountStatus(u.status_akun)
     const statusKontrak = u.status_kontrak || getStatusKontrak(u.kontrak_berakhir) || '-'
     const cutiTahunan = window._cutiTahunanMap?.[u.id]?.sisa_cuti
     const sisaCuti = cutiTahunan ?? u.sisa_cuti ?? 0
     const loginId = u.username || u.email_internal || u.email || '-'
-    const badgeClass = statusAkun === 'Aktif' ? 'badge-green' : statusAkun === 'Non-Aktif' ? 'badge-red' : 'badge-yellow'
+    const badgeClass = statusAkun === 'Aktif' ? 'badge-green' : 'badge-red'
     const kontrakBadgeClass = statusKontrak === 'berakhir' ? 'badge-red' : statusKontrak === 'akan_berakhir' ? 'badge-yellow' : 'badge-green'
     return `
       <div class="user-item">
@@ -1311,8 +1285,8 @@ window.openDetailKaryawan = function(id) {
        <span class="badge badge-gray">${roleLabel}</span>
     </div>
     <div style="display: flex; flex-direction: column; gap: 10px; font-size: .85rem;">
-      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Username:</span><strong>${safeText(target.username)}</strong></div>
-      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Email Internal:</span><strong>${safeText(target.email_internal)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Username:</span><strong>${safeText(legacyLoginValue(target.username))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Email Internal:</span><strong>${safeText(legacyLoginValue(target.email_internal))}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Office:</span><strong>${safeText(getOfficeLabel(target))}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Domain Office:</span><strong>${safeText(getOfficeDomainLabel(target))}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Department:</span><strong>${safeText(getDepartmentLabel(target))}</strong></div>
@@ -1323,7 +1297,7 @@ window.openDetailKaryawan = function(id) {
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Masa Kerja:</span><strong>${safeText(formatMasaKerja(hitungMasaKerja(target.tanggal_bergabung)))}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${safeText(target.tanggal_lahir)}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Plot Titik Absen:</span><strong style="color:var(--primary);">📍 ${safeText(target.titik_radius || 'Bebas Radius')}</strong></div>
-      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${safeText(target.status_akun || 'Aktif')}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${safeText(normalizeAccountStatus(target.status_akun))}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Jenis Kontrak:</span><strong>${safeText(target.jenis_kontrak)}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Periode Kontrak:</span><strong>${safeText(target.kontrak_mulai)} s/d ${safeText(target.kontrak_berakhir)}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Masa / Status Kontrak:</span><strong>${safeText(target.masa_kontrak)} · ${safeText(target.status_kontrak || getStatusKontrak(target.kontrak_berakhir))}</strong></div>
@@ -1345,7 +1319,10 @@ window.openEditKaryawan = async function(id) {
   try { assertSameDepartment(me, target) } catch (err) { showToast(err.message, 'error'); return }
   const isMe = me.id === target.id
   const viewerRole = normalizeRole(me.role)
-  const canEditAllFields = (viewerRole === 'super_admin') || (['admin_all','admin_hr','admin'].includes(viewerRole) && normalizeRole(target.role) === 'staff' && canManageUserByDepartment(me, target))
+  const targetMissingOfficeDepartment = !target.client_id || !target.department_id
+  const targetMissingLogin = !target.username || !target.email_internal
+  const baseCanEditAllFields = (viewerRole === 'super_admin') || (['admin_all','admin_hr','admin'].includes(viewerRole) && normalizeRole(target.role) === 'staff' && canManageUserByDepartment(me, target))
+  const canEditAllFields = baseCanEditAllFields && (viewerRole === 'super_admin' || !targetMissingOfficeDepartment)
   const officeEditable = canEditOffice(me) && canEditAllFields
   const departmentEditable = canEditAllFields && canEditDepartmentForEmployee(me)
 
@@ -1383,7 +1360,7 @@ window.openEditKaryawan = async function(id) {
 
   window._editEmployeeOfficeOptions = officeOptions
   const officeField = officeEditable
-    ? `<select id="editOffice" onchange="window.reloadEditEmployeeDepartments(this.value)">${officeOptions.map(c => `<option value="${safeText(c.id)}" ${String(c.id) === String(target.client_id) ? 'selected' : ''}>${safeText(c.nama_client)} (${safeText(c.domain_login || c.kode_client)})</option>`).join('')}</select>`
+    ? `<select id="editOffice" onchange="window.reloadEditEmployeeDepartments(this.value)"><option value="">-- Pilih Office --</option>${officeOptions.map(c => `<option value="${safeText(c.id)}" ${String(c.id) === String(target.client_id) ? 'selected' : ''}>${safeText(c.nama_client)} (${safeText(c.domain_login || c.kode_client)})</option>`).join('')}</select>`
     : `<input id="editOfficeReadonly" value="${safeText(getOfficeFullLabel(target))}" disabled>`
   const departmentField = departmentEditable
     ? `<select id="editDepartment">${renderDepartmentOptionsForEdit(departmentOptions, target.department_id)}</select>`
@@ -1394,6 +1371,20 @@ window.openEditKaryawan = async function(id) {
       <h3><i class="fa fa-user-pen" style="color:var(--warning);"></i> Edit Data: ${safeText(target.nama_lengkap)}</h3>
       <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
     </div>
+
+    ${targetMissingOfficeDepartment ? `
+      <div class="alert warning" style="margin-bottom:12px;">
+        <i class="fa fa-triangle-exclamation"></i>
+        ${viewerRole === 'super_admin'
+          ? 'Akun lama belum terhubung ke Office/Department. Lengkapi Office dan Department sebelum menyimpan perubahan penting.'
+          : 'Akun lama ini harus dilengkapi Office/Department oleh Super Admin terlebih dahulu.'}
+      </div>
+    ` : ''}
+    ${targetMissingLogin ? `
+      <div class="alert warning" style="margin-bottom:12px;">
+        <i class="fa fa-key"></i> Username/email internal legacy belum diset. Buatkan/rapikan melalui fitur migrasi akun.
+      </div>
+    ` : ''}
 
     <div style="text-align:center;padding:14px 0 10px;border-bottom:1px solid var(--border);margin-bottom:14px;">
       <div style="position:relative;display:inline-block;">
@@ -1418,12 +1409,12 @@ window.openEditKaryawan = async function(id) {
       </div>
       <div class="field">
         <label>Username</label>
-        <input id="editUsername" value="${safeText(target.username)}" disabled>
+        <input id="editUsername" value="${safeText(legacyLoginValue(target.username))}" disabled>
         <small style="font-size:.65rem;color:var(--text-muted);">Username login hanya dapat diubah oleh Super Admin melalui reset akun.</small>
       </div>
       <div class="field">
         <label>Email Internal</label>
-        <input id="editEmailInternal" value="${safeText(target.email_internal)}" disabled>
+        <input id="editEmailInternal" value="${safeText(legacyLoginValue(target.email_internal))}" disabled>
       </div>
       <div class="field">
         <label>Office</label>
@@ -1460,8 +1451,8 @@ window.openEditKaryawan = async function(id) {
       <div class="field">
         <label>Status Akun</label>
         <select id="editStatusAkun" ${canEditAllFields ? '' : 'disabled'}>
-          <option value="Aktif"${(target.status_akun || 'Aktif') === 'Aktif' ? ' selected' : ''}>Aktif</option>
-          <option value="Non-Aktif"${target.status_akun === 'Non-Aktif' ? ' selected' : ''}>Non-Aktif</option>
+          <option value="Aktif"${normalizeAccountStatus(target.status_akun) === 'Aktif' ? ' selected' : ''}>Aktif</option>
+          <option value="Non-Aktif"${normalizeAccountStatus(target.status_akun) === 'Non-Aktif' ? ' selected' : ''}>Non-Aktif</option>
         </select>
       </div>
       <div class="field">
@@ -1518,15 +1509,47 @@ window.reloadEditEmployeeDepartments = async function(clientId) {
   }
 }
 
+async function resetEmployeePassword(targetUserId, newPassword) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sesi login tidak valid. Silakan login ulang.')
+  const res = await fetch('/.netlify/functions/reset-employee-password', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({ user_id: targetUserId, new_password: newPassword })
+  })
+  const result = await res.json().catch(() => ({}))
+  if (!res.ok || !result.success) throw new Error(result.error || 'Reset password gagal.')
+  return result
+}
+
 /* ================= SIMPAN HASIL MODAL EDIT KARYAWAN ================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
-  const newPassword = document.getElementById('editPassword')?.value.trim() || ''
+  const passwordInput = document.getElementById('editPassword')
+  const newPassword = passwordInput?.value || ''
   const selectEl       = document.getElementById('editTitikRadius')
   const titikRadiusBaru = selectEl ? (selectEl.value || null) : null
 
   try {
     const targetProfile = (window._allUsers || []).find(u => u.id === id) || null
     assertSameDepartment(window.currentUser, targetProfile)
+    if (newPassword) {
+      if (newPassword.length < 8) {
+        showToast('Password minimal 8 karakter', 'warning')
+        passwordInput?.focus()
+        return
+      }
+      if (isMe) {
+        const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
+        if (passErr) throw passErr
+      } else {
+        await resetEmployeePassword(id, newPassword)
+      }
+      if (passwordInput) passwordInput.value = ''
+      showToast('Password berhasil diperbarui.', 'success')
+    }
     if (canEditAll) {
       const kontrakPayload = readKontrakForm('edit')
       if (!validateKontrakPayload(kontrakPayload)) return
@@ -1540,7 +1563,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         no_hp:         document.getElementById('editHp')?.value.trim()      || '',
         tanggal_lahir: document.getElementById('editLahir')?.value          || null,
         tanggal_bergabung: document.getElementById('editTgl')?.value       || null,
-        status_akun:   document.getElementById('editStatusAkun')?.value    || 'Aktif',
+        status_akun:   normalizeAccountStatus(document.getElementById('editStatusAkun')?.value),
         sisa_cuti:     Math.max(0, Number.parseInt(document.getElementById('editSisaCuti')?.value || '0', 10) || 0),
         foto_url:      document.getElementById('editFotoUrl')?.value.trim() || '',
         titik_radius:  titikRadiusBaru,
@@ -1584,19 +1607,6 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         .eq('id', id)
 
       if (profileErr) throw profileErr
-    }
-
-    if (newPassword) {
-      if (newPassword.length < 6) {
-        showToast('Password minimal 6 karakter', 'warning')
-        return
-      }
-      if (isMe) {
-        const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
-        if (passErr) throw passErr
-      } else {
-        showToast('Reset password karyawan memerlukan Supabase Service Role.', 'info');
-      }
     }
 
     // Update data cache lokal window agar UI sinkron instan
@@ -1687,54 +1697,9 @@ window.uploadFotoEditModal = async function(input, targetUserId) {
   if (statusEl) statusEl.innerHTML = '<i class="fa fa-check" style="color:var(--success);"></i> Foto diperbarui!'
 }
 
-/* ================= RENDER LIST DAFTAR TUNGGU (PENDING LIST) ================= */
-function renderPendingList(list) {
-  const el = document.getElementById('userListContainer')
-  if (!el) return
-  if (!list.length) {
-    el.innerHTML = `<div class="empty-state"><i class="fa fa-hourglass-half"></i><p>Tidak ada data legacy pending</p></div>`
-    return
-  }
-  el.innerHTML = `
-    <div class="alert info" style="margin-bottom:12px;">
-      <i class="fa fa-info-circle"></i>
-      <span>Data legacy pending ditampilkan hanya untuk audit/backward compatibility. Karyawan baru dibuatkan akun login oleh sistem menggunakan username dan password awal.</span>
-    </div>
-    ${list.map(p => `
-      <div class="user-item">
-        <div class="user-avatar" style="background:linear-gradient(135deg,#64748b,#475569);">
-          ${(p.nama_lengkap||'?')[0].toUpperCase()}
-        </div>
-        <div class="ui-info">
-          <div class="ui-name">${p.nama_lengkap}</div>
-          <div class="ui-email">${p.jabatan||'-'} ${p.departemen?'· '+p.departemen:''}</div>
-          <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;">
-            📅 Input: ${p.tanggal_bergabung||'-'} · Kontrak: ${p.kontrak_mulai || '-'} s/d ${p.kontrak_berakhir || '-'} · Akses Target: ${p.role}
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-          <span class="badge badge-yellow"><i class="fa fa-hourglass-half"></i> Waiting</span>
-          <button class="action-btn delete" title="Hapus" onclick="deletePending('${p.id}','${p.nama_lengkap}')">
-            <i class="fa fa-trash"></i>
-          </button>
-        </div>
-      </div>`).join('')}
-  `
-}
-
-window.deletePending = async function(id, nama) {
-  const pendingTarget = (window._pendingList || []).find(p => p.id === id) || null
-  try { assertSameDepartment(window.currentUser, pendingTarget) } catch (err) { showToast(err.message, 'error'); return }
-  if (!(await confirmAction(`Hapus data legacy pending "${nama}"?`, 'Ya, hapus'))) return
-  await supabase.from('pending_profiles').delete().eq('id', id)
-  window._pendingList = window._pendingList.filter(p => p.id !== id)
-  renderPendingList(window._pendingList)
-}
-
 /* ===============================================================
    UPLOAD KARYAWAN MASSAL VIA EXCEL
-   Akun dibuat server-side via Netlify Function. Tidak lagi masuk ke
-   legacy pending_profiles; tidak lagi memakai daftar tunggu / registrasi mandiri.
+   Akun dibuat server-side via Netlify Function menggunakan username dan password awal.
 =============================================================== */
 const EMPLOYEE_UPLOAD_REQUIRED_COLUMNS = ['Nama Lengkap','Username','Password Awal','Office','Kode Office','Department','Jabatan','Role','Tanggal Bergabung','Jenis Kontrak','Kontrak Mulai','Durasi Kontrak','Satuan Durasi Kontrak']
 const EMPLOYEE_UPLOAD_OPTIONAL_COLUMNS = ['No HP','Tanggal Lahir','Titik Radius','Sisa Cuti Awal','Foto URL']
@@ -1885,7 +1850,7 @@ window.konfirmasiUploadKaryawan = async function() {
 window.toggleStatusUser = async function(userId, statusSekarang) {
   const targetProfile = (window._allUsers || []).find(u => u.id === userId) || null
   try { assertSameDepartment(window.currentUser, targetProfile) } catch (err) { showToast(err.message, 'error'); return }
-  const statusBaru = statusSekarang === 'Aktif' ? 'Non-Aktif' : 'Aktif'
+  const statusBaru = normalizeAccountStatus(statusSekarang) === 'Aktif' ? 'Non-Aktif' : 'Aktif'
   if (!(await confirmAction(`Ubah status karyawan menjadi ${statusBaru}?`, 'Ya, ubah'))) return
 
   await supabase.from('profiles').update({ status_akun: statusBaru }).eq('id', userId)

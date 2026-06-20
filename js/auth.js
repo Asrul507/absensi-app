@@ -156,7 +156,7 @@ export async function logout() {
 /* ===============================================================
    SELF-REGISTER DEPRECATED
    Akun karyawan kini hanya dibuat oleh super_admin/admin_hr melalui
-   Netlify Function server-side agar tidak ada email verification.
+   Netlify Function server-side agar tidak ada proses verifikasi email.
 =============================================================== */
 export async function registerKaryawan() {
   showRegError('Self-register sudah dinonaktifkan. Hubungi HRD/admin untuk dibuatkan akun username.')
