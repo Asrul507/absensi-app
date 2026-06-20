@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { applyTenantFilter } from './access-control.js'
 
 const LEGACY_SHIFT_FALLBACKS = {
   '2': { code: '2', nama_shift: 'Shift Pagi', jam_masuk: '07:00', jam_pulang: '15:00', lintas_hari: false },
@@ -31,6 +32,10 @@ function fromRow(row, fallbackCode = null) {
   const code = String(row.id ?? row.shift_code ?? row.kode_shift ?? fallbackCode ?? '')
   return {
     code,
+    id: row.id,
+    client_id: row.client_id || null,
+    clients: row.clients || null,
+    is_legacy_without_office: !row.client_id,
     nama_shift: row.nama_shift || row.nama || 'Shift',
     jam_masuk: row.jam_masuk || '-',
     jam_pulang: row.jam_pulang || '-',
@@ -38,27 +43,28 @@ function fromRow(row, fallbackCode = null) {
   }
 }
 
-export async function loadShiftMaster() {
-  if (cachedShiftRows) return cachedShiftRows
-  const { data, error } = await supabase.from('shift').select('*').order('id')
+export async function loadShiftMaster(user = window.currentUser) {
+  const cacheKey = user?.role === 'super_admin' ? 'global' : (user?.client_id || 'none')
+  if (cachedShiftRows?.key === cacheKey) return cachedShiftRows.rows
+  const { data, error } = await applyTenantFilter(supabase.from('shift').select('*').order('id'), { user, clientColumn: 'client_id', departmentColumn: null, userColumn: null, enforceSelf: false, enforceDepartment: false })
   if (error) {
     console.warn('Gagal load shift master, fallback ke kode legacy:', error.message)
-    cachedShiftRows = []
-    return cachedShiftRows
+    cachedShiftRows = { key: cacheKey, rows: [] }
+    return cachedShiftRows.rows
   }
-  cachedShiftRows = Array.isArray(data) ? data : []
-  return cachedShiftRows
+  cachedShiftRows = { key: cacheKey, rows: Array.isArray(data) ? data : [] }
+  return cachedShiftRows.rows
 }
 
 export function resetShiftMasterCache() {
   cachedShiftRows = null
 }
 
-export async function getShiftDetailByCode(code) {
+export async function getShiftDetailByCode(code, user = window.currentUser) {
   const codeStr = String(code || '')
   if (!codeStr) return null
 
-  const rows = await loadShiftMaster()
+  const rows = await loadShiftMaster(user)
 
   const byId = rows.find(r => String(r.id ?? '') === codeStr)
   if (byId) return fromRow(byId, codeStr)
@@ -68,25 +74,27 @@ export async function getShiftDetailByCode(code) {
 
   const legacy = LEGACY_SHIFT_FALLBACKS[codeStr]
   if (!legacy) return null
+  if (user?.role !== 'super_admin') return null
 
   const byName = rows.find(r => normalizeName(r.nama_shift || r.nama) === normalizeName(legacy.nama_shift))
   if (byName) return fromRow(byName, codeStr)
 
-  return { ...legacy }
+  return { ...legacy, client_id: null, is_legacy_without_office: true }
 }
 
-export async function getAllShiftOptions() {
-  const rows = await loadShiftMaster()
+export async function getAllShiftOptions(user = window.currentUser) {
+  const rows = await loadShiftMaster(user)
   if (rows.length) return rows.map(row => fromRow(row))
 
-  return Object.values(LEGACY_SHIFT_FALLBACKS).map(shift => ({ ...shift }))
+  if (user?.role !== 'super_admin') return []
+  return Object.values(LEGACY_SHIFT_FALLBACKS).map(shift => ({ ...shift, client_id: null, is_legacy_without_office: true }))
 }
 
 export async function getShiftDetailByJamMasuk(jamMasuk) {
   const jam = normalizeTime(jamMasuk)
   if (!jam || jam === '--:--' || jam === '-') return null
 
-  const rows = await loadShiftMaster()
+  const rows = await loadShiftMaster(window.currentUser)
   const byJam = rows.find(r => normalizeTime(r.jam_masuk) === jam)
   if (byJam) return fromRow(byJam)
 
