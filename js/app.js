@@ -626,6 +626,31 @@ async function renderUsers() {
   const content    = document.getElementById('content')
   const viewerRole = window.currentUser.role
   const isAllDepartmentViewer = canAccessAllDepartments(window.currentUser)
+  window._allUsers = Array.isArray(window._allUsers) ? window._allUsers : []
+  window._pendingList = Array.isArray(window._pendingList) ? window._pendingList : []
+  window._currentTab = window._currentTab || 'aktif'
+  window.filterUsers = function() {
+    const q  = (document.getElementById('searchUser')?.value || '').toLowerCase()
+    const st = document.getElementById('filterStatusUser')?.value || ''
+    const activeUsers = Array.isArray(window._allUsers) ? window._allUsers : []
+    const pendingUsers = Array.isArray(window._pendingList) ? window._pendingList : []
+    if (window._currentTab === 'aktif') {
+      renderUserList(activeUsers.filter(u =>
+        ((u.nama_lengkap||'').toLowerCase().includes(q) ||
+          (u.username||'').toLowerCase().includes(q) ||
+          (u.email_internal||'').toLowerCase().includes(q) ||
+          (u.email||'').toLowerCase().includes(q)) &&
+        (!st || u.status_akun === st)
+      ))
+    } else {
+      renderPendingList(pendingUsers.filter(p =>
+        ((p.nama_lengkap||'').toLowerCase().includes(q) ||
+          (p.username||'').toLowerCase().includes(q) ||
+          (p.email_internal||'').toLowerCase().includes(q)) &&
+        (!st || p.status_akun === st)
+      ))
+    }
+  }
 
   content.innerHTML = `
     <div class="page-header">
@@ -639,7 +664,7 @@ async function renderUsers() {
             <i class="fa fa-upload"></i> Upload Excel
           </button>
           <input type="file" id="inputUploadKaryawanExcel" accept=".xlsx,.xls" style="display:none;" onchange="window.handleUploadKaryawanExcel(this)">
-          <button class="btn-primary btn-sm" onclick="openFormTambah()">
+          <button type="button" class="btn-primary btn-sm" onclick="openFormTambah()">
             <i class="fa fa-plus"></i> Tambah Manual
           </button>
         </div>
@@ -685,49 +710,58 @@ async function renderUsers() {
     </div>
   `
 
-  const users = viewerRole === 'staff'
-    ? await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
-    : await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
-  let pendingQuery = applyTenantFilter(supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap'), { user: window.currentUser, userColumn: null, legacyDepartmentColumn: 'departemen' })
-  const { data: pending } = viewerRole !== 'staff' ? await pendingQuery : { data: [] }
-
-  let cutiTahunanRows = []
   try {
-    cutiTahunanRows = await syncEligibleCutiTahunanForProfiles(users || [])
+    const employeeSelect = '*,clients:client_id(id,nama_client,kode_client,domain_login,status),departments:department_id(id,nama_department,status)'
+    let users = []
+    try {
+      users = viewerRole === 'staff'
+        ? await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: employeeSelect })
+        : await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: employeeSelect })
+    } catch (joinErr) {
+      console.error('Gagal memuat join client/department, mencoba fallback profiles saja:', joinErr)
+      users = viewerRole === 'staff'
+        ? await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
+        : await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
+    }
+    let pendingQuery = applyTenantFilter(supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap'), { user: window.currentUser, userColumn: null, legacyDepartmentColumn: 'departemen' })
+    const { data: pending, error: pendingError } = viewerRole !== 'staff' ? await pendingQuery : { data: [], error: null }
+    if (pendingError) throw pendingError
+
+    let cutiTahunanRows = []
+    try {
+      cutiTahunanRows = await syncEligibleCutiTahunanForProfiles(users || [])
+    } catch (err) {
+      console.error('Gagal memuat cuti tahunan karyawan:', err)
+    }
+    window._cutiTahunanMap = {}
+    ;(cutiTahunanRows || []).forEach(c => { window._cutiTahunanMap[c.user_id] = c })
+
+    window._allUsers    = users    || []
+    window._pendingList = pending  || []
+    window._currentTab  = 'aktif'
+
+    renderUserList(window._allUsers)
   } catch (err) {
-    console.error('Gagal memuat cuti tahunan karyawan:', err)
+    console.error('Gagal memuat data karyawan:', err)
+    const container = document.getElementById('userListContainer')
+    if (container) {
+      container.innerHTML = `
+        <div class="card" style="padding:18px;border-left:4px solid var(--danger);">
+          <div style="font-weight:900;color:var(--danger);margin-bottom:6px;"><i class="fa fa-triangle-exclamation"></i> Gagal memuat data karyawan</div>
+          <div style="color:var(--text-muted);font-size:.85rem;">${err?.message || 'Terjadi kesalahan saat mengambil data profiles / pending_profiles.'}</div>
+        </div>
+      `
+    }
+    showToast('Gagal memuat data karyawan', 'error')
   }
-  window._cutiTahunanMap = {}
-  ;(cutiTahunanRows || []).forEach(c => { window._cutiTahunanMap[c.user_id] = c })
-
-  window._allUsers    = users    || []
-  window._pendingList = pending  || []
-  window._currentTab  = 'aktif'
-
-  renderUserList(window._allUsers)
 
   window.switchTab = function(tab) {
     window._currentTab = tab
     document.getElementById('tabAktif').className   = tab==='aktif'   ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
     const tabPending = document.getElementById('tabPending')
     if (tabPending) tabPending.className = tab==='pending' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
-    if (tab === 'aktif') renderUserList(window._allUsers)
-    else renderPendingList(window._pendingList)
-  }
-
-  window.filterUsers = function() {
-    const q  = document.getElementById('searchUser').value.toLowerCase()
-    const st = document.getElementById('filterStatusUser').value
-    if (window._currentTab === 'aktif') {
-      renderUserList(window._allUsers.filter(u =>
-        ((u.nama_lengkap||'').toLowerCase().includes(q) || (u.username||'').toLowerCase().includes(q)) &&
-        (!st || u.status_akun === st)
-      ))
-    } else {
-      renderPendingList(window._pendingList.filter(p =>
-        (p.nama_lengkap||'').toLowerCase().includes(q)
-      ))
-    }
+    if (tab === 'aktif') renderUserList(Array.isArray(window._allUsers) ? window._allUsers : [])
+    else renderPendingList(Array.isArray(window._pendingList) ? window._pendingList : [])
   }
 }
 
@@ -887,7 +921,7 @@ window.openKontrakKaryawan = function(id, isExtend = false) {
   window.showUserModal(`
     <div class="modal-header">
       <h3><i class="fa fa-file-contract" style="color:var(--primary);"></i> ${isExtend ? 'Perpanjang' : 'Edit'} Kontrak: ${target.nama_lengkap}</h3>
-      <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
+      <button type="button" class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:10px;">
       ${getKontrakFormHtml('kontrak', data, false)}
@@ -1034,8 +1068,8 @@ window.openFormTambah = async function() {
       ${getKontrakFormHtml('p', { tanggal_bergabung: getTodayLokal() })}
     </div>
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
-      <button class="btn-primary" onclick="savePendingKaryawan()"><i class="fa fa-user-plus"></i> Buat Akun</button>
+      <button type="button" class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
+      <button type="button" class="btn-primary" onclick="window.savePendingKaryawan()"><i class="fa fa-user-plus"></i> Buat Akun</button>
     </div>
   `)
 }
@@ -1058,7 +1092,11 @@ window.savePendingKaryawan = async function() {
   const passwordAwal = document.getElementById('pPasswordAwal')?.value || ''
   if (!nama) { showToast('Nama wajib diisi', 'warning'); return }
   if (!username) { showToast('Username login wajib diisi', 'warning'); return }
-  if (passwordAwal.length < 8) { showToast('Password awal minimal 8 karakter', 'warning'); return }
+  if (passwordAwal.length < 8) {
+    showToast('Password awal minimal 8 karakter', 'warning')
+    document.getElementById('pPasswordAwal')?.focus()
+    return
+  }
   const kontrakPayload = readKontrakForm('p')
   if (!validateKontrakPayload(kontrakPayload)) return
 
@@ -1096,6 +1134,80 @@ window.savePendingKaryawan = async function() {
   } catch (error) {
     showToast(error.message || 'Gagal membuat akun karyawan', 'error')
   }
+}
+
+function safeText(value, fallback = '-') {
+  const text = value === null || value === undefined || value === '' ? fallback : String(value)
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function getClientLabel(user) {
+  const client = Array.isArray(user.clients) ? user.clients[0] : user.clients
+  if (client?.nama_client) return `${client.nama_client}${client.kode_client ? ` (${client.kode_client})` : ''}`
+  return user.nama_client || user.client_name || user.client_id || '-'
+}
+
+function getDepartmentLabel(user) {
+  const department = Array.isArray(user.departments) ? user.departments[0] : user.departments
+  return department?.nama_department || user.nama_department || user.departemen || user.department_id || '-'
+}
+
+function renderUserList(list) {
+  const el = document.getElementById('userListContainer')
+  if (!el) return
+  const users = Array.isArray(list) ? list : []
+  if (!users.length) {
+    el.innerHTML = `<div class="empty-state"><i class="fa fa-users"></i><p>Belum ada karyawan</p></div>`
+    return
+  }
+
+  el.innerHTML = users.map(u => {
+    const statusAkun = u.status_akun || 'Aktif'
+    const statusKontrak = u.status_kontrak || getStatusKontrak(u.kontrak_berakhir) || '-'
+    const cutiTahunan = window._cutiTahunanMap?.[u.id]?.sisa_cuti
+    const sisaCuti = cutiTahunan ?? u.sisa_cuti ?? 0
+    const loginId = u.username || u.email_internal || u.email || '-'
+    const badgeClass = statusAkun === 'Aktif' ? 'badge-green' : statusAkun === 'Non-Aktif' ? 'badge-red' : 'badge-yellow'
+    const kontrakBadgeClass = statusKontrak === 'berakhir' ? 'badge-red' : statusKontrak === 'akan_berakhir' ? 'badge-yellow' : 'badge-green'
+    return `
+      <div class="user-item">
+        <div class="user-avatar" style="background:linear-gradient(135deg,var(--primary),#7c3aed);">
+          ${safeText((u.nama_lengkap || '?')[0] || '?')}
+        </div>
+        <div class="ui-info">
+          <div class="ui-name">${safeText(u.nama_lengkap)}</div>
+          <div class="ui-email">${safeText(loginId)}</div>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;">
+            <span><i class="fa fa-briefcase"></i> ${safeText(u.jabatan)}</span>
+            <span>· <i class="fa fa-building-user"></i> ${safeText(getDepartmentLabel(u))}</span>
+            <span>· <i class="fa fa-building"></i> ${safeText(getClientLabel(u))}</span>
+          </div>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;">
+            <span>Role: <strong>${safeText(normalizeRole(u.role || 'staff'))}</strong></span>
+            <span>· Kontrak: <strong>${safeText(u.jenis_kontrak || '-')}</strong> (${safeText(statusKontrak)})</span>
+            <span>· Sisa cuti: <strong>${safeText(sisaCuti)} hari</strong></span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+          <span class="badge ${badgeClass}">${safeText(statusAkun)}</span>
+          <span class="badge ${kontrakBadgeClass}">${safeText(statusKontrak)}</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+            <button type="button" class="action-btn view" title="Detail" onclick="window.openDetailKaryawan('${safeText(u.id)}')">
+              <i class="fa fa-eye"></i> Detail
+            </button>
+            <button type="button" class="action-btn edit" title="Edit" onclick="window.openEditKaryawan('${safeText(u.id)}')">
+              <i class="fa fa-pen"></i> Edit
+            </button>
+          </div>
+        </div>
+      </div>
+    `
+  }).join('')
 }
 
 
