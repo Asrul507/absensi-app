@@ -4,7 +4,7 @@ import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } fr
 import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
 import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
 import { getSisaCuti } from './services/leave-service.js'
-import { applyTenantFilter } from './access-control.js'
+import { applyTenantFilter, isSuperAdmin, isStaff } from './access-control.js'
 
 async function fetchAbsensiRowsForUser({ userId, nama, dateFrom = null, dateTo = null, tanggal = null, select = '*' } = {}) {
   async function applyFilters(query) {
@@ -44,6 +44,12 @@ export async function renderDashboard() {
     content.innerHTML = `<div class="card"><p>Silakan login dulu</p></div>`
     return
   }
+
+  try {
+    if (isSuperAdmin(user)) {
+      await renderSuperAdminDashboard(content)
+      return
+    }
 
   // Attendance approval workflow: jangan mengunci lupa absen pulang menjadi final.
   // Dashboard hanya memastikan record lama tetap berada di status OPEN/MENUNGGU_VERIFIKASI
@@ -108,7 +114,7 @@ export async function renderDashboard() {
   const dateFrom = firstDay.toISOString().split('T')[0]
   const dateTo   = lastDay.toISOString().split('T')[0]
 
-  const isAdmin = canApproveAttendance(user)
+  const isAdmin = canApproveAttendance(user) && !isStaff(user)
 
   // Get total jam kerja (personal user login)
   const absensiMonthAll = await fetchAbsensiRowsForUser({
@@ -278,17 +284,21 @@ export async function renderDashboard() {
   // ===== HR ANALYTICS GLOBAL (ADMIN / SUPER ADMIN) =====
   let adminGlobalHtml = ''
   if (isAdmin) {
-    const { data: globalAbsensi } = await supabase
+    let globalAbsensiQuery = supabase
       .from('absensi')
-      .select('user_id, nama, tanggal, status_masuk, status_absensi, status_kehadiran, waktu_masuk, waktu_pulang, menit_pulang_cepat')
+      .select('user_id, nama, tanggal, status_masuk, status_absensi, status_kehadiran, waktu_masuk, waktu_pulang, menit_pulang_cepat, client_id, department_id, departemen')
       .gte('tanggal', dateFrom)
       .lte('tanggal', dateTo)
+    globalAbsensiQuery = applyTenantFilter(globalAbsensiQuery, { user, legacyDepartmentColumn: 'departemen' })
+    const { data: globalAbsensi } = await globalAbsensiQuery
 
-    const { data: globalJadwal } = await supabase
+    let globalJadwalQuery = supabase
       .from('jadwal')
-      .select('user_id, tanggal, shift_code, status_override')
+      .select('user_id, tanggal, shift_code, status_override, client_id, department_id, departemen')
       .gte('tanggal', dateFrom)
       .lte('tanggal', dateTo)
+    globalJadwalQuery = applyTenantFilter(globalJadwalQuery, { user, legacyDepartmentColumn: 'departemen' })
+    const { data: globalJadwal } = await globalJadwalQuery
 
     const todayValue = todayLocal
     const completedAbsensi = (globalAbsensi || []).filter(a => a.status_absensi === 'COMPLETE')
@@ -310,14 +320,23 @@ export async function renderDashboard() {
 
     const rankMap = {}
     completedAbsensi.forEach(a => {
-      if (!a.nama) return
-      if (!rankMap[a.nama]) rankMap[a.nama] = { hadir: 0 }
-      if (a.waktu_masuk) rankMap[a.nama].hadir += 1
+      const key = a.nama || a.user_id
+      if (!key) return
+      if (!rankMap[key]) rankMap[key] = { nama: a.nama || 'Tanpa Nama', hadir: 0, tepat: 0, terlambat: 0, masalah: 0 }
+      if (a.waktu_masuk) rankMap[key].hadir += 1
+      const isLate = a.status_masuk === 'Terlambat' || a.status_kehadiran === 'TERLAMBAT'
+      if (isLate) rankMap[key].terlambat += 1
+      else if (a.waktu_masuk) rankMap[key].tepat += 1
+      if (isLate || ['LUPA_ABSEN_MASUK', 'LUPA_ABSEN_PULANG'].includes(a.status_kehadiran) || !a.waktu_masuk || !a.waktu_pulang) rankMap[key].masalah += 1
     })
-    const ranking = Object.entries(rankMap).sort((a, b) => b[1].hadir - a[1].hadir).slice(0, 5)
-    const rankingHtml = ranking.length
-      ? ranking.map(([nama, v], i) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>#${i + 1} ${nama}</span><strong>${v.hadir} hadir</strong></div>`).join('')
-      : '<div style="font-size:.82rem;color:var(--text-muted);padding:10px 0;">Belum ada data kehadiran lengkap bulan ini.</div>'
+    const rankRows = Object.values(rankMap)
+    const renderRankList = (rows, metric, suffix) => rows.length
+      ? rows.slice(0, 5).map((v, i) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>#${i + 1} ${v.nama}</span><strong>${v[metric]} ${suffix}</strong></div>`).join('')
+      : '<div style="font-size:.82rem;color:var(--text-muted);padding:10px 0;">Belum ada data bulan ini.</div>'
+    const rajinHtml = renderRankList([...rankRows].sort((a, b) => b.tepat - a.tepat), 'tepat', 'tepat waktu')
+    const terlambatRankHtml = renderRankList([...rankRows].sort((a, b) => b.terlambat - a.terlambat), 'terlambat', 'telat')
+    const baikHtml = renderRankList([...rankRows].sort((a, b) => (b.hadir - b.terlambat) - (a.hadir - a.terlambat)), 'hadir', 'hadir')
+    const burukHtml = renderRankList([...rankRows].sort((a, b) => b.masalah - a.masalah), 'masalah', 'masalah')
 
     adminGlobalHtml = `
       <div style="margin-bottom: 20px;">
@@ -335,8 +354,13 @@ export async function renderDashboard() {
         </div>
       </div>
       <div class="card fade-up" style="padding:16px;margin-bottom:20px;" id="adminGlobalStats" data-hadir="${hadirGlobal}" data-terlambat="${terlambatGlobal}" data-pulang-cepat="${pulangCepatGlobal}" data-cuti="${cutiGlobal}" data-izin="${izinGlobal}" data-sakit="${sakitGlobal}" data-off="${offGlobal}" data-alpha="${alphaGlobal}" data-pending="${openApprovalGlobal}">
-        <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Ranking Staff (Top 5 Kehadiran)</div>
-        ${rankingHtml}
+        <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Ranking Kehadiran Bulan Ini</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
+          <div><strong style="font-size:.78rem;">Paling Rajin Tepat Waktu</strong>${rajinHtml}</div>
+          <div><strong style="font-size:.78rem;">Paling Sering Terlambat</strong>${terlambatRankHtml}</div>
+          <div><strong style="font-size:.78rem;">Kehadiran Paling Baik</strong>${baikHtml}</div>
+          <div><strong style="font-size:.78rem;">Kehadiran Paling Buruk</strong>${burukHtml}</div>
+        </div>
       </div>
       <div class="card fade-up" style="padding:16px;margin-bottom:20px;">
         <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Grafik Global Kehadiran</div>
@@ -462,6 +486,67 @@ export async function renderDashboard() {
     document.head.appendChild(script)
   } else {
     loadCharts(user.id, dateFrom, dateTo, totalJamKerja)
+  }
+  } catch (err) {
+    console.error('Gagal render dashboard:', err)
+    content.innerHTML = `<div class="card" style="padding:18px;border-color:#fecaca;background:#fef2f2;color:#991b1b;"><strong>Dashboard gagal dimuat.</strong><p style="margin:.5rem 0 0;">Data tidak dapat ditampilkan. Coba muat ulang atau hubungi admin.</p></div>`
+    window.showToast?.('Dashboard gagal dimuat.', 'error')
+  }
+}
+
+
+async function renderSuperAdminDashboard(content) {
+  try {
+    const { data: clients, error: clientsError } = await supabase
+      .from('clients')
+      .select('id,nama_client,kode_client,domain_login,status')
+      .order('nama_client')
+    if (clientsError) throw clientsError
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id,client_id,status_akun')
+    if (profilesError) throw profilesError
+
+    const { data: departments, error: departmentsError } = await supabase
+      .from('departments')
+      .select('id,client_id,status')
+    if (departmentsError) throw departmentsError
+
+    const rows = (clients || []).map(client => {
+      const employeeRows = (profiles || []).filter(p => String(p.client_id || '') === String(client.id))
+      const active = employeeRows.filter(p => ['aktif', 'active'].includes(String(p.status_akun || 'Aktif').toLowerCase())).length
+      const inactive = employeeRows.length - active
+      const deptTotal = (departments || []).filter(d => String(d.client_id || '') === String(client.id)).length
+      return { ...client, active, inactive, deptTotal }
+    })
+    const totalActive = rows.reduce((sum, row) => sum + row.active, 0)
+    const totalInactive = rows.reduce((sum, row) => sum + row.inactive, 0)
+    const tableRows = rows.map(row => `
+      <tr>
+        <td style="padding:10px;border-bottom:1px solid var(--border);font-weight:800;">${row.nama_client || '-'}</td>
+        <td style="padding:10px;border-bottom:1px solid var(--border);">${row.domain_login || row.kode_client || '-'}</td>
+        <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">${row.active}</td>
+        <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">${row.inactive}</td>
+        <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">${row.deptTotal}</td>
+        <td style="padding:10px;border-bottom:1px solid var(--border);"><span style="padding:4px 8px;border-radius:999px;background:${row.status === 'active' ? '#dcfce7' : '#fee2e2'};color:${row.status === 'active' ? '#166534' : '#991b1b'};font-weight:800;font-size:.72rem;">${row.status || '-'}</span></td>
+      </tr>`).join('')
+
+    content.innerHTML = `
+      <div class="page-header" style="margin-bottom:20px;"><h2 style="margin:0;"><i class="fa fa-building"></i> Dashboard Super Admin</h2><p style="margin:6px 0 0;color:var(--text-muted);">Ringkasan Office/client untuk owner/developer.</p></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
+        <div class="card" style="padding:16px;"><div style="font-size:.72rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Total Office</div><div style="font-size:1.8rem;font-weight:900;">${rows.length}</div></div>
+        <div class="card" style="padding:16px;"><div style="font-size:.72rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Karyawan Aktif</div><div style="font-size:1.8rem;font-weight:900;">${totalActive}</div></div>
+        <div class="card" style="padding:16px;"><div style="font-size:.72rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Karyawan Nonaktif</div><div style="font-size:1.8rem;font-weight:900;">${totalInactive}</div></div>
+      </div>
+      <div class="card" style="padding:16px;overflow:auto;">
+        <div style="font-size:.75rem;font-weight:900;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;">List Office</div>
+        ${rows.length ? `<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr style="text-align:left;color:var(--text-muted);"><th style="padding:10px;">Office</th><th style="padding:10px;">Kode Domain</th><th style="padding:10px;text-align:right;">Aktif</th><th style="padding:10px;text-align:right;">Nonaktif</th><th style="padding:10px;text-align:right;">Department</th><th style="padding:10px;">Status</th></tr></thead><tbody>${tableRows}</tbody></table>` : `<div style="padding:20px;text-align:center;color:var(--text-muted);">Belum ada Office/client.</div>`}
+      </div>`
+  } catch (err) {
+    console.error('Gagal render dashboard super_admin:', err)
+    content.innerHTML = `<div class="card" style="padding:18px;border-color:#fecaca;background:#fef2f2;color:#991b1b;"><strong>Dashboard super admin gagal dimuat.</strong></div>`
+    window.showToast?.('Dashboard super admin gagal dimuat.', 'error')
   }
 }
 

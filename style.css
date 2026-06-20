@@ -4444,3 +4444,22 @@ html.dark .sidebar-badge-info {
   background: rgba(96,165,250,.15);
   color: #60a5fa;
 }
+
+.login-office-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.login-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: .72rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .login-office-row { grid-template-columns: 1fr; gap: 0; }
+}
