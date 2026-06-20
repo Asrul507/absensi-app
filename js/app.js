@@ -3,7 +3,7 @@
  * ============================================================
  * File utama aplikasi Genius HR.
  * * Sesuai file acuan awal + Pembaruan Tampilan Kategori Sidebar.
- * Semua fungsi manajemen karyawan, modal, upload foto, dan password 
+ * Semua fungsi manajemen karyawan, modal, upload foto, dan password
  * dipertahankan 100% utuh tanpa ada yang terpotong.
  * ============================================================
  */
@@ -111,7 +111,7 @@ async function checkUser() {
     const clientNameEl = document.getElementById('activeClientName')
     if (clientNameEl) {
       const tenantContext = JSON.parse(sessionStorage.getItem('tenantContext') || '{}')
-      clientNameEl.innerText = tenantContext.nama_client || profile.clients?.nama_client || profile.nama_client || (window.currentUser.role === 'super_admin' ? 'Global Admin' : 'Client')
+      clientNameEl.innerText = tenantContext.nama_client || profile.clients?.nama_client || profile.nama_client || (window.currentUser.role === 'super_admin' ? 'Global Admin' : 'Office')
     }
 
     // Sinkronisasi foto profil dari DB Supabase
@@ -289,7 +289,7 @@ function renderMenu(role) {
       <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Rekap Bulanan In/Out</a>
       <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Rekap Absensi</a>
       <a href="#" id="menu-laporan-keseluruhan" onclick="navigate('laporan-keseluruhan'); closeSidebar(); return false;"><i class="fa fa-file-lines"></i> Laporan Keseluruhan <span class="sidebar-badge-info">NEW</span></a>
-      ${role === 'super_admin' ? `<div class="sidebar-section-title">SETTINGS APP</div><a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Client & Department</a>` : ''}
+      ${role === 'super_admin' ? `<div class="sidebar-section-title">SETTINGS APP</div><a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Office & Department</a>` : ''}
     `;
   }
 
@@ -668,41 +668,30 @@ async function renderUsers() {
   const content    = document.getElementById('content')
   const viewerRole = window.currentUser.role
   const isAllDepartmentViewer = canAccessAllDepartments(window.currentUser)
+  const canCreateEmployeeAccounts = ['super_admin', 'admin_hr'].includes(normalizeRole(viewerRole))
   window._allUsers = Array.isArray(window._allUsers) ? window._allUsers : []
-  window._pendingList = Array.isArray(window._pendingList) ? window._pendingList : []
-  window._currentTab = window._currentTab || 'aktif'
   window.filterUsers = function() {
     const q  = (document.getElementById('searchUser')?.value || '').toLowerCase()
     const st = document.getElementById('filterStatusUser')?.value || ''
-    const activeUsers = Array.isArray(window._allUsers) ? window._allUsers : []
-    const pendingUsers = Array.isArray(window._pendingList) ? window._pendingList : []
-    if (window._currentTab === 'aktif') {
-      renderUserList(activeUsers.filter(u =>
-        ((u.nama_lengkap||'').toLowerCase().includes(q) ||
-          (u.username||'').toLowerCase().includes(q) ||
-          (u.email_internal||'').toLowerCase().includes(q) ||
-          (u.email||'').toLowerCase().includes(q)) &&
-        (!st || u.status_akun === st)
-      ))
-    } else {
-      renderPendingList(pendingUsers.filter(p =>
-        ((p.nama_lengkap||'').toLowerCase().includes(q) ||
-          (p.username||'').toLowerCase().includes(q) ||
-          (p.email_internal||'').toLowerCase().includes(q)) &&
-        (!st || p.status_akun === st)
-      ))
-    }
+    const users = Array.isArray(window._allUsers) ? window._allUsers : []
+    renderUserList(users.filter(u =>
+      ((u.nama_lengkap||'').toLowerCase().includes(q) ||
+        (u.username||'').toLowerCase().includes(q) ||
+        (u.email_internal||'').toLowerCase().includes(q) ||
+        (u.email||'').toLowerCase().includes(q)) &&
+      (!st || normalizeAccountStatus(u.status_akun) === st)
+    ))
   }
 
   content.innerHTML = `
     <div class="page-header">
       <h2><i class="fa fa-users"></i> Manajemen Karyawan</h2>
-      ${viewerRole !== 'staff' ? `
+      ${canCreateEmployeeAccounts ? `
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn-secondary btn-sm" onclick="window.downloadTemplateKaryawan()" title="Download template Excel untuk upload massal">
             <i class="fa fa-file-excel" style="color:#16a34a;"></i> Template Excel
           </button>
-          <button class="btn-success btn-sm" onclick="document.getElementById('inputUploadKaryawanExcel').click()" title="Upload daftar karyawan via Excel ke daftar tunggu">
+          <button class="btn-success btn-sm" onclick="document.getElementById('inputUploadKaryawanExcel').click()" title="Upload daftar karyawan via Excel untuk dibuatkan akun login">
             <i class="fa fa-upload"></i> Upload Excel
           </button>
           <input type="file" id="inputUploadKaryawanExcel" accept=".xlsx,.xls" style="display:none;" onchange="window.handleUploadKaryawanExcel(this)">
@@ -714,17 +703,6 @@ async function renderUsers() {
     </div>
 
     ${viewerRole !== 'staff' ? `<div class="card fade-up" style="padding:12px 14px;margin-bottom:12px;color:var(--text-muted);font-size:.82rem;font-weight:700;"><i class="fa fa-building"></i> ${isAllDepartmentViewer ? 'Anda mengelola semua departemen.' : `Anda mengelola departemen: ${getUserDepartment(window.currentUser) || '-'}.`}</div>` : ''}
-
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button id="tabAktif" class="btn-primary btn-sm" onclick="switchTab('aktif')">
-        <i class="fa fa-users"></i> Karyawan Aktif
-      </button>
-      ${viewerRole !== 'staff' ? `
-        <button id="tabPending" class="btn-secondary btn-sm" onclick="switchTab('pending')">
-          <i class="fa fa-hourglass-half"></i> Menunggu Daftar
-        </button>
-      ` : ''}
-    </div>
 
     <!-- Preview Upload Excel Karyawan -->
     <div id="previewUploadKaryawanWrap" style="display:none; margin-bottom:14px;"></div>
@@ -740,7 +718,7 @@ async function renderUsers() {
           <option value="">Semua Status</option>
           <option value="Aktif">Aktif</option>
           <option value="Non-Aktif">Non-Aktif</option>
-          <option value="Menunggu Verifikasi">Menunggu Verifikasi</option>
+
         </select>
       </div>
     </div>
@@ -765,10 +743,6 @@ async function renderUsers() {
         ? await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
         : await getAccessibleProfiles(window.currentUser, { activeOnly: false, select: '*' })
     }
-    let pendingQuery = applyTenantFilter(supabase.from('pending_profiles').select('*').eq('status','waiting').order('nama_lengkap'), { user: window.currentUser, userColumn: null, legacyDepartmentColumn: 'departemen' })
-    const { data: pending, error: pendingError } = viewerRole !== 'staff' ? await pendingQuery : { data: [], error: null }
-    if (pendingError) throw pendingError
-
     let cutiTahunanRows = []
     try {
       cutiTahunanRows = await syncEligibleCutiTahunanForProfiles(users || [])
@@ -778,9 +752,7 @@ async function renderUsers() {
     window._cutiTahunanMap = {}
     ;(cutiTahunanRows || []).forEach(c => { window._cutiTahunanMap[c.user_id] = c })
 
-    window._allUsers    = users    || []
-    window._pendingList = pending  || []
-    window._currentTab  = 'aktif'
+    window._allUsers = users || []
 
     renderUserList(window._allUsers)
   } catch (err) {
@@ -790,20 +762,11 @@ async function renderUsers() {
       container.innerHTML = `
         <div class="card" style="padding:18px;border-left:4px solid var(--danger);">
           <div style="font-weight:900;color:var(--danger);margin-bottom:6px;"><i class="fa fa-triangle-exclamation"></i> Gagal memuat data karyawan</div>
-          <div style="color:var(--text-muted);font-size:.85rem;">${err?.message || 'Terjadi kesalahan saat mengambil data profiles / pending_profiles.'}</div>
+          <div style="color:var(--text-muted);font-size:.85rem;">${err?.message || 'Terjadi kesalahan saat mengambil data profiles.'}</div>
         </div>
       `
     }
     showToast('Gagal memuat data karyawan', 'error')
-  }
-
-  window.switchTab = function(tab) {
-    window._currentTab = tab
-    document.getElementById('tabAktif').className   = tab==='aktif'   ? 'btn-primary btn-sm'   : 'btn-secondary btn-sm'
-    const tabPending = document.getElementById('tabPending')
-    if (tabPending) tabPending.className = tab==='pending' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'
-    if (tab === 'aktif') renderUserList(Array.isArray(window._allUsers) ? window._allUsers : [])
-    else renderPendingList(Array.isArray(window._pendingList) ? window._pendingList : [])
   }
 }
 
@@ -1006,16 +969,16 @@ window.saveKontrakKaryawan = async function(id, isExtend = false) {
 }
 
 
-async function fetchClientOptionsForEmployeeForm() {
+async function fetchOfficeOptionsForEmployeeForm() {
   if (window.currentUser?.role === 'super_admin') {
     const { data, error } = await supabase.from('clients').select('id,nama_client,kode_client,status').order('nama_client')
     if (error) throw error
     return data || []
   }
-  return window.currentUser?.client_id ? [{ id: window.currentUser.client_id, nama_client: window.currentUser.clients?.nama_client || window.currentUser.nama_client || 'Client Anda', kode_client: '' }] : []
+  return window.currentUser?.client_id ? [{ id: window.currentUser.client_id, nama_client: window.currentUser.clients?.nama_client || window.currentUser.nama_client || 'Office Anda', kode_client: '' }] : []
 }
 
-async function fetchDepartmentOptionsForClient(clientId) {
+async function fetchDepartmentOptionsForOffice(clientId) {
   if (!clientId) return []
   const { data, error } = await supabase
     .from('departments')
@@ -1045,7 +1008,7 @@ window.openFormTambah = async function() {
   try {
     const [lokasiResult, clientOptions] = await Promise.all([
       supabase.from('lokasi_absen').select('*'),
-      fetchClientOptionsForEmployeeForm()
+      fetchOfficeOptionsForEmployeeForm()
     ])
     if (!lokasiResult.error && lokasiResult.data) {
       opsiLokasi = lokasiResult.data.map(l => {
@@ -1054,19 +1017,19 @@ window.openFormTambah = async function() {
       }).join('')
     }
     clients = clientOptions
-    const initialClientId = role === 'super_admin' ? (clients[0]?.id || '') : window.currentUser?.client_id
-    departments = await fetchDepartmentOptionsForClient(initialClientId)
+    const initialOfficeId = role === 'super_admin' ? (clients[0]?.id || '') : window.currentUser?.client_id
+    departments = await fetchDepartmentOptionsForOffice(initialOfficeId)
   } catch (e) {
     console.error('Gagal menyiapkan form tambah karyawan:', e)
-    showToast('Gagal memuat data client/department/lokasi.', 'error')
+    showToast('Gagal memuat data Office/Department/lokasi.', 'error')
     return
   }
 
-  const initialClientId = role === 'super_admin' ? (clients[0]?.id || '') : window.currentUser?.client_id
+  const initialOfficeId = role === 'super_admin' ? (clients[0]?.id || '') : window.currentUser?.client_id
   const currentViewerRole = window.currentUser?.role || 'admin_hr'
   const clientField = role === 'super_admin'
-    ? `<select id="pClient" onchange="window.reloadEmployeeDepartments(this.value)">${clients.map(c => `<option value="${c.id}" ${c.id === initialClientId ? 'selected' : ''}>${c.nama_client} (${c.kode_client || '-'})</option>`).join('')}</select>`
-    : `<input id="pClientName" value="${clients[0]?.nama_client || window.currentUser?.clients?.nama_client || 'Client Anda'}" disabled><input type="hidden" id="pClient" value="${initialClientId || ''}">`
+    ? `<select id="pOffice" onchange="window.reloadEmployeeDepartments(this.value)">${clients.map(c => `<option value="${c.id}" ${c.id === initialOfficeId ? 'selected' : ''}>${c.nama_client} (${c.kode_client || '-'})</option>`).join('')}</select>`
+    : `<input id="pOfficeName" value="${clients[0]?.nama_client || window.currentUser?.clients?.nama_client || 'Office Anda'}" disabled><input type="hidden" id="pOffice" value="${initialOfficeId || ''}">`
 
   window.showUserModal(`
     <div class="modal-header">
@@ -1079,12 +1042,12 @@ window.openFormTambah = async function() {
         <input id="pNama" placeholder="Nama lengkap karyawan">
       </div>
       <div class="field"><label>Username Login</label><input type="text" id="pUsername" placeholder="staff01" autocapitalize="none"><label>Password Awal</label><input type="password" id="pPasswordAwal" placeholder="Password awal"></div>
-      <div class="field"><label>Nama Kantor / Client <span class="req">*</span></label>${clientField}</div>
+      <div class="field"><label>Office <span class="req">*</span></label>${clientField}</div>
       <div class="field"><label>Department <span class="req">*</span></label><select id="pDepartment">${renderDepartmentOptions(departments)}</select></div>
       <div class="field"><label>Status Akun</label>
         <select id="pStatusAkun">
           <option value="Aktif">Aktif</option>
-          <option value="Menunggu Verifikasi">Menunggu Verifikasi</option>
+
           <option value="Non-Aktif">Non-Aktif</option>
         </select>
       </div>
@@ -1097,7 +1060,7 @@ window.openFormTambah = async function() {
       <div class="field"><label>Role Hak Akses</label>
         <select id="pRole">
           <option value="staff">Staff Karyawan</option>
-          ${currentViewerRole === 'super_admin' ? `<option value="admin">Admin Department</option><option value="admin_hr">Admin HR</option><option value="admin_all">Admin All</option><option value="super_admin">Super Admin</option>` : ''}
+          ${currentViewerRole === 'super_admin' ? `<option value="admin">Admin Department</option><option value="admin_hr">Admin HR</option><option value="admin_all">Admin All</option>` : ''}
         </select>
       </div>
       <div class="field">
@@ -1121,7 +1084,7 @@ window.reloadEmployeeDepartments = async function(clientId) {
   if (!select) return
   select.innerHTML = '<option value="">Memuat department...</option>'
   try {
-    select.innerHTML = renderDepartmentOptions(await fetchDepartmentOptionsForClient(clientId))
+    select.innerHTML = renderDepartmentOptions(await fetchDepartmentOptionsForOffice(clientId))
   } catch (err) {
     console.error('Gagal memuat department:', err)
     select.innerHTML = '<option value="">Gagal memuat department</option>'
@@ -1139,39 +1102,43 @@ window.savePendingKaryawan = async function() {
     document.getElementById('pPasswordAwal')?.focus()
     return
   }
+  const jabatanValue = document.getElementById('pJabatan')?.value.trim() || ''
+  const roleValue = document.getElementById('pRole')?.value || ''
+  if (!jabatanValue) { showToast('Jabatan wajib diisi', 'warning'); return }
+  if (!roleValue) { showToast('Role wajib dipilih', 'warning'); return }
   const kontrakPayload = readKontrakForm('p')
   if (!validateKontrakPayload(kontrakPayload)) return
 
   const role = normalizeRole(window.currentUser?.role)
   if (!['super_admin', 'admin_hr'].includes(role)) { showToast('Hanya Super Admin dan Admin HR yang dapat membuat akun.', 'warning'); return }
-  const selectedClientId = role === 'super_admin' ? document.getElementById('pClient')?.value : window.currentUser?.client_id
+  const selectedOfficeId = role === 'super_admin' ? document.getElementById('pOffice')?.value : window.currentUser?.client_id
   const selectedDepartmentId = document.getElementById('pDepartment')?.value || null
-  if (!selectedClientId) { showToast('Client wajib dipilih.', 'warning'); return }
+  if (!selectedOfficeId) { showToast('Office wajib dipilih.', 'warning'); return }
   if (!selectedDepartmentId) { showToast('Department wajib dipilih.', 'warning'); return }
-  const departments = await fetchDepartmentOptionsForClient(selectedClientId)
+  const departments = await fetchDepartmentOptionsForOffice(selectedOfficeId)
   const selectedDepartment = departments.find(d => String(d.id) === String(selectedDepartmentId))
-  if (!selectedDepartment) { showToast('Department tidak valid untuk client yang dipilih.', 'warning'); return }
+  if (!selectedDepartment) { showToast('Department tidak valid untuk Office yang dipilih.', 'warning'); return }
 
   try {
     await createEmployeeAccount({
       nama_lengkap: nama,
       username,
       password_awal: passwordAwal,
-      client_id: selectedClientId,
+      client_id: selectedOfficeId,
       department_id: selectedDepartmentId,
       departemen: selectedDepartment.nama_department,
-      jabatan: document.getElementById('pJabatan').value.trim(),
+      jabatan: jabatanValue,
       no_hp: document.getElementById('pHp').value.trim(),
       tanggal_bergabung: document.getElementById('pTgl').value || null,
       tanggal_lahir: document.getElementById('pLahir').value || null,
-      role: document.getElementById('pRole').value,
+      role: roleValue,
       sisa_cuti: Math.max(0, Number.parseInt(document.getElementById('pSisaCuti')?.value || '0', 10) || 0),
       foto_url: document.getElementById('pFotoUrl')?.value.trim() || '',
       titik_radius: document.getElementById('pTitikRadius').value || null,
       ...kontrakPayload
     })
     window.closeUserModal()
-    showToast(`${nama} berhasil dibuat tanpa email verification`, 'success')
+    showToast(`${nama} berhasil dibuat dengan username dan password awal`, 'success')
     await renderUsers()
   } catch (error) {
     showToast(error.message || 'Gagal membuat akun karyawan', 'error')
@@ -1188,15 +1155,59 @@ function safeText(value, fallback = '-') {
     .replace(/'/g, '&#39;')
 }
 
-function getClientLabel(user) {
-  const client = Array.isArray(user.clients) ? user.clients[0] : user.clients
-  if (client?.nama_client) return `${client.nama_client}${client.kode_client ? ` (${client.kode_client})` : ''}`
-  return user.nama_client || user.client_name || user.client_id || '-'
+function normalizeAccountStatus(status) {
+  const v = String(status || 'Aktif').trim().toLowerCase()
+  if (v === 'aktif' || v === 'active') return 'Aktif'
+  if (v === 'non-aktif' || v === 'nonaktif' || v === 'inactive' || v === 'disabled') return 'Non-Aktif'
+  if (v === 'menunggu verifikasi' || v === 'waiting' || v === 'pending') return 'Non-Aktif'
+  return 'Aktif'
+}
+
+function legacyLoginValue(value) {
+  return value || '(legacy belum diset)'
+}
+
+function getClientObject(user) {
+  return Array.isArray(user?.clients) ? user.clients[0] : user?.clients
+}
+
+function getOfficeLabel(user) {
+  const client = getClientObject(user)
+  return client?.nama_client || user?.nama_client || user?.client_name || user?.client_id || '-'
+}
+
+function getOfficeDomainLabel(user) {
+  const client = getClientObject(user)
+  return client?.domain_login || client?.kode_client || user?.domain_login || user?.kode_client || '-'
+}
+
+function getOfficeFullLabel(user) {
+  const office = getOfficeLabel(user)
+  const domain = getOfficeDomainLabel(user)
+  return domain && domain !== '-' ? `${office} (${domain})` : office
+}
+
+function getDepartmentObject(user) {
+  return Array.isArray(user?.departments) ? user.departments[0] : user?.departments
 }
 
 function getDepartmentLabel(user) {
-  const department = Array.isArray(user.departments) ? user.departments[0] : user.departments
-  return department?.nama_department || user.nama_department || user.departemen || user.department_id || '-'
+  const department = getDepartmentObject(user)
+  return department?.nama_department || user?.nama_department || user?.departemen || user?.department_id || '-'
+}
+
+function canEditOffice(user) {
+  return normalizeRole(user?.role) === 'super_admin'
+}
+
+function canEditDepartmentForEmployee(user) {
+  const role = normalizeRole(user?.role)
+  return ['super_admin', 'admin_all', 'admin_hr'].includes(role)
+}
+
+function renderDepartmentOptionsForEdit(departments = [], selectedId = '') {
+  const options = departments.map(d => `<option value="${safeText(d.id)}" ${String(d.id) === String(selectedId) ? 'selected' : ''}>${safeText(d.nama_department)}</option>`).join('')
+  return `<option value="">-- Pilih Department --</option>${options}`
 }
 
 function renderUserList(list) {
@@ -1209,12 +1220,12 @@ function renderUserList(list) {
   }
 
   el.innerHTML = users.map(u => {
-    const statusAkun = u.status_akun || 'Aktif'
+    const statusAkun = normalizeAccountStatus(u.status_akun)
     const statusKontrak = u.status_kontrak || getStatusKontrak(u.kontrak_berakhir) || '-'
     const cutiTahunan = window._cutiTahunanMap?.[u.id]?.sisa_cuti
     const sisaCuti = cutiTahunan ?? u.sisa_cuti ?? 0
     const loginId = u.username || u.email_internal || u.email || '-'
-    const badgeClass = statusAkun === 'Aktif' ? 'badge-green' : statusAkun === 'Non-Aktif' ? 'badge-red' : 'badge-yellow'
+    const badgeClass = statusAkun === 'Aktif' ? 'badge-green' : 'badge-red'
     const kontrakBadgeClass = statusKontrak === 'berakhir' ? 'badge-red' : statusKontrak === 'akan_berakhir' ? 'badge-yellow' : 'badge-green'
     return `
       <div class="user-item">
@@ -1227,7 +1238,7 @@ function renderUserList(list) {
           <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;">
             <span><i class="fa fa-briefcase"></i> ${safeText(u.jabatan)}</span>
             <span>· <i class="fa fa-building-user"></i> ${safeText(getDepartmentLabel(u))}</span>
-            <span>· <i class="fa fa-building"></i> ${safeText(getClientLabel(u))}</span>
+            <span>· <i class="fa fa-building"></i> ${safeText(getOfficeFullLabel(u))}</span>
           </div>
           <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;">
             <span>Role: <strong>${safeText(normalizeRole(u.role || 'staff'))}</strong></span>
@@ -1255,8 +1266,10 @@ function renderUserList(list) {
 
 /* ================= POPUP MODAL: DETAIL KARYAWAN ================= */
 window.openDetailKaryawan = function(id) {
-  const target = window._allUsers.find(u => u.id === id)
+  const target = (window._allUsers || []).find(u => u.id === id)
   if (!target) return
+  const avatarLetter = safeText((target.nama_lengkap || '?')[0] || '?')
+  const roleLabel = safeText(normalizeRole(target.role || 'staff').toUpperCase())
 
   window.showUserModal(`
     <div class="modal-header">
@@ -1265,27 +1278,31 @@ window.openDetailKaryawan = function(id) {
     </div>
     <div style="padding: 10px 0; text-align:center; border-bottom: 1px solid var(--border); margin-bottom: 14px;">
        ${target.foto_url
-         ? `<img src="${target.foto_url}" style="width:70px; height:70px; border-radius:50%; object-fit:cover;" onclick="window.previewImageFullScreen('${target.foto_url}')">`
-         : `<div class="profile-avatar" style="margin:0 auto 10px;">${target.nama_lengkap[0].toUpperCase()}</div>`
+         ? `<img src="${safeText(target.foto_url)}" style="width:70px; height:70px; border-radius:50%; object-fit:cover;" onclick="window.previewImageFullScreen('${safeText(target.foto_url)}')">`
+         : `<div class="profile-avatar" style="margin:0 auto 10px;">${avatarLetter.toUpperCase()}</div>`
        }
-       <h4 style="margin:6px 0 2px; font-size:1.1rem;">${target.nama_lengkap}</h4>
-       <span class="badge badge-gray">${target.role.toUpperCase()}</span>
+       <h4 style="margin:6px 0 2px; font-size:1.1rem;">${safeText(target.nama_lengkap)}</h4>
+       <span class="badge badge-gray">${roleLabel}</span>
     </div>
     <div style="display: flex; flex-direction: column; gap: 10px; font-size: .85rem;">
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Email login:</span><strong>${target.email || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Jabatan:</span><strong>${target.jabatan || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Departemen:</span><strong>${target.departemen || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">No. HP:</span><strong>${target.no_hp || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Bergabung:</span><strong>${target.tanggal_bergabung || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Masa Kerja:</span><strong>${formatMasaKerja(hitungMasaKerja(target.tanggal_bergabung))}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${target.tanggal_lahir || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Plot Titik Absen:</span><strong style="color:var(--primary);">📍 ${target.titik_radius || 'Bebas Radius'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${target.status_akun || 'Aktif'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Jenis Kontrak:</span><strong>${target.jenis_kontrak || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Periode Kontrak:</span><strong>${target.kontrak_mulai || '-'} s/d ${target.kontrak_berakhir || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Masa / Status Kontrak:</span><strong>${target.masa_kontrak || '-'} · ${target.status_kontrak || getStatusKontrak(target.kontrak_berakhir)}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Cuti Tahunan:</span><strong>${window._cutiTahunanMap?.[target.id]?.status || 'BELUM_ELIGIBLE'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Sisa Cuti Tahunan:</span><strong>🌴 ${window._cutiTahunanMap?.[target.id]?.sisa_cuti || target.sisa_cuti || 0} Hari</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Username:</span><strong>${safeText(legacyLoginValue(target.username))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Email Internal:</span><strong>${safeText(legacyLoginValue(target.email_internal))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Office:</span><strong>${safeText(getOfficeLabel(target))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Domain Office:</span><strong>${safeText(getOfficeDomainLabel(target))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Department:</span><strong>${safeText(getDepartmentLabel(target))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Email Kontak:</span><strong>${safeText(target.email)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Jabatan:</span><strong>${safeText(target.jabatan)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">No. HP:</span><strong>${safeText(target.no_hp)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Tanggal Bergabung:</span><strong>${safeText(target.tanggal_bergabung)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Masa Kerja:</span><strong>${safeText(formatMasaKerja(hitungMasaKerja(target.tanggal_bergabung)))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${safeText(target.tanggal_lahir)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Plot Titik Absen:</span><strong style="color:var(--primary);">📍 ${safeText(target.titik_radius || 'Bebas Radius')}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${safeText(normalizeAccountStatus(target.status_akun))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Jenis Kontrak:</span><strong>${safeText(target.jenis_kontrak)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Periode Kontrak:</span><strong>${safeText(target.kontrak_mulai)} s/d ${safeText(target.kontrak_berakhir)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Masa / Status Kontrak:</span><strong>${safeText(target.masa_kontrak)} · ${safeText(target.status_kontrak || getStatusKontrak(target.kontrak_berakhir))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Status Cuti Tahunan:</span><strong>${safeText(window._cutiTahunanMap?.[target.id]?.status || 'BELUM_ELIGIBLE')}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Sisa Cuti Tahunan:</span><strong>🌴 ${safeText(window._cutiTahunanMap?.[target.id]?.sisa_cuti || target.sisa_cuti || 0)} Hari</strong></div>
     </div>
     <div class="modal-actions" style="margin-top:20px;">
       <button class="btn-secondary" style="width:100%;" onclick="window.closeUserModal()">Tutup Detail</button>
@@ -1301,37 +1318,79 @@ window.openEditKaryawan = async function(id) {
   const me = window.currentUser
   try { assertSameDepartment(me, target) } catch (err) { showToast(err.message, 'error'); return }
   const isMe = me.id === target.id
-  const canEditAllFields = (me.role === 'super_admin') || (['admin','admin_hr'].includes(normalizeRole(me.role)) && target.role === 'staff' && canManageUserByDepartment(me, target))
+  const viewerRole = normalizeRole(me.role)
+  const targetMissingOfficeDepartment = !target.client_id || !target.department_id
+  const targetMissingLogin = !target.username || !target.email_internal
+  const baseCanEditAllFields = (viewerRole === 'super_admin') || (['admin_all','admin_hr','admin'].includes(viewerRole) && normalizeRole(target.role) === 'staff' && canManageUserByDepartment(me, target))
+  const canEditAllFields = baseCanEditAllFields && (viewerRole === 'super_admin' || !targetMissingOfficeDepartment)
+  const officeEditable = canEditOffice(me) && canEditAllFields
+  const departmentEditable = canEditAllFields && canEditDepartmentForEmployee(me)
 
   let opsiLokasi = ''
+  let officeOptions = []
+  let departmentOptions = []
   try {
-    const { data: lokasiList, error: lokasiErr } = await supabase
-      .from('lokasi_absen')
-      .select('nama_titik')
-      .order('nama_titik')
+    const lokasiPromise = supabase.from('lokasi_absen').select('nama_titik').order('nama_titik')
+    const officePromise = officeEditable
+      ? supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').eq('status', 'active').order('nama_client')
+      : Promise.resolve({ data: [], error: null })
+    const departmentOfficeId = officeEditable ? target.client_id : me.client_id
+    const departmentPromise = departmentEditable
+      ? fetchDepartmentOptionsForOffice(departmentOfficeId)
+        .then(data => ({ data, error: null }))
+        .catch(error => ({ data: [], error }))
+      : Promise.resolve({ data: [], error: null })
 
-    if (lokasiErr) throw lokasiErr
+    const [lokasiResult, officeResult, departmentResult] = await Promise.all([lokasiPromise, officePromise, departmentPromise])
+    if (lokasiResult.error) throw lokasiResult.error
+    if (officeResult.error) throw officeResult.error
+    if (departmentResult.error) throw departmentResult.error
 
-    opsiLokasi = (lokasiList || []).map(l => {
+    officeOptions = officeResult.data || []
+    departmentOptions = departmentResult.data || []
+    opsiLokasi = (lokasiResult.data || []).map(l => {
       const namaTitik  = (l.nama_titik || '').trim()
       const isSelected = namaTitik.toLowerCase() === (target.titik_radius || '').trim().toLowerCase() ? 'selected' : ''
-      return `<option value="${namaTitik}" ${isSelected}>${namaTitik}</option>`
+      return `<option value="${safeText(namaTitik)}" ${isSelected}>${safeText(namaTitik)}</option>`
     }).join('')
   } catch (e) {
-    console.error('Gagal memuat list lokasi untuk form edit:', e)
+    console.error('Gagal memuat opsi form edit karyawan:', e)
+    showToast('Sebagian opsi edit karyawan gagal dimuat.', 'warning')
   }
+
+  window._editEmployeeOfficeOptions = officeOptions
+  const officeField = officeEditable
+    ? `<select id="editOffice" onchange="window.reloadEditEmployeeDepartments(this.value)"><option value="">-- Pilih Office --</option>${officeOptions.map(c => `<option value="${safeText(c.id)}" ${String(c.id) === String(target.client_id) ? 'selected' : ''}>${safeText(c.nama_client)} (${safeText(c.domain_login || c.kode_client)})</option>`).join('')}</select>`
+    : `<input id="editOfficeReadonly" value="${safeText(getOfficeFullLabel(target))}" disabled>`
+  const departmentField = departmentEditable
+    ? `<select id="editDepartment">${renderDepartmentOptionsForEdit(departmentOptions, target.department_id)}</select>`
+    : `<input id="editDepartmentReadonly" value="${safeText(getDepartmentLabel(target))}" disabled>`
 
   window.showUserModal(`
     <div class="modal-header">
-      <h3><i class="fa fa-user-pen" style="color:var(--warning);"></i> Edit Data: ${target.nama_lengkap}</h3>
+      <h3><i class="fa fa-user-pen" style="color:var(--warning);"></i> Edit Data: ${safeText(target.nama_lengkap)}</h3>
       <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
     </div>
+
+    ${targetMissingOfficeDepartment ? `
+      <div class="alert warning" style="margin-bottom:12px;">
+        <i class="fa fa-triangle-exclamation"></i>
+        ${viewerRole === 'super_admin'
+          ? 'Akun lama belum terhubung ke Office/Department. Lengkapi Office dan Department sebelum menyimpan perubahan penting.'
+          : 'Akun lama ini harus dilengkapi Office/Department oleh Super Admin terlebih dahulu.'}
+      </div>
+    ` : ''}
+    ${targetMissingLogin ? `
+      <div class="alert warning" style="margin-bottom:12px;">
+        <i class="fa fa-key"></i> Username/email internal legacy belum diset. Buatkan/rapikan melalui fitur migrasi akun.
+      </div>
+    ` : ''}
 
     <div style="text-align:center;padding:14px 0 10px;border-bottom:1px solid var(--border);margin-bottom:14px;">
       <div style="position:relative;display:inline-block;">
         ${target.foto_url
-          ? `<img src="${target.foto_url}" id="editAvatarPreview" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);" onclick="window.previewImageFullScreen('${target.foto_url}')">`
-          : `<div class="profile-avatar" id="editAvatarPreview" style="width:64px;height:64px;font-size:1.4rem;display:flex;align-items:center;justify-content:center;">${target.nama_lengkap[0].toUpperCase()}</div>`
+          ? `<img src="${safeText(target.foto_url)}" id="editAvatarPreview" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);" onclick="window.previewImageFullScreen('${safeText(target.foto_url)}')">`
+          : `<div class="profile-avatar" id="editAvatarPreview" style="width:64px;height:64px;font-size:1.4rem;display:flex;align-items:center;justify-content:center;">${safeText((target.nama_lengkap || '?')[0] || '?').toUpperCase()}</div>`
         }
         ${isMe || canEditAllFields ? `
           <label for="editFotoInput" title="Ganti foto" style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.6rem;box-shadow:0 2px 6px rgba(0,0,0,.25);border:2px solid #fff;">
@@ -1346,38 +1405,54 @@ window.openEditKaryawan = async function(id) {
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; padding-top:4px;">
       <div class="field full" style="grid-column:1/-1;">
         <label>Nama Lengkap</label>
-        <input id="editNama" value="${target.nama_lengkap}" ${canEditAllFields ? '' : 'disabled'}>
+        <input id="editNama" value="${safeText(target.nama_lengkap)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
-        <label>Email Login</label>
-        <input type="email" id="editEmail" value="${target.email || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <label>Username</label>
+        <input id="editUsername" value="${safeText(legacyLoginValue(target.username))}" disabled>
+        <small style="font-size:.65rem;color:var(--text-muted);">Username login hanya dapat diubah oleh Super Admin melalui reset akun.</small>
+      </div>
+      <div class="field">
+        <label>Email Internal</label>
+        <input id="editEmailInternal" value="${safeText(legacyLoginValue(target.email_internal))}" disabled>
+      </div>
+      <div class="field">
+        <label>Office</label>
+        ${officeField}
+      </div>
+      <div class="field">
+        <label>Domain Office</label>
+        <input id="editOfficeDomain" value="${safeText(getOfficeDomainLabel(target))}" disabled>
+      </div>
+      <div class="field">
+        <label>Department</label>
+        ${departmentField}
+      </div>
+      <div class="field">
+        <label>Email Kontak</label>
+        <input type="email" id="editEmail" value="${safeText(target.email)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>Jabatan</label>
-        <input id="editJabatan" value="${target.jabatan || ''}" ${canEditAllFields ? '' : 'disabled'}>
-      </div>
-      <div class="field">
-        <label>Departemen</label>
-        <input id="editDept" value="${target.departemen || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input id="editJabatan" value="${safeText(target.jabatan)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>No. HP</label>
-        <input id="editHp" value="${target.no_hp || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input id="editHp" value="${safeText(target.no_hp)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>Tanggal Lahir</label>
-        <input type="date" id="editLahir" value="${target.tanggal_lahir || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input type="date" id="editLahir" value="${safeText(target.tanggal_lahir, '')}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>Tanggal Bergabung</label>
-        <input type="date" id="editTgl" value="${target.tanggal_bergabung || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input type="date" id="editTgl" value="${safeText(target.tanggal_bergabung, '')}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>Status Akun</label>
         <select id="editStatusAkun" ${canEditAllFields ? '' : 'disabled'}>
-          <option value="Aktif"${(target.status_akun || 'Aktif') === 'Aktif' ? ' selected' : ''}>Aktif</option>
-          <option value="Menunggu Verifikasi"${target.status_akun === 'Menunggu Verifikasi' ? ' selected' : ''}>Menunggu Verifikasi</option>
-          <option value="Non-Aktif"${target.status_akun === 'Non-Aktif' ? ' selected' : ''}>Non-Aktif</option>
+          <option value="Aktif"${normalizeAccountStatus(target.status_akun) === 'Aktif' ? ' selected' : ''}>Aktif</option>
+          <option value="Non-Aktif"${normalizeAccountStatus(target.status_akun) === 'Non-Aktif' ? ' selected' : ''}>Non-Aktif</option>
         </select>
       </div>
       <div class="field">
@@ -1386,7 +1461,7 @@ window.openEditKaryawan = async function(id) {
       </div>
       <div class="field full" style="grid-column:1/-1;">
         <label>URL Foto</label>
-        <input id="editFotoUrl" value="${target.foto_url || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input id="editFotoUrl" value="${safeText(target.foto_url)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
 
       <div class="field">
@@ -1416,31 +1491,109 @@ window.openEditKaryawan = async function(id) {
   `)
 }
 
+window.reloadEditEmployeeDepartments = async function(clientId) {
+  const departmentSelect = document.getElementById('editDepartment')
+  const domainInput = document.getElementById('editOfficeDomain')
+  const office = (window._editEmployeeOfficeOptions || []).find(c => String(c.id) === String(clientId))
+  if (domainInput) domainInput.value = office?.domain_login || office?.kode_client || '-'
+  if (!departmentSelect) return
+  departmentSelect.innerHTML = '<option value="">Memuat Department...</option>'
+  try {
+    const departments = await fetchDepartmentOptionsForOffice(clientId)
+    departmentSelect.innerHTML = renderDepartmentOptionsForEdit(departments, '')
+    if (!departments.length) showToast('Belum ada Department aktif untuk Office ini.', 'warning')
+  } catch (err) {
+    console.error('Gagal reload Department edit karyawan:', err)
+    departmentSelect.innerHTML = '<option value="">Gagal memuat Department</option>'
+    showToast('Gagal memuat Department untuk Office terpilih.', 'error')
+  }
+}
+
+async function resetEmployeePassword(targetUserId, newPassword) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sesi login tidak valid. Silakan login ulang.')
+  const res = await fetch('/.netlify/functions/reset-employee-password', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({ user_id: targetUserId, new_password: newPassword })
+  })
+  const result = await res.json().catch(() => ({}))
+  if (!res.ok || !result.success) throw new Error(result.error || 'Reset password gagal.')
+  return result
+}
+
 /* ================= SIMPAN HASIL MODAL EDIT KARYAWAN ================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
-  const newPassword = document.getElementById('editPassword')?.value.trim() || ''
+  const passwordInput = document.getElementById('editPassword')
+  const newPassword = passwordInput?.value || ''
   const selectEl       = document.getElementById('editTitikRadius')
   const titikRadiusBaru = selectEl ? (selectEl.value || null) : null
 
   try {
     const targetProfile = (window._allUsers || []).find(u => u.id === id) || null
     assertSameDepartment(window.currentUser, targetProfile)
+    if (newPassword) {
+      if (newPassword.length < 8) {
+        showToast('Password minimal 8 karakter', 'warning')
+        passwordInput?.focus()
+        return
+      }
+      if (isMe) {
+        const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
+        if (passErr) throw passErr
+      } else {
+        await resetEmployeePassword(id, newPassword)
+      }
+      if (passwordInput) passwordInput.value = ''
+      showToast('Password berhasil diperbarui.', 'success')
+    }
     if (canEditAll) {
       const kontrakPayload = readKontrakForm('edit')
       if (!validateKontrakPayload(kontrakPayload)) return
+      const role = normalizeRole(window.currentUser?.role)
+      const selectedOfficeId = role === 'super_admin' ? document.getElementById('editOffice')?.value || null : targetProfile?.client_id || null
+      const selectedDepartmentId = canEditDepartmentForEmployee(window.currentUser) ? document.getElementById('editDepartment')?.value || null : targetProfile?.department_id || null
       const updatePayload = {
         nama_lengkap:  document.getElementById('editNama')?.value.trim()    || '',
         email:         document.getElementById('editEmail')?.value.trim()   || null,
         jabatan:       document.getElementById('editJabatan')?.value.trim() || '',
-        departemen:    document.getElementById('editDept')?.value.trim()    || '',
         no_hp:         document.getElementById('editHp')?.value.trim()      || '',
         tanggal_lahir: document.getElementById('editLahir')?.value          || null,
         tanggal_bergabung: document.getElementById('editTgl')?.value       || null,
-        status_akun:   document.getElementById('editStatusAkun')?.value    || 'Aktif',
+        status_akun:   normalizeAccountStatus(document.getElementById('editStatusAkun')?.value),
         sisa_cuti:     Math.max(0, Number.parseInt(document.getElementById('editSisaCuti')?.value || '0', 10) || 0),
         foto_url:      document.getElementById('editFotoUrl')?.value.trim() || '',
         titik_radius:  titikRadiusBaru,
         ...kontrakPayload
+      }
+
+      if (role === 'super_admin') {
+        if (!selectedOfficeId) { showToast('Office wajib dipilih.', 'warning'); return }
+        const { data: office, error: officeErr } = await supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').eq('id', selectedOfficeId).eq('status', 'active').maybeSingle()
+        if (officeErr) throw officeErr
+        if (!office) { showToast('Office tidak valid atau nonaktif.', 'warning'); return }
+        updatePayload.client_id = office.id
+      }
+
+      if (canEditDepartmentForEmployee(window.currentUser)) {
+        if (!selectedDepartmentId) { showToast('Department wajib dipilih.', 'warning'); return }
+        const departmentOfficeId = role === 'super_admin' ? selectedOfficeId : window.currentUser?.client_id
+        const { data: selectedDepartment, error: deptErr } = await supabase
+          .from('departments')
+          .select('id,nama_department,client_id,status')
+          .eq('id', selectedDepartmentId)
+          .eq('client_id', departmentOfficeId)
+          .eq('status', 'active')
+          .maybeSingle()
+        if (deptErr) throw deptErr
+        if (!selectedDepartment) { showToast('Department tidak valid untuk Office yang dipilih.', 'warning'); return }
+        updatePayload.department_id = selectedDepartment.id
+        updatePayload.departemen = selectedDepartment.nama_department
+      } else {
+        updatePayload.departemen = targetProfile?.departemen || getDepartmentLabel(targetProfile)
       }
 
       const beforeProfile = (window._allUsers || []).find(u => u.id === id) || null
@@ -1456,25 +1609,11 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       if (profileErr) throw profileErr
     }
 
-    if (newPassword) {
-      if (newPassword.length < 6) {
-        showToast('Password minimal 6 karakter', 'warning')
-        return
-      }
-      if (isMe) {
-        const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
-        if (passErr) throw passErr
-      } else {
-        showToast('Reset password karyawan memerlukan Supabase Service Role.', 'info');
-      }
-    }
-
     // Update data cache lokal window agar UI sinkron instan
     const userIndex = (window._allUsers || []).findIndex(u => u.id === id)
     if (userIndex !== -1 && canEditAll) {
       window._allUsers[userIndex].nama_lengkap  = document.getElementById('editNama')?.value.trim()    || ''
       window._allUsers[userIndex].jabatan       = document.getElementById('editJabatan')?.value.trim() || ''
-      window._allUsers[userIndex].departemen    = document.getElementById('editDept')?.value.trim()    || ''
       window._allUsers[userIndex].no_hp         = document.getElementById('editHp')?.value.trim()      || ''
       window._allUsers[userIndex].tanggal_lahir = document.getElementById('editLahir')?.value          || null
       window._allUsers[userIndex].tanggal_bergabung = document.getElementById('editTgl')?.value       || null
@@ -1486,7 +1625,6 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       if (canEditAll) {
         window.currentUser.nama_lengkap  = document.getElementById('editNama')?.value.trim()    || ''
         window.currentUser.jabatan       = document.getElementById('editJabatan')?.value.trim() || ''
-        window.currentUser.departemen    = document.getElementById('editDept')?.value.trim()    || ''
         window.currentUser.no_hp         = document.getElementById('editHp')?.value.trim()      || ''
         window.currentUser.tanggal_lahir = document.getElementById('editLahir')?.value          || null
         window.currentUser.tanggal_bergabung = document.getElementById('editTgl')?.value       || null
@@ -1559,249 +1697,162 @@ window.uploadFotoEditModal = async function(input, targetUserId) {
   if (statusEl) statusEl.innerHTML = '<i class="fa fa-check" style="color:var(--success);"></i> Foto diperbarui!'
 }
 
-/* ================= RENDER LIST DAFTAR TUNGGU (PENDING LIST) ================= */
-function renderPendingList(list) {
-  const el = document.getElementById('userListContainer')
-  if (!el) return
-  if (!list.length) {
-    el.innerHTML = `<div class="empty-state"><i class="fa fa-hourglass-half"></i><p>Tidak ada data di daftar tunggu</p></div>`
-    return
-  }
-  el.innerHTML = `
-    <div class="alert info" style="margin-bottom:12px;">
-      <i class="fa fa-info-circle"></i>
-      <span>Karyawan di bawah ini belum mendaftarkan emailnya. Instruksikan staff untuk registrasi mandiri di tautan <strong>register</strong></span>
-    </div>
-    ${list.map(p => `
-      <div class="user-item">
-        <div class="user-avatar" style="background:linear-gradient(135deg,#64748b,#475569);">
-          ${(p.nama_lengkap||'?')[0].toUpperCase()}
-        </div>
-        <div class="ui-info">
-          <div class="ui-name">${p.nama_lengkap}</div>
-          <div class="ui-email">${p.jabatan||'-'} ${p.departemen?'· '+p.departemen:''}</div>
-          <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;">
-            📅 Input: ${p.tanggal_bergabung||'-'} · Kontrak: ${p.kontrak_mulai || '-'} s/d ${p.kontrak_berakhir || '-'} · Akses Target: ${p.role}
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-          <span class="badge badge-yellow"><i class="fa fa-hourglass-half"></i> Waiting</span>
-          <button class="action-btn delete" title="Hapus" onclick="deletePending('${p.id}','${p.nama_lengkap}')">
-            <i class="fa fa-trash"></i>
-          </button>
-        </div>
-      </div>`).join('')}
-  `
-}
-
-window.deletePending = async function(id, nama) {
-  const pendingTarget = (window._pendingList || []).find(p => p.id === id) || null
-  try { assertSameDepartment(window.currentUser, pendingTarget) } catch (err) { showToast(err.message, 'error'); return }
-  if (!(await confirmAction(`Hapus data "${nama}" dari daftar tunggu pendaftaran?`, 'Ya, hapus'))) return
-  await supabase.from('pending_profiles').delete().eq('id', id)
-  window._pendingList = window._pendingList.filter(p => p.id !== id)
-  renderPendingList(window._pendingList)
-}
-
 /* ===============================================================
    UPLOAD KARYAWAN MASSAL VIA EXCEL
-   Kolom wajib: Nama | Email (opsional: Jabatan, Departemen, No HP,
-   Tgl Bergabung, Tgl Lahir, Role, Titik Radius)
-   → Data masuk ke pending_profiles (status: waiting)
-   → Karyawan tinggal registrasi di register.html untuk verif email
+   Akun dibuat server-side via Netlify Function menggunakan username dan password awal.
 =============================================================== */
+const EMPLOYEE_UPLOAD_REQUIRED_COLUMNS = ['Nama Lengkap','Username','Password Awal','Office','Kode Office','Department','Jabatan','Role','Tanggal Bergabung','Jenis Kontrak','Kontrak Mulai','Durasi Kontrak','Satuan Durasi Kontrak']
+const EMPLOYEE_UPLOAD_OPTIONAL_COLUMNS = ['No HP','Tanggal Lahir','Titik Radius','Sisa Cuti Awal','Foto URL']
+const EMPLOYEE_UPLOAD_ROLES = ['admin_all','admin_hr','admin','staff']
+const USERNAME_RE = /^[a-z0-9._-]{3,40}$/
 
 window.downloadTemplateKaryawan = function() {
   if (typeof XLSX === 'undefined') { showToast('Library XLSX belum siap. Coba lagi sebentar.', 'warning'); return }
+  const header = [...EMPLOYEE_UPLOAD_REQUIRED_COLUMNS, ...EMPLOYEE_UPLOAD_OPTIONAL_COLUMNS]
   const ws = XLSX.utils.aoa_to_sheet([
-    ['Nama Lengkap','Jabatan','Departemen','No HP','Tanggal Bergabung','Tanggal Lahir','Role','Titik Radius','Jenis Kontrak','Kontrak Mulai','Durasi Kontrak','Satuan Durasi Kontrak'],
-    ['Budi Santoso','Staff','IT','081234567890','2025-01-01','1995-06-15','staff','','kontrak','2026-01-01','12','bulan'],
-    ['Siti Rahayu','Supervisor','HR','081298765432','2025-01-01','1990-03-20','staff','','probation','2026-01-01','3','bulan'],
+    header,
+    ['Budi Santoso','budi01','Demo12345!','Office A','kantora','Housekeeping','Staff HK','staff','2026-06-20','kontrak','2026-06-20','12','bulan','081234567890','1995-06-15','','12',''],
+    ['Siti Aminah','siti01','Demo12345!','Office A','kantora','HRD','Admin HR','admin_hr','2026-06-20','tetap','2026-06-20','12','bulan','','','','0','']
   ])
+  ws['!cols'] = header.map(h => ({ wch: Math.max(14, h.length + 2) }))
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Template Karyawan')
-  XLSX.writeFile(wb, 'template_upload_karyawan.xlsx')
+  XLSX.writeFile(wb, 'template_upload_karyawan_office.xlsx')
+}
+
+function getRowValueCaseInsensitive(row, ...keys) {
+  const entries = Object.entries(row || {})
+  for (const key of keys) {
+    const found = entries.find(([k]) => String(k).trim().toLowerCase() === String(key).trim().toLowerCase())
+    if (found && found[1] !== undefined && found[1] !== null) return String(found[1]).trim()
+  }
+  return ''
+}
+function isValidDateString(v) { if (!v) return false; const d = new Date(v); return !Number.isNaN(d.getTime()) }
+function normalizeOfficeCode(v) { return String(v || '').trim().toLowerCase().replace(/^@/, '') }
+function buildInternalEmail(username, officeCode) { return `${username}@${normalizeOfficeCode(officeCode)}.local` }
+
+async function loadEmployeeUploadLookups() {
+  const [clientsRes, departmentsRes, profilesRes] = await Promise.all([
+    supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').eq('status', 'active'),
+    supabase.from('departments').select('id,client_id,nama_department,status').eq('status', 'active'),
+    supabase.from('profiles').select('id,username,email_internal,client_id')
+  ])
+  if (clientsRes.error) throw clientsRes.error
+  if (departmentsRes.error) throw departmentsRes.error
+  if (profilesRes.error) throw profilesRes.error
+  return { clients: clientsRes.data || [], departments: departmentsRes.data || [], profiles: profilesRes.data || [] }
 }
 
 window.handleUploadKaryawanExcel = function(input) {
   if (typeof XLSX === 'undefined') { showToast('Library XLSX belum siap.', 'warning'); return }
+  const role = normalizeRole(window.currentUser?.role)
+  if (!['super_admin','admin_hr'].includes(role)) { showToast('Upload karyawan hanya untuk Super Admin dan Admin HR.', 'warning'); input.value = ''; return }
   const file = input.files[0]
   if (!file) return
-
   const reader = new FileReader()
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
-      const data = new Uint8Array(e.target.result)
-      const wb   = XLSX.read(data, { type: 'array' })
-      const ws   = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
-
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' })
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
       if (!rows.length) { showToast('File Excel kosong atau format tidak sesuai.', 'warning'); return }
-
-      // Normalisasi kolom (case-insensitive)
+      const lookups = await loadEmployeeUploadLookups()
+      const clientByCode = new Map()
+      lookups.clients.forEach(c => { clientByCode.set(normalizeOfficeCode(c.kode_client), c); clientByCode.set(normalizeOfficeCode(c.domain_login), c) })
+      const existingUsernames = new Set((lookups.profiles || []).map(p => `${p.client_id}|${String(p.username || '').toLowerCase()}`))
+      const existingEmails = new Set((lookups.profiles || []).map(p => String(p.email_internal || '').toLowerCase()).filter(Boolean))
+      const seen = new Set()
       const parsed = rows.map((row, i) => {
-        const get = (...keys) => {
-          for (const k of keys) {
-            const found = Object.keys(row).find(rk => rk.trim().toLowerCase() === k.toLowerCase())
-            if (found && row[found] !== '') return String(row[found]).trim()
-          }
-          return ''
+        const errors = []
+        const nama = getRowValueCaseInsensitive(row, 'Nama Lengkap', 'Nama')
+        const username = getRowValueCaseInsensitive(row, 'Username', 'Username Login').toLowerCase()
+        const passwordAwal = getRowValueCaseInsensitive(row, 'Password Awal', 'Password')
+        const kodeOfficeRaw = getRowValueCaseInsensitive(row, 'Kode Office', 'Kode Kantor', 'Kode Client')
+        const deptName = getRowValueCaseInsensitive(row, 'Department', 'Departemen')
+        const jabatan = getRowValueCaseInsensitive(row, 'Jabatan')
+        const targetRole = normalizeRole(getRowValueCaseInsensitive(row, 'Role'))
+        const tanggalBergabung = getRowValueCaseInsensitive(row, 'Tanggal Bergabung')
+        const jenisKontrak = getRowValueCaseInsensitive(row, 'Jenis Kontrak')
+        const kontrakMulai = getRowValueCaseInsensitive(row, 'Kontrak Mulai')
+        const durasiKontrak = getRowValueCaseInsensitive(row, 'Durasi Kontrak')
+        const satuan = getRowValueCaseInsensitive(row, 'Satuan Durasi Kontrak').toLowerCase() || 'bulan'
+        if (!nama) errors.push('Nama Lengkap wajib')
+        if (!USERNAME_RE.test(username)) errors.push('Username wajib 3-40 karakter huruf kecil/angka/titik/underscore/strip')
+        if (passwordAwal.length < 8) errors.push('Password Awal minimal 8 karakter')
+        if (!EMPLOYEE_UPLOAD_ROLES.includes(targetRole)) errors.push(targetRole === 'super_admin' ? 'Role super_admin ditolak' : 'Role tidak valid')
+        if (!jabatan) errors.push('Jabatan wajib')
+        if (!tanggalBergabung || !isValidDateString(tanggalBergabung)) errors.push('Tanggal Bergabung tidak valid')
+        if (!jenisKontrak) errors.push('Jenis Kontrak wajib')
+        if (!kontrakMulai || !isValidDateString(kontrakMulai)) errors.push('Kontrak Mulai tidak valid')
+        if (!durasiKontrak || Number.isNaN(Number(durasiKontrak))) errors.push('Durasi Kontrak harus angka')
+        if (!['bulan','tahun'].includes(satuan)) errors.push('Satuan Durasi Kontrak hanya bulan/tahun')
+        let client = null
+        if (role === 'admin_hr') {
+          client = lookups.clients.find(c => String(c.id) === String(window.currentUser?.client_id)) || null
+          if (kodeOfficeRaw && client && ![client.kode_client, client.domain_login].map(normalizeOfficeCode).includes(normalizeOfficeCode(kodeOfficeRaw))) errors.push('Admin HR tidak boleh upload ke Office lain')
+          if (!['admin','staff'].includes(targetRole)) errors.push('Admin HR hanya boleh membuat role admin atau staff')
+        } else {
+          if (!kodeOfficeRaw) errors.push('Kode Office wajib untuk Super Admin')
+          client = clientByCode.get(normalizeOfficeCode(kodeOfficeRaw)) || null
         }
-        const nama = get('Nama Lengkap', 'Nama', 'nama_lengkap', 'name')
-        const kontrakPayload = buildKontrakPayload({
-          jenisKontrak: get('Jenis Kontrak', 'jenis_kontrak') || 'kontrak',
-          kontrakMulai: get('Kontrak Mulai', 'kontrak_mulai', 'Tanggal Mulai Kontrak') || get('Tanggal Bergabung', 'tanggal_bergabung') || null,
-          durasiKontrak: get('Durasi Kontrak', 'durasi_kontrak') || 12,
-          satuanDurasiKontrak: get('Satuan Durasi Kontrak', 'satuan_durasi_kontrak') || 'bulan'
-        })
-        const dept = get('Departemen', 'departemen', 'dept')
-        const deptAllowed = canAccessAllDepartments(window.currentUser) || String(dept || '').trim().toLowerCase() === getUserDepartment(window.currentUser).toLowerCase()
-        const valid = !!nama && !!kontrakPayload.kontrak_mulai && !!kontrakPayload.durasi_kontrak && deptAllowed
-        return {
-          _index: i + 2, // baris Excel (header = 1)
-          nama_lengkap:      nama,
-          jabatan:           get('Jabatan', 'jabatan', 'position'),
-          departemen:        canAccessAllDepartments(window.currentUser) ? dept : getUserDepartment(window.currentUser),
-          no_hp:             get('No HP', 'no_hp', 'hp', 'phone'),
-          tanggal_bergabung: get('Tanggal Bergabung', 'tanggal_bergabung') || null,
-          tanggal_lahir:     get('Tanggal Lahir', 'tanggal_lahir') || null,
-          role:              ['staff','admin','admin_hr','admin_all','super_admin'].includes(normalizeRole(get('Role','role')))
-                               ? normalizeRole(get('Role','role')) : 'staff',
-          titik_radius:      get('Titik Radius', 'titik_radius') || null,
-          ...kontrakPayload,
-          valid,
-          errMsg: !nama ? 'Kolom "Nama Lengkap" kosong' : !deptAllowed ? 'Departemen berbeda' : !kontrakPayload.kontrak_mulai ? 'Kontrak Mulai wajib diisi' : !kontrakPayload.durasi_kontrak ? 'Durasi Kontrak wajib diisi' : ''
-        }
+        if (!client) errors.push('Office/Kode Office tidak valid')
+        const department = client ? lookups.departments.find(d => String(d.client_id) === String(client.id) && String(d.nama_department || '').trim().toLowerCase() === deptName.toLowerCase()) : null
+        if (!department) errors.push('Department tidak valid dalam Office')
+        const emailInternal = client ? buildInternalEmail(username, client.kode_client) : ''
+        const uniqueKey = `${client?.id}|${username}`
+        if (client && existingUsernames.has(uniqueKey)) errors.push('Username sudah dipakai di Office ini')
+        if (emailInternal && existingEmails.has(emailInternal.toLowerCase())) errors.push('Email internal sudah dipakai')
+        if (seen.has(uniqueKey)) errors.push('Username duplikat di file untuk Office yang sama')
+        seen.add(uniqueKey)
+        const kontrakPayload = buildKontrakPayload({ jenisKontrak, kontrakMulai, durasiKontrak, satuanDurasiKontrak: satuan })
+        return { _index: i + 2, nama_lengkap: nama, username, password_awal: passwordAwal, office: client?.nama_client || getRowValueCaseInsensitive(row, 'Office'), kode_office: client?.kode_client || kodeOfficeRaw, client_id: client?.id || null, department_id: department?.id || null, departemen: department?.nama_department || deptName, jabatan, role: targetRole, tanggal_bergabung: tanggalBergabung, no_hp: getRowValueCaseInsensitive(row, 'No HP'), tanggal_lahir: getRowValueCaseInsensitive(row, 'Tanggal Lahir') || null, titik_radius: getRowValueCaseInsensitive(row, 'Titik Radius') || null, sisa_cuti: Number(getRowValueCaseInsensitive(row, 'Sisa Cuti Awal') || 0) || 0, foto_url: getRowValueCaseInsensitive(row, 'Foto URL') || '', ...kontrakPayload, valid: errors.length === 0, errMsg: errors.join('; ') }
       })
-
       window._uploadKaryawanParsed = parsed
       renderPreviewUploadKaryawan(parsed)
     } catch(err) {
-      showToast('Gagal membaca file Excel: ' + err.message, 'error')
-    }
+      console.error('handleUploadKaryawanExcel error:', err)
+      showToast('Gagal membaca/validasi Excel: ' + err.message, 'error')
+    } finally { input.value = '' }
   }
   reader.readAsArrayBuffer(file)
-  input.value = '' // reset agar bisa upload file yang sama lagi
 }
 
 function renderPreviewUploadKaryawan(rows) {
   const wrap = document.getElementById('previewUploadKaryawanWrap')
   if (!wrap) return
-
-  const valid   = rows.filter(r => r.valid)
-  const invalid = rows.filter(r => !r.valid)
-
+  const valid = rows.filter(r => r.valid), invalid = rows.filter(r => !r.valid)
   wrap.style.display = 'block'
-  wrap.innerHTML = `
-    <div class="card fade-up" style="border:1.5px solid var(--primary); padding:16px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
-        <div>
-          <h3 style="font-size:.9rem; font-weight:800; color:var(--primary); margin:0 0 4px;">
-            <i class="fa fa-table"></i> Preview Upload Excel Karyawan
-          </h3>
-          <p style="font-size:.78rem; color:var(--text-muted); margin:0;">
-            ${valid.length} valid
-            ${invalid.length ? `· <span style="color:var(--danger);">${invalid.length} baris bermasalah</span>` : ''}
-            · Setelah disimpan, karyawan masuk <strong>Daftar Tunggu</strong> dan bisa registrasi di <code>register.html</code>
-          </p>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn-secondary btn-sm" onclick="window.batalUploadKaryawan()">
-            <i class="fa fa-times"></i> Batal
-          </button>
-          ${valid.length ? `
-            <button class="btn-success btn-sm" onclick="window.konfirmasiUploadKaryawan()">
-              <i class="fa fa-check"></i> Simpan ${valid.length} ke Daftar Tunggu
-            </button>` : ''}
-        </div>
-      </div>
-
-      <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse; font-size:.78rem;">
-          <thead>
-            <tr style="background:var(--gray-50);">
-              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Baris</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Nama Lengkap</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Jabatan</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Departemen</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Role</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:1.5px solid var(--border); color:var(--text-muted);">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.map(r => `
-              <tr style="border-bottom:1px solid var(--border); ${!r.valid ? 'background:#fff5f5;' : ''}">
-                <td style="padding:7px 10px; color:var(--text-muted); font-size:.75rem;">${r._index}</td>
-                <td style="padding:7px 10px; font-weight:700;">${r.nama_lengkap || '<em style="color:var(--danger);">—</em>'}</td>
-                <td style="padding:7px 10px;">${r.jabatan || '-'}</td>
-                <td style="padding:7px 10px;">${r.departemen || '-'}</td>
-                <td style="padding:7px 10px;"><span class="badge badge-gray">${r.role}</span></td>
-                <td style="padding:7px 10px;">
-                  ${r.valid
-                    ? `<span class="badge badge-green"><i class="fa fa-check"></i> Valid</span>`
-                    : `<span class="badge badge-red"><i class="fa fa-times"></i> ${r.errMsg}</span>`}
-                </td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `
+  wrap.innerHTML = `<div class="card fade-up" style="border:1.5px solid var(--primary); padding:16px;"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><div><h3 style="font-size:.9rem;font-weight:800;color:var(--primary);margin:0 0 4px;"><i class="fa fa-table"></i> Preview Upload Excel Karyawan</h3><p style="font-size:.78rem;color:var(--text-muted);margin:0;">${valid.length} valid ${invalid.length ? `· <span style="color:var(--danger);">${invalid.length} baris bermasalah</span>` : ''} · Karyawan akan dibuatkan akun login oleh sistem menggunakan username dan password awal.</p></div><div style="display:flex;gap:8px;"><button class="btn-secondary btn-sm" onclick="window.batalUploadKaryawan()"><i class="fa fa-times"></i> Batal</button>${valid.length ? `<button class="btn-success btn-sm" onclick="window.konfirmasiUploadKaryawan()" ${invalid.length ? 'disabled title="Perbaiki baris invalid terlebih dahulu"' : ''}><i class="fa fa-check"></i> Buat ${valid.length} Akun</button>` : ''}</div></div><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.78rem;"><thead><tr style="background:var(--gray-50);"><th>Baris</th><th>Nama</th><th>Username</th><th>Office</th><th>Department</th><th>Role</th><th>Status</th></tr></thead><tbody>${rows.map(r => `<tr style="border-bottom:1px solid var(--border);${!r.valid ? 'background:#fff5f5;' : ''}"><td style="padding:7px 10px;">${r._index}</td><td style="padding:7px 10px;font-weight:700;">${safeText(r.nama_lengkap)}</td><td style="padding:7px 10px;">${safeText(r.username)}</td><td style="padding:7px 10px;">${safeText(r.office)} (${safeText(r.kode_office)})</td><td style="padding:7px 10px;">${safeText(r.departemen)}</td><td style="padding:7px 10px;"><span class="badge badge-gray">${safeText(r.role)}</span></td><td style="padding:7px 10px;">${r.valid ? '<span class="badge badge-green"><i class="fa fa-check"></i> Valid</span>' : `<span class="badge badge-red"><i class="fa fa-times"></i> ${safeText(r.errMsg)}</span>`}</td></tr>`).join('')}</tbody></table></div></div>`
 }
 
-window.batalUploadKaryawan = function() {
-  const wrap = document.getElementById('previewUploadKaryawanWrap')
-  if (wrap) { wrap.style.display = 'none'; wrap.innerHTML = '' }
-  window._uploadKaryawanParsed = null
-}
+window.batalUploadKaryawan = function() { const wrap = document.getElementById('previewUploadKaryawanWrap'); if (wrap) { wrap.style.display = 'none'; wrap.innerHTML = '' }; window._uploadKaryawanParsed = null }
 
 window.konfirmasiUploadKaryawan = async function() {
-  const tenantContext = JSON.parse(sessionStorage.getItem('tenantContext') || '{}')
-  const uploadClientId = window.currentUser?.role === 'super_admin' ? tenantContext.client_id : window.currentUser?.client_id
-  const uploadDepartmentId = window.currentUser?.role === 'super_admin' ? null : window.currentUser?.department_id
-  if (!uploadClientId) { showToast('Pilih konteks client terlebih dahulu sebelum upload massal.', 'warning'); return }
-  const rows = (window._uploadKaryawanParsed || []).filter(r => r.valid && (canAccessAllDepartments(window.currentUser) || String(r.departemen || '').trim().toLowerCase() === getUserDepartment(window.currentUser).toLowerCase()))
+  const rows = window._uploadKaryawanParsed || []
   if (!rows.length) return
-
-  const payload = rows.map(r => ({
-    nama_lengkap:      r.nama_lengkap,
-    jabatan:           r.jabatan || '',
-    departemen:        r.departemen || '',
-    no_hp:             r.no_hp || '',
-    tanggal_bergabung: r.tanggal_bergabung || null,
-    tanggal_lahir:     r.tanggal_lahir || null,
-    role:              r.role || 'staff',
-    titik_radius:      r.titik_radius || null,
-    jenis_kontrak:     r.jenis_kontrak || null,
-    kontrak_mulai:     r.kontrak_mulai || null,
-    durasi_kontrak:    r.durasi_kontrak || null,
-    satuan_durasi_kontrak: r.satuan_durasi_kontrak || 'bulan',
-    masa_kontrak:      r.masa_kontrak || null,
-    kontrak_berakhir:  r.kontrak_berakhir || null,
-    status_kontrak:    r.status_kontrak || 'aktif',
-    status:            'waiting',
-    client_id:         uploadClientId,
-    department_id:     uploadDepartmentId,
-    created_by:        window.currentUser?.id || null
-  }))
-
-  const { error } = await supabase.from('pending_profiles').insert(payload)
-  if (error) { showToast('Gagal menyimpan: ' + error.message, 'error'); return }
-
-  window.batalUploadKaryawan()
-  showToast(`${payload.length} karyawan berhasil dimasukkan ke daftar tunggu`, 'success')
-  await renderUsers()
-  // Otomatis pindah ke tab pending
-  if (window.switchTab) window.switchTab('pending')
+  const invalid = rows.filter(r => !r.valid)
+  if (invalid.length) { showToast('Masih ada baris invalid. Tidak ada akun yang dibuat.', 'warning'); return }
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/.netlify/functions/bulk-create-employee-accounts', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${session?.access_token || ''}` }, body: JSON.stringify({ employees: rows }) })
+    const result = await res.json().catch(() => ({}))
+    if (!res.ok || !result.success) throw new Error(result.error || 'Bulk create gagal')
+    window.batalUploadKaryawan()
+    showToast(`${result.created_count || rows.length} akun karyawan berhasil dibuat`, 'success')
+    await renderUsers()
+  } catch (err) {
+    console.error('konfirmasiUploadKaryawan error:', err)
+    showToast('Gagal membuat akun massal: ' + err.message, 'error')
+  }
 }
 
 /* ================= TOGGLE AKTIF / NON-AKTIF KARYAWAN ================= */
 window.toggleStatusUser = async function(userId, statusSekarang) {
   const targetProfile = (window._allUsers || []).find(u => u.id === userId) || null
   try { assertSameDepartment(window.currentUser, targetProfile) } catch (err) { showToast(err.message, 'error'); return }
-  const statusBaru = statusSekarang === 'Aktif' ? 'Non-Aktif' : 'Aktif'
+  const statusBaru = normalizeAccountStatus(statusSekarang) === 'Aktif' ? 'Non-Aktif' : 'Aktif'
   if (!(await confirmAction(`Ubah status karyawan menjadi ${statusBaru}?`, 'Ya, ubah'))) return
-  
+
   await supabase.from('profiles').update({ status_akun: statusBaru }).eq('id', userId)
   if (statusBaru === 'Non-Aktif') {
     await resetCutiKaryawan(userId)
@@ -1868,7 +1919,7 @@ window.previewImageFullScreen = function(urlSrc) {
   overlay.id = 'imagePreviewOverlay'
   overlay.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.85); display: flex; align-items: center; 
+    background: rgba(0, 0, 0, 0.85); display: flex; align-items: center;
     justify-content: center; z-index: 10000; cursor: zoom-out; opacity: 0; transition: opacity 0.25s ease;
   `
 
