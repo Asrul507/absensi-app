@@ -1193,15 +1193,47 @@ function safeText(value, fallback = '-') {
     .replace(/'/g, '&#39;')
 }
 
+function getClientObject(user) {
+  return Array.isArray(user?.clients) ? user.clients[0] : user?.clients
+}
+
 function getOfficeLabel(user) {
-  const client = Array.isArray(user.clients) ? user.clients[0] : user.clients
-  if (client?.nama_client) return `${client.nama_client}${client.kode_client ? ` (${client.kode_client})` : ''}`
-  return user.nama_client || user.client_name || user.client_id || '-'
+  const client = getClientObject(user)
+  return client?.nama_client || user?.nama_client || user?.client_name || user?.client_id || '-'
+}
+
+function getOfficeDomainLabel(user) {
+  const client = getClientObject(user)
+  return client?.domain_login || client?.kode_client || user?.domain_login || user?.kode_client || '-'
+}
+
+function getOfficeFullLabel(user) {
+  const office = getOfficeLabel(user)
+  const domain = getOfficeDomainLabel(user)
+  return domain && domain !== '-' ? `${office} (${domain})` : office
+}
+
+function getDepartmentObject(user) {
+  return Array.isArray(user?.departments) ? user.departments[0] : user?.departments
 }
 
 function getDepartmentLabel(user) {
-  const department = Array.isArray(user.departments) ? user.departments[0] : user.departments
-  return department?.nama_department || user.nama_department || user.departemen || user.department_id || '-'
+  const department = getDepartmentObject(user)
+  return department?.nama_department || user?.nama_department || user?.departemen || user?.department_id || '-'
+}
+
+function canEditOffice(user) {
+  return normalizeRole(user?.role) === 'super_admin'
+}
+
+function canEditDepartmentForEmployee(user) {
+  const role = normalizeRole(user?.role)
+  return ['super_admin', 'admin_all', 'admin_hr'].includes(role)
+}
+
+function renderDepartmentOptionsForEdit(departments = [], selectedId = '') {
+  const options = departments.map(d => `<option value="${safeText(d.id)}" ${String(d.id) === String(selectedId) ? 'selected' : ''}>${safeText(d.nama_department)}</option>`).join('')
+  return `<option value="">-- Pilih Department --</option>${options}`
 }
 
 function renderUserList(list) {
@@ -1232,7 +1264,7 @@ function renderUserList(list) {
           <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;">
             <span><i class="fa fa-briefcase"></i> ${safeText(u.jabatan)}</span>
             <span>· <i class="fa fa-building-user"></i> ${safeText(getDepartmentLabel(u))}</span>
-            <span>· <i class="fa fa-building"></i> ${safeText(getOfficeLabel(u))}</span>
+            <span>· <i class="fa fa-building"></i> ${safeText(getOfficeFullLabel(u))}</span>
           </div>
           <div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;">
             <span>Role: <strong>${safeText(normalizeRole(u.role || 'staff'))}</strong></span>
@@ -1260,8 +1292,10 @@ function renderUserList(list) {
 
 /* ================= POPUP MODAL: DETAIL KARYAWAN ================= */
 window.openDetailKaryawan = function(id) {
-  const target = window._allUsers.find(u => u.id === id)
+  const target = (window._allUsers || []).find(u => u.id === id)
   if (!target) return
+  const avatarLetter = safeText((target.nama_lengkap || '?')[0] || '?')
+  const roleLabel = safeText(normalizeRole(target.role || 'staff').toUpperCase())
 
   window.showUserModal(`
     <div class="modal-header">
@@ -1270,27 +1304,31 @@ window.openDetailKaryawan = function(id) {
     </div>
     <div style="padding: 10px 0; text-align:center; border-bottom: 1px solid var(--border); margin-bottom: 14px;">
        ${target.foto_url
-         ? `<img src="${target.foto_url}" style="width:70px; height:70px; border-radius:50%; object-fit:cover;" onclick="window.previewImageFullScreen('${target.foto_url}')">`
-         : `<div class="profile-avatar" style="margin:0 auto 10px;">${target.nama_lengkap[0].toUpperCase()}</div>`
+         ? `<img src="${safeText(target.foto_url)}" style="width:70px; height:70px; border-radius:50%; object-fit:cover;" onclick="window.previewImageFullScreen('${safeText(target.foto_url)}')">`
+         : `<div class="profile-avatar" style="margin:0 auto 10px;">${avatarLetter.toUpperCase()}</div>`
        }
-       <h4 style="margin:6px 0 2px; font-size:1.1rem;">${target.nama_lengkap}</h4>
-       <span class="badge badge-gray">${target.role.toUpperCase()}</span>
+       <h4 style="margin:6px 0 2px; font-size:1.1rem;">${safeText(target.nama_lengkap)}</h4>
+       <span class="badge badge-gray">${roleLabel}</span>
     </div>
     <div style="display: flex; flex-direction: column; gap: 10px; font-size: .85rem;">
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Email login:</span><strong>${target.email || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Jabatan:</span><strong>${target.jabatan || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Departemen:</span><strong>${target.departemen || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">No. HP:</span><strong>${target.no_hp || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Bergabung:</span><strong>${target.tanggal_bergabung || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Masa Kerja:</span><strong>${formatMasaKerja(hitungMasaKerja(target.tanggal_bergabung))}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${target.tanggal_lahir || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Plot Titik Absen:</span><strong style="color:var(--primary);">📍 ${target.titik_radius || 'Bebas Radius'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${target.status_akun || 'Aktif'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Jenis Kontrak:</span><strong>${target.jenis_kontrak || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Periode Kontrak:</span><strong>${target.kontrak_mulai || '-'} s/d ${target.kontrak_berakhir || '-'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Masa / Status Kontrak:</span><strong>${target.masa_kontrak || '-'} · ${target.status_kontrak || getStatusKontrak(target.kontrak_berakhir)}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Status Cuti Tahunan:</span><strong>${window._cutiTahunanMap?.[target.id]?.status || 'BELUM_ELIGIBLE'}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Sisa Cuti Tahunan:</span><strong>🌴 ${window._cutiTahunanMap?.[target.id]?.sisa_cuti || target.sisa_cuti || 0} Hari</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Username:</span><strong>${safeText(target.username)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Email Internal:</span><strong>${safeText(target.email_internal)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Office:</span><strong>${safeText(getOfficeLabel(target))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Domain Office:</span><strong>${safeText(getOfficeDomainLabel(target))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Department:</span><strong>${safeText(getDepartmentLabel(target))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Email Kontak:</span><strong>${safeText(target.email)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Jabatan:</span><strong>${safeText(target.jabatan)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">No. HP:</span><strong>${safeText(target.no_hp)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Tanggal Bergabung:</span><strong>${safeText(target.tanggal_bergabung)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Masa Kerja:</span><strong>${safeText(formatMasaKerja(hitungMasaKerja(target.tanggal_bergabung)))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Tanggal Lahir:</span><strong>${safeText(target.tanggal_lahir)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Plot Titik Absen:</span><strong style="color:var(--primary);">📍 ${safeText(target.titik_radius || 'Bebas Radius')}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Status Akun:</span><strong>${safeText(target.status_akun || 'Aktif')}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Jenis Kontrak:</span><strong>${safeText(target.jenis_kontrak)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Periode Kontrak:</span><strong>${safeText(target.kontrak_mulai)} s/d ${safeText(target.kontrak_berakhir)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Masa / Status Kontrak:</span><strong>${safeText(target.masa_kontrak)} · ${safeText(target.status_kontrak || getStatusKontrak(target.kontrak_berakhir))}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Status Cuti Tahunan:</span><strong>${safeText(window._cutiTahunanMap?.[target.id]?.status || 'BELUM_ELIGIBLE')}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Sisa Cuti Tahunan:</span><strong>🌴 ${safeText(window._cutiTahunanMap?.[target.id]?.sisa_cuti || target.sisa_cuti || 0)} Hari</strong></div>
     </div>
     <div class="modal-actions" style="margin-top:20px;">
       <button class="btn-secondary" style="width:100%;" onclick="window.closeUserModal()">Tutup Detail</button>
@@ -1306,37 +1344,62 @@ window.openEditKaryawan = async function(id) {
   const me = window.currentUser
   try { assertSameDepartment(me, target) } catch (err) { showToast(err.message, 'error'); return }
   const isMe = me.id === target.id
-  const canEditAllFields = (me.role === 'super_admin') || (['admin','admin_hr'].includes(normalizeRole(me.role)) && target.role === 'staff' && canManageUserByDepartment(me, target))
+  const viewerRole = normalizeRole(me.role)
+  const canEditAllFields = (viewerRole === 'super_admin') || (['admin_all','admin_hr','admin'].includes(viewerRole) && normalizeRole(target.role) === 'staff' && canManageUserByDepartment(me, target))
+  const officeEditable = canEditOffice(me) && canEditAllFields
+  const departmentEditable = canEditAllFields && canEditDepartmentForEmployee(me)
 
   let opsiLokasi = ''
+  let officeOptions = []
+  let departmentOptions = []
   try {
-    const { data: lokasiList, error: lokasiErr } = await supabase
-      .from('lokasi_absen')
-      .select('nama_titik')
-      .order('nama_titik')
+    const lokasiPromise = supabase.from('lokasi_absen').select('nama_titik').order('nama_titik')
+    const officePromise = officeEditable
+      ? supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').eq('status', 'active').order('nama_client')
+      : Promise.resolve({ data: [], error: null })
+    const departmentOfficeId = officeEditable ? target.client_id : me.client_id
+    const departmentPromise = departmentEditable
+      ? fetchDepartmentOptionsForOffice(departmentOfficeId)
+        .then(data => ({ data, error: null }))
+        .catch(error => ({ data: [], error }))
+      : Promise.resolve({ data: [], error: null })
 
-    if (lokasiErr) throw lokasiErr
+    const [lokasiResult, officeResult, departmentResult] = await Promise.all([lokasiPromise, officePromise, departmentPromise])
+    if (lokasiResult.error) throw lokasiResult.error
+    if (officeResult.error) throw officeResult.error
+    if (departmentResult.error) throw departmentResult.error
 
-    opsiLokasi = (lokasiList || []).map(l => {
+    officeOptions = officeResult.data || []
+    departmentOptions = departmentResult.data || []
+    opsiLokasi = (lokasiResult.data || []).map(l => {
       const namaTitik  = (l.nama_titik || '').trim()
       const isSelected = namaTitik.toLowerCase() === (target.titik_radius || '').trim().toLowerCase() ? 'selected' : ''
-      return `<option value="${namaTitik}" ${isSelected}>${namaTitik}</option>`
+      return `<option value="${safeText(namaTitik)}" ${isSelected}>${safeText(namaTitik)}</option>`
     }).join('')
   } catch (e) {
-    console.error('Gagal memuat list lokasi untuk form edit:', e)
+    console.error('Gagal memuat opsi form edit karyawan:', e)
+    showToast('Sebagian opsi edit karyawan gagal dimuat.', 'warning')
   }
+
+  window._editEmployeeOfficeOptions = officeOptions
+  const officeField = officeEditable
+    ? `<select id="editOffice" onchange="window.reloadEditEmployeeDepartments(this.value)">${officeOptions.map(c => `<option value="${safeText(c.id)}" ${String(c.id) === String(target.client_id) ? 'selected' : ''}>${safeText(c.nama_client)} (${safeText(c.domain_login || c.kode_client)})</option>`).join('')}</select>`
+    : `<input id="editOfficeReadonly" value="${safeText(getOfficeFullLabel(target))}" disabled>`
+  const departmentField = departmentEditable
+    ? `<select id="editDepartment">${renderDepartmentOptionsForEdit(departmentOptions, target.department_id)}</select>`
+    : `<input id="editDepartmentReadonly" value="${safeText(getDepartmentLabel(target))}" disabled>`
 
   window.showUserModal(`
     <div class="modal-header">
-      <h3><i class="fa fa-user-pen" style="color:var(--warning);"></i> Edit Data: ${target.nama_lengkap}</h3>
+      <h3><i class="fa fa-user-pen" style="color:var(--warning);"></i> Edit Data: ${safeText(target.nama_lengkap)}</h3>
       <button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button>
     </div>
 
     <div style="text-align:center;padding:14px 0 10px;border-bottom:1px solid var(--border);margin-bottom:14px;">
       <div style="position:relative;display:inline-block;">
         ${target.foto_url
-          ? `<img src="${target.foto_url}" id="editAvatarPreview" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);" onclick="window.previewImageFullScreen('${target.foto_url}')">`
-          : `<div class="profile-avatar" id="editAvatarPreview" style="width:64px;height:64px;font-size:1.4rem;display:flex;align-items:center;justify-content:center;">${target.nama_lengkap[0].toUpperCase()}</div>`
+          ? `<img src="${safeText(target.foto_url)}" id="editAvatarPreview" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);" onclick="window.previewImageFullScreen('${safeText(target.foto_url)}')">`
+          : `<div class="profile-avatar" id="editAvatarPreview" style="width:64px;height:64px;font-size:1.4rem;display:flex;align-items:center;justify-content:center;">${safeText((target.nama_lengkap || '?')[0] || '?').toUpperCase()}</div>`
         }
         ${isMe || canEditAllFields ? `
           <label for="editFotoInput" title="Ganti foto" style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.6rem;box-shadow:0 2px 6px rgba(0,0,0,.25);border:2px solid #fff;">
@@ -1351,31 +1414,48 @@ window.openEditKaryawan = async function(id) {
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; padding-top:4px;">
       <div class="field full" style="grid-column:1/-1;">
         <label>Nama Lengkap</label>
-        <input id="editNama" value="${target.nama_lengkap}" ${canEditAllFields ? '' : 'disabled'}>
+        <input id="editNama" value="${safeText(target.nama_lengkap)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
-        <label>Email Login</label>
-        <input type="email" id="editEmail" value="${target.email || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <label>Username</label>
+        <input id="editUsername" value="${safeText(target.username)}" disabled>
+        <small style="font-size:.65rem;color:var(--text-muted);">Username login hanya dapat diubah oleh Super Admin melalui reset akun.</small>
+      </div>
+      <div class="field">
+        <label>Email Internal</label>
+        <input id="editEmailInternal" value="${safeText(target.email_internal)}" disabled>
+      </div>
+      <div class="field">
+        <label>Office</label>
+        ${officeField}
+      </div>
+      <div class="field">
+        <label>Domain Office</label>
+        <input id="editOfficeDomain" value="${safeText(getOfficeDomainLabel(target))}" disabled>
+      </div>
+      <div class="field">
+        <label>Department</label>
+        ${departmentField}
+      </div>
+      <div class="field">
+        <label>Email Kontak</label>
+        <input type="email" id="editEmail" value="${safeText(target.email)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>Jabatan</label>
-        <input id="editJabatan" value="${target.jabatan || ''}" ${canEditAllFields ? '' : 'disabled'}>
-      </div>
-      <div class="field">
-        <label>Departemen</label>
-        <input id="editDept" value="${target.departemen || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input id="editJabatan" value="${safeText(target.jabatan)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>No. HP</label>
-        <input id="editHp" value="${target.no_hp || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input id="editHp" value="${safeText(target.no_hp)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>Tanggal Lahir</label>
-        <input type="date" id="editLahir" value="${target.tanggal_lahir || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input type="date" id="editLahir" value="${safeText(target.tanggal_lahir, '')}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>Tanggal Bergabung</label>
-        <input type="date" id="editTgl" value="${target.tanggal_bergabung || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input type="date" id="editTgl" value="${safeText(target.tanggal_bergabung, '')}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
       <div class="field">
         <label>Status Akun</label>
@@ -1390,7 +1470,7 @@ window.openEditKaryawan = async function(id) {
       </div>
       <div class="field full" style="grid-column:1/-1;">
         <label>URL Foto</label>
-        <input id="editFotoUrl" value="${target.foto_url || ''}" ${canEditAllFields ? '' : 'disabled'}>
+        <input id="editFotoUrl" value="${safeText(target.foto_url)}" ${canEditAllFields ? '' : 'disabled'}>
       </div>
 
       <div class="field">
@@ -1420,6 +1500,24 @@ window.openEditKaryawan = async function(id) {
   `)
 }
 
+window.reloadEditEmployeeDepartments = async function(clientId) {
+  const departmentSelect = document.getElementById('editDepartment')
+  const domainInput = document.getElementById('editOfficeDomain')
+  const office = (window._editEmployeeOfficeOptions || []).find(c => String(c.id) === String(clientId))
+  if (domainInput) domainInput.value = office?.domain_login || office?.kode_client || '-'
+  if (!departmentSelect) return
+  departmentSelect.innerHTML = '<option value="">Memuat Department...</option>'
+  try {
+    const departments = await fetchDepartmentOptionsForOffice(clientId)
+    departmentSelect.innerHTML = renderDepartmentOptionsForEdit(departments, '')
+    if (!departments.length) showToast('Belum ada Department aktif untuk Office ini.', 'warning')
+  } catch (err) {
+    console.error('Gagal reload Department edit karyawan:', err)
+    departmentSelect.innerHTML = '<option value="">Gagal memuat Department</option>'
+    showToast('Gagal memuat Department untuk Office terpilih.', 'error')
+  }
+}
+
 /* ================= SIMPAN HASIL MODAL EDIT KARYAWAN ================= */
 window.saveEditKaryawan = async function(id, canEditAll, isMe) {
   const newPassword = document.getElementById('editPassword')?.value.trim() || ''
@@ -1432,11 +1530,13 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
     if (canEditAll) {
       const kontrakPayload = readKontrakForm('edit')
       if (!validateKontrakPayload(kontrakPayload)) return
+      const role = normalizeRole(window.currentUser?.role)
+      const selectedOfficeId = role === 'super_admin' ? document.getElementById('editOffice')?.value || null : targetProfile?.client_id || null
+      const selectedDepartmentId = canEditDepartmentForEmployee(window.currentUser) ? document.getElementById('editDepartment')?.value || null : targetProfile?.department_id || null
       const updatePayload = {
         nama_lengkap:  document.getElementById('editNama')?.value.trim()    || '',
         email:         document.getElementById('editEmail')?.value.trim()   || null,
         jabatan:       document.getElementById('editJabatan')?.value.trim() || '',
-        departemen:    document.getElementById('editDept')?.value.trim()    || '',
         no_hp:         document.getElementById('editHp')?.value.trim()      || '',
         tanggal_lahir: document.getElementById('editLahir')?.value          || null,
         tanggal_bergabung: document.getElementById('editTgl')?.value       || null,
@@ -1445,6 +1545,32 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         foto_url:      document.getElementById('editFotoUrl')?.value.trim() || '',
         titik_radius:  titikRadiusBaru,
         ...kontrakPayload
+      }
+
+      if (role === 'super_admin') {
+        if (!selectedOfficeId) { showToast('Office wajib dipilih.', 'warning'); return }
+        const { data: office, error: officeErr } = await supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').eq('id', selectedOfficeId).eq('status', 'active').maybeSingle()
+        if (officeErr) throw officeErr
+        if (!office) { showToast('Office tidak valid atau nonaktif.', 'warning'); return }
+        updatePayload.client_id = office.id
+      }
+
+      if (canEditDepartmentForEmployee(window.currentUser)) {
+        if (!selectedDepartmentId) { showToast('Department wajib dipilih.', 'warning'); return }
+        const departmentOfficeId = role === 'super_admin' ? selectedOfficeId : window.currentUser?.client_id
+        const { data: selectedDepartment, error: deptErr } = await supabase
+          .from('departments')
+          .select('id,nama_department,client_id,status')
+          .eq('id', selectedDepartmentId)
+          .eq('client_id', departmentOfficeId)
+          .eq('status', 'active')
+          .maybeSingle()
+        if (deptErr) throw deptErr
+        if (!selectedDepartment) { showToast('Department tidak valid untuk Office yang dipilih.', 'warning'); return }
+        updatePayload.department_id = selectedDepartment.id
+        updatePayload.departemen = selectedDepartment.nama_department
+      } else {
+        updatePayload.departemen = targetProfile?.departemen || getDepartmentLabel(targetProfile)
       }
 
       const beforeProfile = (window._allUsers || []).find(u => u.id === id) || null
@@ -1478,7 +1604,6 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
     if (userIndex !== -1 && canEditAll) {
       window._allUsers[userIndex].nama_lengkap  = document.getElementById('editNama')?.value.trim()    || ''
       window._allUsers[userIndex].jabatan       = document.getElementById('editJabatan')?.value.trim() || ''
-      window._allUsers[userIndex].departemen    = document.getElementById('editDept')?.value.trim()    || ''
       window._allUsers[userIndex].no_hp         = document.getElementById('editHp')?.value.trim()      || ''
       window._allUsers[userIndex].tanggal_lahir = document.getElementById('editLahir')?.value          || null
       window._allUsers[userIndex].tanggal_bergabung = document.getElementById('editTgl')?.value       || null
@@ -1490,7 +1615,6 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       if (canEditAll) {
         window.currentUser.nama_lengkap  = document.getElementById('editNama')?.value.trim()    || ''
         window.currentUser.jabatan       = document.getElementById('editJabatan')?.value.trim() || ''
-        window.currentUser.departemen    = document.getElementById('editDept')?.value.trim()    || ''
         window.currentUser.no_hp         = document.getElementById('editHp')?.value.trim()      || ''
         window.currentUser.tanggal_lahir = document.getElementById('editLahir')?.value          || null
         window.currentUser.tanggal_bergabung = document.getElementById('editTgl')?.value       || null
