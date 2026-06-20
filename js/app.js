@@ -10,7 +10,7 @@
 
 import { supabase } from './supabase.js'
 import { getProfile } from './users.js'
-import { login as doLogin, logout, updateUserPassword, createEmployeeAccount } from './auth.js'
+import { login as doLogin, logout, updateUserPassword, createEmployeeAccount, lookupOfficeForUsername } from './auth.js'
 import { renderDashboard } from './dashboard.js'
 import { renderAbsensi } from './ui.js'
 import { renderShiftManagement } from './shift.js'
@@ -182,6 +182,48 @@ function updateTopbarAvatar(profile) {
     el.textContent = (profile?.nama_lengkap || '?')[0].toUpperCase()
   }
 }
+
+
+async function autoFillOfficeFromUsername() {
+  const usernameEl = document.getElementById('username')
+  const clientEl = document.getElementById('clientCode')
+  const hintEl = document.getElementById('officeLookupHint')
+  const username = usernameEl?.value?.trim() || ''
+  if (!username || !clientEl || clientEl.dataset.userEdited === 'true') return
+  try {
+    const result = await lookupOfficeForUsername(username)
+    if (result.status === 'single') {
+      clientEl.value = result.code || ''
+      if (hintEl) { hintEl.textContent = `Office terdeteksi: ${result.client?.nama_client || result.code}`; hintEl.style.color = 'var(--success)' }
+    } else if (result.status === 'multiple') {
+      if (hintEl) { hintEl.textContent = 'Username ditemukan di beberapa Office, isi kode Office.'; hintEl.style.color = 'var(--warning)' }
+    } else if (result.status === 'super_admin') {
+      if (hintEl) { hintEl.textContent = 'Super admin dapat login tanpa Office.'; hintEl.style.color = 'var(--text-muted)' }
+    } else if (hintEl) {
+      hintEl.textContent = 'Isi kode Office jika akun bukan super admin.'; hintEl.style.color = 'var(--text-muted)'
+    }
+  } catch (err) {
+    console.warn('Lookup Office login gagal:', err)
+    if (hintEl) { hintEl.textContent = 'Isi kode Office jika akun bukan super admin.'; hintEl.style.color = 'var(--text-muted)' }
+  }
+}
+
+function bindLoginOfficeLookup() {
+  const usernameEl = document.getElementById('username')
+  const clientEl = document.getElementById('clientCode')
+  if (!usernameEl || usernameEl.dataset.officeLookupBound === 'true') return
+  usernameEl.dataset.officeLookupBound = 'true'
+  let timer = null
+  usernameEl.addEventListener('input', () => {
+    if (clientEl) { clientEl.dataset.userEdited = 'false'; clientEl.value = '' }
+    clearTimeout(timer)
+    timer = setTimeout(autoFillOfficeFromUsername, 450)
+  })
+  usernameEl.addEventListener('blur', autoFillOfficeFromUsername)
+  clientEl?.addEventListener('input', () => { clientEl.dataset.userEdited = 'true' })
+}
+
+bindLoginOfficeLookup()
 
 /* ================= AUTHENTICATION ACTIONS ================= */
 window.login = async function () {

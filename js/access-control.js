@@ -29,6 +29,7 @@ export async function getCurrentUserProfile() {
 }
 
 export function getCurrentClientId(user = window.currentUser) { return user?.client_id || null }
+export function getCurrentOfficeId(user = window.currentUser) { return user?.client_id || null }
 export function getCurrentDepartmentId(user = window.currentUser) { return user?.department_id || null }
 export function isSuperAdmin(user = window.currentUser) { return normalizeRole(user?.role) === 'super_admin' }
 export function isAdminAll(user = window.currentUser) { return normalizeRole(user?.role) === 'admin_all' }
@@ -89,7 +90,23 @@ export function requireRole(allowedRoles, user = window.currentUser) {
 
 export function canAccessAllDepartments(user) { return isSuperAdmin(user) || isAdminAll(user) || isAdminHR(user) }
 export function getUserDepartment(user) { return String(user?.departemen || user?.department || user?.departments?.nama_department || '').trim() }
+export function isOfficeScopedRole(user) { return isAdminAll(user) || isAdminHR(user) || isAdmin(user) }
 export function isDepartmentScopedRole(user) { return isAdmin(user) }
+
+export function canSeeEmployee(currentUser, targetUser) { return canManageUserByDepartment(currentUser, targetUser) }
+
+export function canSeeAttendance(currentUser, row) {
+  if (!currentUser || !row) return false
+  if (isSuperAdmin(currentUser)) return true
+  if (isStaff(currentUser)) return String(row.user_id || row.profile_id || '') === String(currentUser.id || '')
+  if (currentUser.client_id && row.client_id && String(row.client_id) !== String(currentUser.client_id)) return false
+  if (isAdmin(currentUser)) {
+    if (currentUser.department_id && row.department_id) return String(row.department_id) === String(currentUser.department_id)
+    const a = getUserDepartment(currentUser).toLowerCase(); const b = String(row.departemen || row.department || '').trim().toLowerCase()
+    return Boolean(a && b && a === b)
+  }
+  return Boolean(currentUser.client_id && (!row.client_id || String(row.client_id) === String(currentUser.client_id)))
+}
 
 export function canManageUserByDepartment(currentUser, targetUser) {
   if (!currentUser || !targetUser) return false

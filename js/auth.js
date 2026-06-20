@@ -51,6 +51,27 @@ async function findSuperAdminProfileByUsername(username) {
   return data || null
 }
 
+
+export async function lookupOfficeForUsername(username) {
+  const cleanUsername = String(username || '').trim().toLowerCase()
+  if (!cleanUsername) return { status: 'empty' }
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,username,role,client_id,clients:client_id(id,nama_client,kode_client,domain_login,status)')
+    .eq('username', cleanUsername)
+    .limit(5)
+  if (error) throw error
+  const officeProfiles = (data || []).filter(profile => normalizeRole(profile.role) !== 'super_admin' && profile.client_id)
+  const uniqueClients = Array.from(new Map(officeProfiles.map(profile => [String(profile.client_id), profile.clients])).values()).filter(Boolean)
+  if (uniqueClients.length === 1) {
+    const client = uniqueClients[0]
+    return { status: 'single', code: client.domain_login || client.kode_client || '', client }
+  }
+  if (uniqueClients.length > 1) return { status: 'multiple' }
+  const superAdmin = (data || []).some(profile => normalizeRole(profile.role) === 'super_admin')
+  return { status: superAdmin ? 'super_admin' : 'none' }
+}
+
 export async function login(username, password, clientCode = '') {
   const btn = document.getElementById('btnLogin')
   setButtonLoading(btn, true, '<i class="fa fa-spinner fa-spin"></i> Memproses...')
