@@ -23,8 +23,11 @@ declare
   only_client uuid;
   client_count int;
 begin
-  select count(*), min(id) into client_count, only_client from public.clients where status = 'active';
+  select count(*) into client_count from public.clients where status = 'active';
   if client_count = 1 then
+    select id into only_client from public.clients where status = 'active' limit 1;
     update public.shift set client_id = only_client where client_id is null;
   end if;
+  -- If more than one active Office exists, legacy shift.client_id null rows are left as-is.
+  -- Treat shift_missing_client_id > 0 as a data-warning, not a migration failure.
 end $$;

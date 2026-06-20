@@ -32,6 +32,10 @@ function fromRow(row, fallbackCode = null) {
   const code = String(row.id ?? row.shift_code ?? row.kode_shift ?? fallbackCode ?? '')
   return {
     code,
+    id: row.id,
+    client_id: row.client_id || null,
+    clients: row.clients || null,
+    is_legacy_without_office: !row.client_id,
     nama_shift: row.nama_shift || row.nama || 'Shift',
     jam_masuk: row.jam_masuk || '-',
     jam_pulang: row.jam_pulang || '-',
@@ -70,18 +74,20 @@ export async function getShiftDetailByCode(code, user = window.currentUser) {
 
   const legacy = LEGACY_SHIFT_FALLBACKS[codeStr]
   if (!legacy) return null
+  if (user?.role !== 'super_admin') return null
 
   const byName = rows.find(r => normalizeName(r.nama_shift || r.nama) === normalizeName(legacy.nama_shift))
   if (byName) return fromRow(byName, codeStr)
 
-  return { ...legacy }
+  return { ...legacy, client_id: null, is_legacy_without_office: true }
 }
 
 export async function getAllShiftOptions(user = window.currentUser) {
   const rows = await loadShiftMaster(user)
   if (rows.length) return rows.map(row => fromRow(row))
 
-  return Object.values(LEGACY_SHIFT_FALLBACKS).map(shift => ({ ...shift }))
+  if (user?.role !== 'super_admin') return []
+  return Object.values(LEGACY_SHIFT_FALLBACKS).map(shift => ({ ...shift, client_id: null, is_legacy_without_office: true }))
 }
 
 export async function getShiftDetailByJamMasuk(jamMasuk) {

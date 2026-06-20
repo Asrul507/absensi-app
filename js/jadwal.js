@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js'
 import { showToast } from './feedback.js'
 import { getAllShiftOptions } from './shift-resolver.js'
-import { applyTenantFilter, assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, isDepartmentScopedRole, isStaff } from './access-control.js'
+import { applyTenantFilter, assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, isDepartmentScopedRole, isStaff, isSuperAdmin } from './access-control.js'
 
 const SHIFT_COLORS = [
   { bg: '#e0f2fe', color: '#0369a1', badge: '#0ea5e9' },
@@ -54,12 +54,25 @@ function buildShiftInfoMap(options) {
     acc[code] = {
       ...style,
       code,
+      client_id: shift.client_id || null,
+      is_legacy_without_office: Boolean(shift.is_legacy_without_office),
       label: makeShortLabel(shift.nama_shift, code),
       nama_shift: shift.nama_shift,
       jam: formatShiftTime(shift),
     }
     return acc
   }, {})
+}
+
+async function countLegacyShiftsWithoutOffice() {
+  try {
+    const { count, error } = await supabase.from('shift').select('id', { count: 'exact', head: true }).is('client_id', null)
+    if (error) throw error
+    return count || 0
+  } catch (err) {
+    console.warn('Tidak dapat menghitung shift legacy tanpa Office:', err)
+    return 0
+  }
 }
 
 export async function renderJadwalManagement(user) {
@@ -85,6 +98,9 @@ export async function renderJadwalManagement(user) {
 
   const shiftOptions = await getAllShiftOptions(currentUserObj)
   SHIFT_INFO = buildShiftInfoMap(shiftOptions)
+  const legacyShiftCount = isSuperAdmin(currentUserObj)
+    ? shiftOptions.filter(s => s.is_legacy_without_office || !s.client_id).length
+    : await countLegacyShiftsWithoutOffice()
 
   content.innerHTML = `
     <style>
@@ -199,12 +215,22 @@ export async function renderJadwalManagement(user) {
             <div>
               <div style="font-weight:700;font-size:.82rem;color:${s.color};">${s.label}</div>
               <div style="font-size:.7rem;color:var(--text-muted);">${s.jam}</div>
+              ${s.is_legacy_without_office ? `<div class="badge badge-yellow" style="margin-top:4px;">Belum ada Office</div>` : ''}
             </div>
           </div>`).join('')}
       </div>
     </div>
 
     ${isAdmin ? `<div class="card fade-up" style="padding:12px 14px;margin-bottom:12px;color:var(--text-muted);font-size:.82rem;font-weight:700;"><i class="fa fa-building"></i> ${buildDepartmentScopeInfo(currentUserObj)}</div>` : ''}
+
+    ${legacyShiftCount ? `
+      <div class="alert warning" style="margin-bottom:12px;">
+        <i class="fa fa-triangle-exclamation"></i>
+        ${isSuperAdmin(currentUserObj)
+          ? `<span><strong>${legacyShiftCount}</strong> shift legacy belum memiliki Office. Shift ini ditampilkan untuk Super Admin dengan badge <strong>Belum ada Office</strong>; role Office tidak melihat shift legacy tersebut.</span>`
+          : `<span>Ada shift legacy tanpa Office pada data lama. Shift tersebut disembunyikan dari role Office dan perlu di-assign oleh Super Admin.</span>`}
+      </div>
+    ` : ''}
 
     <!-- Toggle Mode Input -->
     ${isAdmin ? `
