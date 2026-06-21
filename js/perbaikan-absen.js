@@ -24,6 +24,7 @@ import { showToast } from './feedback.js'
 import { logAuditEvent, fetchAuditTimeline } from './audit-trail.js'
 import { getShiftDetailByCode, getAllShiftOptions } from './shift-resolver.js'
 import { buildAttendanceDateTime, recalculateAttendanceStatus, STATUS_ABSENSI, STATUS_KEHADIRAN } from './attendance-approval.js'
+import { ensureSuperAdminOfficeContext } from './office-context.js'
 import { applyTenantFilter, assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, getProfileForAccessByName, isAdmin, isAdminAll, isAdminHR, isSuperAdmin } from './access-control.js'
 
 function validateTanggalPerbaikan(tanggal) {
@@ -94,6 +95,7 @@ async function findAbsensiByUserOrNama(req, select = 'id') {
 }
 
 export async function renderPerbaikanAbsen(user) {
+  if (!(await ensureSuperAdminOfficeContext('perbaikan-absen', 'Pilih Office untuk Perbaikan Absen'))) return
   const content = document.getElementById('content')
   if (!content) return
   const isAdmin = canApprovePerbaikan(user)

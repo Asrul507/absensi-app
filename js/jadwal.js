@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js'
 import { showToast } from './feedback.js'
 import { getAllShiftOptions } from './shift-resolver.js'
+import { ensureSuperAdminOfficeContext } from './office-context.js'
 import { applyTenantFilter, assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, isDepartmentScopedRole, isStaff, isSuperAdmin } from './access-control.js'
 
 const SHIFT_COLORS = [
@@ -76,6 +77,7 @@ async function countLegacyShiftsWithoutOffice() {
 }
 
 export async function renderJadwalManagement(user) {
+  if (!(await ensureSuperAdminOfficeContext('jadwal', 'Pilih Office untuk Pengaturan Jadwal'))) return
   const content = document.getElementById('content')
   const currentUserObj = user || window.currentUser
   

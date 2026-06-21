@@ -97,12 +97,6 @@ export async function renderDashboard() {
 
   if (profile?.foto_url && profile.foto_url !== window.currentUser.foto_url) {
     window.currentUser.foto_url = profile.foto_url
-    const el = document.getElementById('topbarAvatar')
-    if (el) {
-      el.style.backgroundImage = `url(${profile.foto_url})`
-      el.style.backgroundSize  = 'cover'
-      el.textContent = ''
-    }
   }
 
   // Date range (current month)
@@ -533,7 +527,7 @@ async function renderSuperAdminDashboard(content) {
       </tr>`).join('')
 
     content.innerHTML = `
-      <div class="page-header" style="margin-bottom:20px;"><h2 style="margin:0;"><i class="fa fa-building"></i> Dashboard Super Admin</h2><p style="margin:6px 0 0;color:var(--text-muted);">Ringkasan Office/client untuk owner/developer.</p></div>
+      <div class="page-header" style="margin-bottom:20px;"><h2 style="margin:0;"><i class="fa fa-building"></i> Dashboard Super Admin</h2><p style="margin:6px 0 0;color:var(--text-muted);">Ringkasan Office untuk owner/developer.</p></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
         <div class="card" style="padding:16px;"><div style="font-size:.72rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Total Office</div><div style="font-size:1.8rem;font-weight:900;">${rows.length}</div></div>
         <div class="card" style="padding:16px;"><div style="font-size:.72rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Karyawan Aktif</div><div style="font-size:1.8rem;font-weight:900;">${totalActive}</div></div>
@@ -541,7 +535,7 @@ async function renderSuperAdminDashboard(content) {
       </div>
       <div class="card" style="padding:16px;overflow:auto;">
         <div style="font-size:.75rem;font-weight:900;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;">List Office</div>
-        ${rows.length ? `<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr style="text-align:left;color:var(--text-muted);"><th style="padding:10px;">Office</th><th style="padding:10px;">Kode Domain</th><th style="padding:10px;text-align:right;">Aktif</th><th style="padding:10px;text-align:right;">Nonaktif</th><th style="padding:10px;text-align:right;">Department</th><th style="padding:10px;">Status</th></tr></thead><tbody>${tableRows}</tbody></table>` : `<div style="padding:20px;text-align:center;color:var(--text-muted);">Belum ada Office/client.</div>`}
+        ${rows.length ? `<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr style="text-align:left;color:var(--text-muted);"><th style="padding:10px;">Office</th><th style="padding:10px;">Kode Domain</th><th style="padding:10px;text-align:right;">Aktif</th><th style="padding:10px;text-align:right;">Nonaktif</th><th style="padding:10px;text-align:right;">Department</th><th style="padding:10px;">Status</th></tr></thead><tbody>${tableRows}</tbody></table>` : `<div style="padding:20px;text-align:center;color:var(--text-muted);">Belum ada Office.</div>`}
       </div>`
   } catch (err) {
     console.error('Gagal render dashboard super_admin:', err)

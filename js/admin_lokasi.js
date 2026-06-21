@@ -1,8 +1,11 @@
 import { supabase } from './supabase.js'
 import { showToast, confirmAction } from './feedback.js'
 import { resetTimezoneCache } from './timezone.js'
+import { applyTenantFilter, isSuperAdmin } from './access-control.js'
+import { ensureSuperAdminOfficeContext, readTenantContext } from './office-context.js'
 
 export async function renderPengaturanLokasi() {
+  if (!(await ensureSuperAdminOfficeContext('admin-lokasi', 'Pilih Office untuk Setting Radius'))) return
   const content = document.getElementById('content')
   
   content.innerHTML = `
@@ -30,17 +33,46 @@ export async function renderPengaturanLokasi() {
 
     <div class="card fade-up-1" style="padding: 16px; overflow-x: auto;">
       <h3 style="font-size: .95rem; margin-bottom: 12px; font-weight:800;"><i class="fa fa-list"></i> Daftar Titik Aktif</h3>
+      <div id="lokasiBulkToolbar"></div>
       <div id="tabelLokasiContainer"></div>
     </div>
   `
   await muatDaftarLokasiAdmin()
 }
 
+
+function renderLokasiSuperAdminToolbar(rows = []) {
+  if (!isSuperAdmin(window.currentUser)) return ''
+  return `<div class="card" style="padding:12px 14px;margin-bottom:12px;border:1px solid #fecaca;background:#fff7f7;">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
+      <div><strong style="color:#991b1b;"><i class="fa fa-shield-halved"></i> Super Admin Bulk Action</strong><div style="font-size:.75rem;color:var(--text-muted);">Titik sesuai tampilan/filter: ${rows.length}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="btn-danger btn-sm" onclick="window.superAdminDeleteSelectedLocations()"><i class="fa fa-trash"></i> Hapus Item Terpilih</button><button type="button" class="btn-danger btn-sm" onclick="window.superAdminDeleteFilteredLocations()"><i class="fa fa-layer-group"></i> Hapus Semua Sesuai Filter</button><button type="button" class="btn-secondary btn-sm" disabled title="Reset menu ini belum tersedia."><i class="fa fa-rotate-left"></i> Reset Data Sesuai Filter</button></div>
+    </div>
+  </div>`
+}
+async function runSuperAdminLocationDelete(ids, label) {
+  if (!ids.length) { showToast('Pilih minimal 1 titik.', 'warning'); return }
+  if (!(await confirmAction(`${label}: ${ids.length} titik akan dihapus. Lanjutkan?`, 'Lanjutkan'))) return
+  const typed = window.prompt(`Ketik HAPUS untuk konfirmasi ${label}.`)
+  if (String(typed || '').trim().toUpperCase() !== 'HAPUS') { showToast('Konfirmasi dibatalkan.', 'warning'); return }
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sesi login tidak valid.')
+  const res = await fetch('/.netlify/functions/super-admin-data-action', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ action: 'delete_selected', menu_key: 'locations', ids, confirm_text: 'HAPUS' }) })
+  const result = await res.json().catch(() => ({}))
+  if (!res.ok || !result.success) throw new Error(result.error || 'Gagal menghapus titik.')
+  resetTimezoneCache(); showToast(`Titik terhapus: ${result.affected_count || 0}`, 'success'); await muatDaftarLokasiAdmin()
+}
+window.superAdminDeleteSelectedLocations = async function() { try { await runSuperAdminLocationDelete(Array.from(document.querySelectorAll('.lokasi-select-checkbox')).filter(el => el.checked).map(el => el.value), 'Hapus Item Terpilih') } catch (err) { console.error('superAdminDeleteSelectedLocations error:', err); showToast(err.message || 'Gagal hapus titik.', 'error') } }
+window.superAdminDeleteFilteredLocations = async function() { try { await runSuperAdminLocationDelete((window._lokasiRows || []).map(r => String(r.id)), 'Hapus Semua Sesuai Filter') } catch (err) { console.error('superAdminDeleteFilteredLocations error:', err); showToast(err.message || 'Gagal hapus titik.', 'error') } }
+
 async function muatDaftarLokasiAdmin() {
   const container = document.getElementById('tabelLokasiContainer')
   try {
-    const { data: list, error } = await supabase.from('lokasi_absen').select('*').order('created_at', { ascending: false })
+    const { data: list, error } = await applyTenantFilter(supabase.from('lokasi_absen').select('*').order('created_at', { ascending: false }), { user: window.currentUser, clientColumn: 'client_id', departmentColumn: null, userColumn: null, enforceSelf: false, enforceDepartment: false })
     if (error) throw error
+    window._lokasiRows = list || []
+    const toolbar = document.getElementById('lokasiBulkToolbar')
+    if (toolbar) toolbar.innerHTML = renderLokasiSuperAdminToolbar(window._lokasiRows)
 
     if (!list?.length) {
       container.innerHTML = `<p style="font-size:.85rem; color:var(--text-muted); text-align:center; padding:15px;">Belum ada titik absensi yang dikonfigurasi.</p>`
@@ -51,7 +83,7 @@ async function muatDaftarLokasiAdmin() {
       <table style="width:100%; border-collapse:collapse; font-size:.8rem; text-align:left;">
         <thead>
           <tr style="background:var(--gray-100); border-bottom:2px solid var(--border);">
-            <th style="padding:10px;">Nama Titik</th>
+            ${isSuperAdmin(window.currentUser) ? '<th style="padding:10px;">Pilih</th>' : ''}<th style="padding:10px;">Nama Titik</th>
             <th style="padding:10px;">Latitude</th>
             <th style="padding:10px;">Longitude</th>
             <th style="padding:10px; text-align:center;">Radius</th>
@@ -63,6 +95,7 @@ async function muatDaftarLokasiAdmin() {
     list.forEach(item => {
       html += `
         <tr style="border-bottom:1px solid var(--border);">
+          ${isSuperAdmin(window.currentUser) ? `<td style="padding:10px;"><input type="checkbox" class="lokasi-select-checkbox" value="${item.id}"></td>` : ''}
           <td style="padding:10px; font-weight:700;">${item.nama_titik}</td>
           <td style="padding:10px; color:var(--text-muted);">${Number(item.latitude).toFixed(5)}</td>
           <td style="padding:10px; color:var(--text-muted);">${Number(item.longitude).toFixed(5)}</td>
@@ -97,8 +130,10 @@ window.tangkapDanSimpanLokasi = function() {
 
   navigator.geolocation.getCurrentPosition(async (pos) => {
     try {
+      const activeClientId = isSuperAdmin(window.currentUser) ? readTenantContext().client_id : window.currentUser?.client_id
       const { error } = await supabase.from('lokasi_absen').insert([{
         nama_titik: nama,
+        client_id: activeClientId || null,
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
         radius_meter: parseInt(radius) || 50
@@ -126,7 +161,7 @@ window.tangkapDanSimpanLokasi = function() {
 window.hapusTitikLokasi = async function(id) {
   if (!(await confirmAction('Hapus titik lokasi patokan ini?', 'Ya, hapus'))) return
   try {
-    const { error } = await supabase.from('lokasi_absen').delete().eq('id', id)
+    const { error } = await applyTenantFilter(supabase.from('lokasi_absen').delete().eq('id', id), { user: window.currentUser, clientColumn: 'client_id', departmentColumn: null, userColumn: null, enforceSelf: false, enforceDepartment: false })
     if (error) throw error
     resetTimezoneCache()
     await muatDaftarLokasiAdmin()

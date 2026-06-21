@@ -35,7 +35,7 @@ function buildTenantContext(profile, selectedClient = null, globalMode = false) 
     role: normalizeRole(profile.role),
     client_id: globalMode ? null : (selectedClient?.id || profile.client_id || null),
     department_id: globalMode ? null : (profile.department_id || null),
-    nama_client: globalMode ? 'Global Admin / All Clients' : (selectedClient?.nama_client || 'Client'),
+    nama_client: globalMode ? 'Global Admin / All Offices' : (selectedClient?.nama_client || 'Office'),
     kode_client: globalMode ? null : (selectedClient?.kode_client || null)
   }
 }
@@ -90,8 +90,8 @@ export async function login(username, password, clientCode = '') {
     if (cleanClientCode) {
       selectedClient = await fetchClientByCode(cleanClientCode)
       if (!selectedClient) { showLoginError('Kode kantor tidak ditemukan. Periksa kembali kode/domain login kantor Anda.'); return false }
-      if (selectedClient.status !== 'active') { showLoginError('Kantor/client ini sedang nonaktif. Hubungi administrator.'); return false }
-      emailInternal = buildInternalEmail(cleanUsername, selectedClient.kode_client)
+      if (!['active','aktif'].includes(String(selectedClient.status || '').toLowerCase())) { showLoginError('Office ini sedang nonaktif. Hubungi administrator.'); return false }
+      emailInternal = buildInternalEmail(cleanUsername, selectedClient.kode_client || selectedClient.domain_login)
     } else {
       const superProfile = await findSuperAdminProfileByUsername(cleanUsername)
       if (!superProfile?.email_internal) { showLoginError('Kode kantor wajib diisi untuk akun kantor. Super admin dapat login tanpa kode kantor.'); return false }
@@ -121,7 +121,7 @@ export async function login(username, password, clientCode = '') {
       return true
     }
 
-    if (!isSuperAdmin && String(profile.client_id || '') !== String(selectedClient.id)) { await supabase.auth.signOut(); showLoginError('Akun ini tidak terdaftar pada kantor/client yang dipilih.'); return false }
+    if (!isSuperAdmin && String(profile.client_id || '') !== String(selectedClient.id)) { await supabase.auth.signOut(); showLoginError('Akun ini tidak terdaftar pada Office yang dipilih.'); return false }
     if (isSuperAdmin && !profile.client_id) profile.client_id = selectedClient.id
     sessionStorage.setItem('tenantContext', JSON.stringify(buildTenantContext({ ...profile, role }, selectedClient, false)))
     return true
@@ -149,6 +149,7 @@ export async function createEmployeeAccount(payload) {
 
 /* ================= LOGOUT ================= */
 export async function logout() {
+  sessionStorage.removeItem('tenantContext')
   await supabase.auth.signOut()
   location.reload()
 }
