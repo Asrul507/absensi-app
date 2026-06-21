@@ -17,7 +17,7 @@ import { supabase } from './supabase.js'
 export async function getProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select('*, clients:client_id(id,nama_client,kode_client,domain_login,status), departments:department_id(id,nama_department,status)')
     .eq('id', userId)
     .maybeSingle()
 
