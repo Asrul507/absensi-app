@@ -35,8 +35,11 @@ function canResetPassword(caller, target) {
   const targetRole = normalizeRole(target?.role)
   if (!caller?.id || !target?.id || caller.id === target.id) return false
   if (callerRole === 'super_admin') return targetRole !== 'super_admin'
-  if (callerRole === 'admin_hr') {
-    return Boolean(caller.client_id && target.client_id && String(caller.client_id) === String(target.client_id) && ['admin', 'staff'].includes(targetRole))
+  const sameOffice = Boolean(caller.client_id && target.client_id && String(caller.client_id) === String(target.client_id))
+  if (!sameOffice) return false
+  if (callerRole === 'admin_all' || callerRole === 'admin_hr') return ['admin', 'staff'].includes(targetRole)
+  if (callerRole === 'admin') {
+    return targetRole === 'staff' && caller.department_id && target.department_id && String(caller.department_id) === String(target.department_id)
   }
   return false
 }
