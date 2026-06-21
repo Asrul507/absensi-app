@@ -1,4 +1,4 @@
-# Genius HR / Absensi App
+# GenPro / Absensi App
 
 Aplikasi HR dan absensi berbasis static frontend, Supabase, dan siap deploy ke Netlify.
 

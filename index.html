@@ -3,30 +3,13 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-  <meta name="description" content="Genius HR - Aplikasi Manajemen Absensi"/>
-  <title>Genius HR App</title>
+  <meta name="description" content="GenPro - Aplikasi Manajemen Absensi"/>
+  <title>GenPro App</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="style.css"/>
   <style>
-    /* Avatar topbar style */
-    #topbarAvatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: rgba(255,255,255,.22);
-      border: 1.5px solid rgba(255,255,255,.35);
-      color: #fff;
-      font-size: .78rem;
-      font-weight: 900;
-      display: flex; align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      cursor: pointer;
-      overflow: hidden;
-    }
-    #topbarAvatar:hover { opacity: .85; }
-    
     /* Override onClick behavior untuk gambar preview */
     .clickable-preview {
       cursor: pointer;
@@ -44,7 +27,7 @@
 
     <div class="login-logo">
       <span class="login-icon">🏢</span>
-      <h1>GENIUS HR</h1>
+      <h1>GenPro</h1>
       <p>HR & Attendance Management System</p>
     </div>
 
@@ -85,22 +68,11 @@
       <button class="btn-menu" onclick="toggleSidebar()" aria-label="Menu">
         <i class="fa fa-bars"></i>
       </button>
-      <div class="topbar-title">GENIUS HR</div>
+      <div class="topbar-title">GenPro</div>
     </div>
     <div class="topbar-right">
-      <div id="topbarAvatar" onclick="if(window.currentUser?.foto_url) { window.previewImageFullScreen(window.currentUser.foto_url); } else { navigate('profile'); }" title="Klik untuk lihat foto / Masuk ke profil">?</div>
-      
-      <span id="activeClientName" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; font-size:.75rem;font-weight:800;color:rgba(255,255,255,.9);background:rgba(255,255,255,.14);padding:5px 8px;border-radius:999px;"></span>
-
-      <span id="userName" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; font-size:.82rem;font-weight:700;color:rgba(255,255,255,.95);" onclick="navigate('profile')" style="cursor:pointer;"></span>
-      
-      <button id="notifBtn" onclick="openNotificationCenter()" aria-label="Notifikasi"
-        style="position:relative;margin-top:0!important;min-height:unset!important;width:38px!important;height:38px!important;padding:0!important;border:none;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;">
-        <i class="fa fa-bell"></i>
-        <span id="notifBadge" style="display:none;position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#ef4444;color:#fff;font-size:.65rem;font-weight:800;line-height:18px;text-align:center;">0</span>
-      </button>
-      <button class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Ganti tema"
-        style="margin-top:0!important;min-height:unset!important;width:38px!important;padding:0!important;">
+      <button type="button" id="userName" class="topbar-user-name" onclick="window.navigate('profile')" title="Profil saya"></button>
+      <button class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Ganti tema">
         <i class="fa fa-moon" id="themeIcon"></i>
       </button>
       <button class="btn-logout-top" onclick="logout()" aria-label="Keluar">
@@ -108,14 +80,6 @@
       </button>
     </div>
   </div>
-
-      <div id="notifPanel" style="display:none;position:fixed;top:58px;right:12px;width:min(360px,92vw);max-height:70vh;overflow:auto;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 34px rgba(0,0,0,.2);z-index:10020;">
-        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;">
-          <strong style="font-size:.85rem;"><i class="fa fa-bell"></i> Notifikasi</strong>
-          <button onclick="closeNotificationCenter()" style="border:none;background:none;color:var(--text-muted);cursor:pointer;"><i class="fa fa-times"></i></button>
-        </div>
-        <div id="notifPanelBody" style="padding:10px 12px;font-size:.82rem;color:var(--text-muted);">Memuat notifikasi...</div>
-      </div>
 
   <div id="overlay" onclick="closeSidebar()"></div>
 

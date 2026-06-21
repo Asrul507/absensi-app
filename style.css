@@ -1,5 +1,5 @@
 /* ============================================================
-   GENIUS HR APP — style.css
+   GENPRO APP — style.css
    Modern Glassmorphism · 3D Depth · High Contrast · Responsive
    ============================================================ */
 
@@ -333,31 +333,34 @@ a { color: var(--primary); text-decoration: none; }
 }
 
 .topbar-left  { display: flex; align-items: center; gap: 12px; }
-.topbar-right { display: flex; align-items: center; gap: 10px; }
+.topbar-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 .topbar-title {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.05rem;
+  font-size: 1.02rem;
   font-weight: 900;
-  letter-spacing: 3px;
+  letter-spacing: .6px;
   color: var(--white);
   text-shadow: 0 1px 4px rgba(0,0,0,.2);
 }
 
-#userName {
-  font-size: .82rem;
-  font-weight: 700;
-  color: rgba(255,255,255,.95);
-  letter-spacing: .2px;
-  max-width: 130px;
+.topbar-user-name {
+  max-width: min(240px, 42vw);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: rgba(255,255,255,.12);
-  padding: 4px 10px;
-  border-radius: var(--r-full);
-  border: 1px solid rgba(255,255,255,.18);
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,.96);
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 6px 4px;
+  line-height: 1.2;
 }
+.topbar-user-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 .btn-menu,
 .btn-logout-top {
@@ -432,12 +435,11 @@ a { color: var(--primary); text-decoration: none; }
   color: #ffffff;
   letter-spacing: .3px;
 }
-.sidebar-header .sb-role {
+.sidebar-header .sb-office {
   font-size: .68rem;
   color: rgba(255,255,255,.65);
   margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: .9px;
+  letter-spacing: .2px;
   font-weight: 600;
 }
 
@@ -3188,7 +3190,7 @@ html.dark h1, html.dark h2, html.dark h3, html.dark h4 { color: #e8f0fe; }
 html.dark p { color: #b8c9d9; }
 html.dark label { color: #94a3b8; }
 html.dark small { color: #7a90ac; }
-html.dark span:not(.badge):not(.topbar-title):not(#userName):not(.dot) { color: inherit; }
+html.dark span:not(.badge):not(.topbar-title):not(.dot) { color: inherit; }
 html.dark a { color: #60a5fa; }
 
 /* ===== DARK: THEME TOGGLE BASE STYLE ===== */
@@ -4462,4 +4464,15 @@ html.dark .sidebar-badge-info {
 
 @media (max-width: 640px) {
   .login-office-row { grid-template-columns: 1fr; gap: 0; }
+}
+
+
+/* Clean GenPro topbar */
+@media (max-width: 480px) {
+  .topbar { padding: 0 10px; }
+  .topbar-left { gap: 8px; }
+  .topbar-title { font-size: .94rem; letter-spacing: .2px; }
+  .topbar-right { gap: 6px; }
+  .topbar-user-name { max-width: 34vw; font-size: .8rem; }
+  .btn-theme-toggle, .btn-logout-top, .btn-menu { width: 34px !important; height: 34px; }
 }
