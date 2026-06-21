@@ -379,6 +379,7 @@ a { color: var(--primary); text-decoration: none; }
   padding: 6px 10px;
   cursor: pointer;
 }
+.topbar-user-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 
 .btn-menu,
