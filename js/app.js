@@ -1,7 +1,7 @@
 /**
  * js/app.js
  * ============================================================
- * File utama aplikasi Genius HR.
+ * File utama aplikasi GenPro.
  * * Sesuai file acuan awal + Pembaruan Tampilan Kategori Sidebar.
  * Semua fungsi manajemen karyawan, modal, upload foto, dan password
  * dipertahankan 100% utuh tanpa ada yang terpotong.
@@ -108,11 +108,6 @@ async function checkUser() {
 
     const userNameEl = document.getElementById('userName')
     if (userNameEl) userNameEl.innerText = profile.nama_lengkap || user.email
-    const clientNameEl = document.getElementById('activeClientName')
-    if (clientNameEl) {
-      const tenantContext = JSON.parse(sessionStorage.getItem('tenantContext') || '{}')
-      clientNameEl.innerText = tenantContext.nama_client || profile.clients?.nama_client || profile.nama_client || (window.currentUser.role === 'super_admin' ? 'Global Admin' : 'Office')
-    }
 
     // Sinkronisasi foto profil dari DB Supabase
     await syncAvatarFromDB(profile)
@@ -242,6 +237,17 @@ window.logout = async function () {
 }
 
 /* ================= RENDER MENU SIDEBAR MODERN (FITUR KATEGORI) ================= */
+function getCurrentOfficeLabel(user) {
+  if (normalizeRole(user?.role) === 'super_admin') return ''
+  const client = Array.isArray(user?.clients) ? user.clients[0] : user?.clients
+  const name = client?.nama_client || user?.nama_client || user?.client_name || ''
+  const code = client?.domain_login || client?.kode_client || ''
+  if (!name && !code) return ''
+  return name && code ? `${name} (${code})` : (name || code)
+}
+
+window.getCurrentOfficeLabel = getCurrentOfficeLabel
+
 function renderMenu(role) {
   const sidebar = document.getElementById('sidebar')
   if (!sidebar) return
@@ -293,10 +299,11 @@ function renderMenu(role) {
     `;
   }
 
+  const officeLabel = getCurrentOfficeLabel(window.currentUser)
   sidebar.innerHTML = `
     <div class="sidebar-header">
-      <div class="sb-name">GENIUS HR</div>
-      <div class="sb-role">${(role||'').replace('_',' ').toUpperCase()}</div>
+      <div class="sb-name">GenPro</div>
+      ${officeLabel ? `<div class="sb-office">${officeLabel}</div>` : ''}
     </div>
     <nav class="sidebar-nav">
       ${menuHtml}
