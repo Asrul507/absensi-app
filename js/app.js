@@ -109,28 +109,17 @@ async function checkUser() {
     const userNameEl = document.getElementById('userName')
     if (userNameEl) userNameEl.innerText = profile.nama_lengkap || user.email
 
-    // Sinkronisasi foto profil dari DB Supabase
-    await syncAvatarFromDB(profile)
+    if (profile?.foto_url) window.currentUser.foto_url = profile.foto_url
 
     // Render komponen navigasi sesuai hak akses
     renderMenu(window.currentUser.role)
     renderBottomNav(window.currentUser.role)
-    await refreshNotificationBadge()
-    startNotificationPolling()
     navigate('dashboard')
 
   } catch (err) {
     console.error('checkUser error:', err)
     showLoginPage()
   }
-}
-
-/* ================= SINKRONISASI AVATAR ================= */
-async function syncAvatarFromDB(profile) {
-  if (profile && profile.foto_url) {
-    window.currentUser.foto_url = profile.foto_url
-  }
-  updateTopbarAvatar(window.currentUser)
 }
 
 function showLoginPage() {
@@ -164,20 +153,6 @@ function showAppPage() {
   if (loginPage) loginPage.style.display = 'none'
   if (appPage)   appPage.style.display   = 'block'
 }
-
-function updateTopbarAvatar(profile) {
-  const el = document.getElementById('topbarAvatar')
-  if (!el) return
-  if (profile && profile.foto_url) {
-    el.style.backgroundImage = `url(${profile.foto_url})`
-    el.style.backgroundSize  = 'cover'
-    el.textContent = ''
-  } else {
-    el.style.backgroundImage = ''
-    el.textContent = (profile?.nama_lengkap || '?')[0].toUpperCase()
-  }
-}
-
 
 async function autoFillOfficeFromUsername() {
   const usernameEl = document.getElementById('username')
@@ -440,13 +415,6 @@ window.closeNotificationCenter = function () {
 }
 
 
-document.addEventListener('click', (e) => {
-  const panel = document.getElementById('notifPanel')
-  const btn = document.getElementById('notifBtn')
-  if (!panel || panel.style.display !== 'block') return
-  if (panel.contains(e.target) || (btn && btn.contains(e.target))) return
-  window.closeNotificationCenter?.()
-})
 
 
 /* ================= BOTTOM NAVIGATION (MOBILE DEVICE) ================= */
@@ -666,7 +634,6 @@ window.uploadFotoProfil = async function (input) {
 
   window.currentUser.foto_url = foto_url
   if (status) status.innerHTML = '<i class="fa fa-check"></i> Foto diperbarui!'
-  updateTopbarAvatar(window.currentUser)
   renderProfile()
 }
 
@@ -1822,7 +1789,6 @@ window.uploadFotoEditModal = async function(input, targetUserId) {
 
   if (targetUserId === window.currentUser.id) {
     window.currentUser.foto_url = foto_url
-    updateTopbarAvatar(window.currentUser)
   }
 
   const idx = (window._allUsers || []).findIndex(u => u.id === targetUserId)

@@ -97,12 +97,6 @@ export async function renderDashboard() {
 
   if (profile?.foto_url && profile.foto_url !== window.currentUser.foto_url) {
     window.currentUser.foto_url = profile.foto_url
-    const el = document.getElementById('topbarAvatar')
-    if (el) {
-      el.style.backgroundImage = `url(${profile.foto_url})`
-      el.style.backgroundSize  = 'cover'
-      el.textContent = ''
-    }
   }
 
   // Date range (current month)
