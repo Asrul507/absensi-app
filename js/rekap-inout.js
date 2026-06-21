@@ -2,7 +2,8 @@ import { supabase } from './supabase.js'
 import { toJamLokal, getTodayLokal, getDurasiMenit } from './timezone.js'
 import { showToast } from './feedback.js'
 import { canApproveAttendance, formatAttendanceStatus, RADIUS_STATUS } from './attendance-approval.js'
-import { canAccessAllDepartments, getAccessibleProfiles } from './access-control.js'
+import { getAccessibleProfiles } from './access-control.js'
+import { ATTENDANCE_REPORT_SELECT, filterRowsByUserScope, getRowDepartment, getRowEmployeeName, getRowOffice, getRowOfficeDomain, getRowUsername } from './report-scope.js'
 
 export async function renderRekapInOut(user) {
   const content = document.getElementById('content')
@@ -100,13 +101,7 @@ async function loadNamaListRekap() {
   if (!container) return
 
   try {
-    const profiles = canAccessAllDepartments(window.currentUser)
-      ? (await supabase
-          .from('profiles')
-          .select('id, nama_lengkap, departemen')
-          .eq('status_akun', 'Aktif')
-          .order('nama_lengkap', { ascending: true })).data || []
-      : await getAccessibleProfiles(window.currentUser, { select: 'id, nama_lengkap, departemen, role, status_akun' })
+    const profiles = await getAccessibleProfiles(window.currentUser, { activeOnly: true, select: 'id, nama_lengkap, username, departemen, department_id, client_id, role, status_akun, clients:client_id(id,nama_client,kode_client,domain_login,status), departments:department_id(id,nama_department,status)' })
 
     if (!profiles?.length) {
       container.innerHTML = `<div class="empty-state" style="padding: 28px;"><i class="fa fa-inbox"></i><p>Tidak ada data untuk departemen Anda.</p></div>`
@@ -116,11 +111,11 @@ async function loadNamaListRekap() {
     let html = ''
     profiles.forEach(p => {
       html += `
-        <button onclick="selectKaryawanRekap('${p.nama_lengkap}')" 
+        <button onclick="selectKaryawanRekap('${p.id}')"
           style="padding: 12px 16px; background: #fff; border: 1.5px solid var(--border); border-radius: var(--r-md);
             text-align: left; font-weight: 600; color: var(--text); cursor: pointer; transition: all 0.2s;
             display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <span>${p.nama_lengkap}</span>
+          <span>${p.nama_lengkap}<small style="display:block;color:var(--text-muted);">${p.username || '-'} · ${p.clients?.nama_client || p.client_id || '-'}</small></span>
           <i class="fa fa-chevron-right" style="color: var(--text-muted); font-size: .85rem;"></i>
         </button>
       `
@@ -133,8 +128,8 @@ async function loadNamaListRekap() {
   }
 }
 
-window.selectKaryawanRekap = async function (namaKaryawan) {
-  window._selectedRekapKaryawan = namaKaryawan
+window.selectKaryawanRekap = async function (userId) {
+  window._selectedRekapKaryawan = userId
 
   document.getElementById('namaListRekap').style.display = 'none'
   document.getElementById('detailViewRekap').style.display = 'block'
@@ -162,23 +157,12 @@ window.applyRekapInOutFilter = async function (user) {
   try {
     let query = supabase
       .from('absensi')
-      .select('*')
+      .select(ATTENDANCE_REPORT_SELECT)
       .eq('status_absensi', 'COMPLETE')
       .order('tanggal', { ascending: false })
 
-    if (isAdmin && !canAccessAllDepartments(user)) {
-      const profiles = await getAccessibleProfiles(user, { activeOnly: false, select: 'id, nama_lengkap, departemen, role, status_akun' })
-      const ids = profiles.map(p => p.id).filter(Boolean)
-      query = ids.length ? query.in('user_id', ids) : null
-    }
-
-    if (!query) {
-      renderRekapInOutTable([], isAdmin)
-      return
-    }
-
     if (window._selectedRekapKaryawan) {
-      query = query.eq('nama', window._selectedRekapKaryawan)
+      query = query.eq('user_id', window._selectedRekapKaryawan)
     } else if (!isAdmin) {
       query = query.eq('user_id', user.id)
     }
@@ -189,7 +173,8 @@ window.applyRekapInOutFilter = async function (user) {
     const { data: absensiData, error } = await query
     if (error) throw error
 
-    const hasil = calculateRekapInOut(absensiData || [], isAdmin, user.nama_lengkap)
+    const scopedRows = filterRowsByUserScope(absensiData || [], user)
+    const hasil = calculateRekapInOut(scopedRows, isAdmin, user.nama_lengkap)
 
     document.getElementById('totalRecordsRekap').textContent = hasil.summary.total
     document.getElementById('totalMasukRekap').textContent = hasil.summary.masuk
@@ -245,7 +230,11 @@ function calculateRekapInOut(absensiData, isAdmin, currentUserName) {
     }
 
     detail.push({
-      nama: a.nama,
+      nama: getRowEmployeeName(a),
+      username: getRowUsername(a),
+      office: getRowOffice(a),
+      domain: getRowOfficeDomain(a),
+      department: getRowDepartment(a),
       tanggal: a.tanggal,
       shift: shiftLabel,
       jamMasuk,
@@ -294,7 +283,7 @@ function renderRekapInOutTable(detail, isAdmin) {
         <table>
           <thead>
             <tr>
-              ${isAdmin ? '<th>Nama</th>' : ''}
+              ${isAdmin ? '<th>Nama</th><th>Username</th><th>Office</th><th>Department</th>' : ''}
               <th>Tanggal</th>
               <th>Shift</th>
               <th>Jam CI</th>
@@ -309,7 +298,7 @@ function renderRekapInOutTable(detail, isAdmin) {
           <tbody>
             ${detail.map(d => `
               <tr>
-                ${isAdmin ? `<td style="font-weight: 600;">${d.nama}</td>` : ''}
+                ${isAdmin ? `<td style="font-weight: 600;">${d.nama}</td><td>${d.username || '-'}</td><td>${d.office || '-'}<div style="font-size:.7rem;color:var(--text-muted);">${d.domain || '-'}</div></td><td>${d.department || '-'}</td>` : ''}
                 <td>${d.tanggal}</td>
                 <td>${d.shift}</td>
                 <td style="font-weight: 700; color: var(--success);">${d.jamMasuk}</td>
@@ -342,6 +331,10 @@ window.downloadExcelRekapInOut = function () {
   }
 
   const rows = window._rekapInOutDetail.map(d => ({
+    'Office': d.office || '-',
+    'Domain Office': d.domain || '-',
+    'Department': d.department || '-',
+    'Username': d.username || '-',
     'Nama': d.nama,
     'Tanggal': d.tanggal,
     'Shift': d.shift,
