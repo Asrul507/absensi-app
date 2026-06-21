@@ -112,7 +112,7 @@ export function canManageUserByDepartment(currentUser, targetUser) {
   if (!currentUser || !targetUser) return false
   if (isSuperAdmin(currentUser)) return true
   if (currentUser.id && targetUser.id && currentUser.id === targetUser.id) return true
-  if ((isAdminAll(currentUser) || isAdminHR(currentUser)) && canAccessClient(targetUser.client_id || currentUser.client_id, currentUser)) return true
+  if ((isAdminAll(currentUser) || isAdminHR(currentUser)) && targetUser.client_id && canAccessClient(targetUser.client_id, currentUser)) return true
   if (!isAdmin(currentUser)) return false
   if (currentUser.department_id && targetUser.department_id) return String(currentUser.department_id) === String(targetUser.department_id)
   const a = getUserDepartment(currentUser).toLowerCase(); const b = getUserDepartment(targetUser).toLowerCase()
@@ -145,8 +145,8 @@ export async function getProfileForAccess(userId, select = 'id, nama_lengkap, de
 
 export function buildDepartmentScopeInfo(user) {
   const scope = getUserScope(user)
-  if (scope.type === 'global') return 'Anda mengelola semua client dan departemen.'
-  if (scope.type === 'client') return `Anda mengelola client: ${user?.clients?.nama_client || user?.nama_client || user?.client_id || '-'}.`
+  if (scope.type === 'global') return 'Anda mengelola semua Office dan Department.'
+  if (scope.type === 'client') return `Anda mengelola Office: ${user?.clients?.nama_client || user?.nama_client || user?.client_id || '-'}.`
   if (scope.type === 'department') return `Anda mengelola departemen: ${getUserDepartment(user) || user?.department_id || '-'}.`
   return 'Anda hanya dapat mengakses data pribadi.'
 }
