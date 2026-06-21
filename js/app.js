@@ -674,13 +674,15 @@ async function renderUsers() {
     const q  = (document.getElementById('searchUser')?.value || '').toLowerCase()
     const st = document.getElementById('filterStatusUser')?.value || ''
     const users = Array.isArray(window._allUsers) ? window._allUsers : []
-    renderUserList(users.filter(u =>
+    const filtered = users.filter(u =>
       ((u.nama_lengkap||'').toLowerCase().includes(q) ||
         (u.username||'').toLowerCase().includes(q) ||
         (u.email_internal||'').toLowerCase().includes(q) ||
         (u.email||'').toLowerCase().includes(q)) &&
       (!st || normalizeAccountStatus(u.status_akun) === st)
-    ))
+    )
+    window._filteredUsers = filtered
+    renderUserList(filtered)
   }
 
   content.innerHTML = `
@@ -754,6 +756,7 @@ async function renderUsers() {
 
     window._allUsers = users || []
 
+    window._filteredUsers = window._allUsers
     renderUserList(window._allUsers)
   } catch (err) {
     console.error('Gagal memuat data karyawan:', err)
@@ -1210,16 +1213,75 @@ function renderDepartmentOptionsForEdit(departments = [], selectedId = '') {
   return `<option value="">-- Pilih Department --</option>${options}`
 }
 
+
+function getCheckedValues(selector) {
+  return Array.from(document.querySelectorAll(selector)).filter(el => el.checked).map(el => el.value).filter(Boolean)
+}
+
+async function runSuperAdminDataAction({ action, menuKey, ids, label, confirmText = 'HAPUS' }) {
+  if (normalizeRole(window.currentUser?.role) !== 'super_admin') { showToast('Aksi ini khusus Super Admin.', 'warning'); return null }
+  const uniqueIds = Array.from(new Set(ids || [])).filter(Boolean)
+  if (!uniqueIds.length) { showToast('Pilih minimal 1 data terlebih dahulu.', 'warning'); return null }
+  const firstConfirm = await confirmAction(`${label}: ${uniqueIds.length} data akan diproses. Lanjutkan?`, 'Lanjutkan')
+  if (!firstConfirm) return null
+  const typed = window.prompt(`Ketik ${confirmText} untuk konfirmasi ${label} (${uniqueIds.length} data).`)
+  if (String(typed || '').trim().toUpperCase() !== confirmText) { showToast('Konfirmasi dibatalkan.', 'warning'); return null }
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sesi login tidak valid.')
+  const res = await fetch('/.netlify/functions/super-admin-data-action', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action, menu_key: menuKey, ids: uniqueIds, confirm_text: confirmText })
+  })
+  const result = await res.json().catch(() => ({}))
+  if (!res.ok || !result.success) throw new Error(result.error || 'Aksi data gagal.')
+  showToast(`${label} selesai: ${result.affected_count || 0} data.`, 'success')
+  return result
+}
+
+function renderSuperAdminBulkToolbar({ menuKey, filteredRows = [], selectedSelector, selectedLabel = 'Hapus Item Terpilih', filteredLabel = 'Hapus Semua Sesuai Filter', resetAvailable = false }) {
+  if (normalizeRole(window.currentUser?.role) !== 'super_admin') return ''
+  const count = Array.isArray(filteredRows) ? filteredRows.length : 0
+  return `
+    <div class="card" style="padding:12px 14px;margin-bottom:12px;border:1px solid #fecaca;background:#fff7f7;">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
+        <div><strong style="color:#991b1b;"><i class="fa fa-shield-halved"></i> Super Admin Bulk Action</strong><div style="font-size:.75rem;color:var(--text-muted);">Data sesuai tampilan/filter saat ini: ${count}</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn-danger btn-sm" onclick="window.superAdminRunSelectedAction('${menuKey}','${selectedSelector}','${selectedLabel}')"><i class="fa fa-trash"></i> ${selectedLabel}</button>
+          <button type="button" class="btn-danger btn-sm" onclick="window.superAdminRunFilteredAction('${menuKey}','${filteredLabel}')"><i class="fa fa-layer-group"></i> ${filteredLabel}</button>
+          <button type="button" class="btn-secondary btn-sm" ${resetAvailable ? '' : 'disabled title="Reset menu ini belum tersedia."'}><i class="fa fa-rotate-left"></i> Reset Data Sesuai Filter</button>
+        </div>
+      </div>
+    </div>`
+}
+
+window.superAdminRunSelectedAction = async function(menuKey, selector, label) {
+  try {
+    const action = menuKey === 'employees' ? 'deactivate_selected' : 'delete_selected'
+    await runSuperAdminDataAction({ action, menuKey, ids: getCheckedValues(selector), label })
+    await renderUsers()
+  } catch (err) { console.error('superAdminRunSelectedAction error:', err); showToast(err.message || 'Aksi gagal.', 'error') }
+}
+
+window.superAdminRunFilteredAction = async function(menuKey, label) {
+  try {
+    const rows = menuKey === 'employees' ? (window._filteredUsers || []) : []
+    const action = menuKey === 'employees' ? 'delete_filtered' : 'delete_filtered'
+    await runSuperAdminDataAction({ action, menuKey, ids: rows.map(r => r.id), label })
+    await renderUsers()
+  } catch (err) { console.error('superAdminRunFilteredAction error:', err); showToast(err.message || 'Aksi gagal.', 'error') }
+}
+
 function renderUserList(list) {
   const el = document.getElementById('userListContainer')
   if (!el) return
   const users = Array.isArray(list) ? list : []
   if (!users.length) {
-    el.innerHTML = `<div class="empty-state"><i class="fa fa-users"></i><p>Belum ada karyawan</p></div>`
+    el.innerHTML = `${renderSuperAdminBulkToolbar({ menuKey: 'employees', filteredRows: users, selectedSelector: '.employee-select-checkbox', selectedLabel: 'Non-Aktifkan Terpilih', filteredLabel: 'Non-Aktifkan Semua Sesuai Filter' })}<div class="empty-state"><i class="fa fa-users"></i><p>Belum ada karyawan</p></div>`
     return
   }
 
-  el.innerHTML = users.map(u => {
+  el.innerHTML = renderSuperAdminBulkToolbar({ menuKey: 'employees', filteredRows: users, selectedSelector: '.employee-select-checkbox', selectedLabel: 'Non-Aktifkan Terpilih', filteredLabel: 'Non-Aktifkan Semua Sesuai Filter' }) + users.map(u => {
     const statusAkun = normalizeAccountStatus(u.status_akun)
     const statusKontrak = u.status_kontrak || getStatusKontrak(u.kontrak_berakhir) || '-'
     const cutiTahunan = window._cutiTahunanMap?.[u.id]?.sisa_cuti
@@ -1229,6 +1291,7 @@ function renderUserList(list) {
     const kontrakBadgeClass = statusKontrak === 'berakhir' ? 'badge-red' : statusKontrak === 'akan_berakhir' ? 'badge-yellow' : 'badge-green'
     return `
       <div class="user-item">
+        ${normalizeRole(window.currentUser?.role) === 'super_admin' ? `<label style="display:flex;align-items:center;padding-right:4px;"><input type="checkbox" class="employee-select-checkbox" value="${safeText(u.id)}"></label>` : ''}
         <div class="user-avatar" style="background:linear-gradient(135deg,var(--primary),#7c3aed);">
           ${safeText((u.nama_lengkap || '?')[0] || '?')}
         </div>
@@ -1332,7 +1395,7 @@ window.openEditKaryawan = async function(id) {
   try {
     const lokasiPromise = supabase.from('lokasi_absen').select('nama_titik').order('nama_titik')
     const officePromise = officeEditable
-      ? supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').eq('status', 'active').order('nama_client')
+      ? supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').order('nama_client')
       : Promise.resolve({ data: [], error: null })
     const departmentOfficeId = officeEditable ? target.client_id : me.client_id
     const departmentPromise = departmentEditable
@@ -1346,7 +1409,7 @@ window.openEditKaryawan = async function(id) {
     if (officeResult.error) throw officeResult.error
     if (departmentResult.error) throw departmentResult.error
 
-    officeOptions = officeResult.data || []
+    officeOptions = (officeResult.data || []).filter(c => ['active','aktif'].includes(String(c.status || '').toLowerCase()))
     departmentOptions = departmentResult.data || []
     opsiLokasi = (lokasiResult.data || []).map(l => {
       const namaTitik  = (l.nama_titik || '').trim()
@@ -1360,7 +1423,7 @@ window.openEditKaryawan = async function(id) {
 
   window._editEmployeeOfficeOptions = officeOptions
   const officeField = officeEditable
-    ? `<select id="editOffice" onchange="window.reloadEditEmployeeDepartments(this.value)"><option value="">-- Pilih Office --</option>${officeOptions.map(c => `<option value="${safeText(c.id)}" ${String(c.id) === String(target.client_id) ? 'selected' : ''}>${safeText(c.nama_client)} (${safeText(c.domain_login || c.kode_client)})</option>`).join('')}</select>`
+    ? `<select id="editOffice" onchange="window.reloadEditEmployeeDepartments(this.value); window.updateEditEmailInternalPreview()"><option value="">-- Pilih Office --</option>${officeOptions.map(c => `<option value="${safeText(c.id)}" ${String(c.id) === String(target.client_id) ? 'selected' : ''}>${safeText(c.nama_client)} (${safeText(c.domain_login || c.kode_client)})</option>`).join('')}</select>`
     : `<input id="editOfficeReadonly" value="${safeText(getOfficeFullLabel(target))}" disabled>`
   const departmentField = departmentEditable
     ? `<select id="editDepartment">${renderDepartmentOptionsForEdit(departmentOptions, target.department_id)}</select>`
@@ -1409,12 +1472,13 @@ window.openEditKaryawan = async function(id) {
       </div>
       <div class="field">
         <label>Username</label>
-        <input id="editUsername" value="${safeText(legacyLoginValue(target.username))}" disabled>
-        <small style="font-size:.65rem;color:var(--text-muted);">Username login hanya dapat diubah oleh Super Admin melalui reset akun.</small>
+        <input id="editUsername" value="${safeText(legacyLoginValue(target.username))}" ${viewerRole === 'super_admin' && canEditAllFields ? 'oninput="window.updateEditEmailInternalPreview()"' : 'disabled'}>
+        <small style="font-size:.65rem;color:var(--text-muted);">${viewerRole === 'super_admin' ? 'Mengubah username/Office akan memperbarui email Auth lewat Netlify Function.' : 'Username login hanya dapat diubah oleh Super Admin.'}</small>
       </div>
       <div class="field">
         <label>Email Internal</label>
         <input id="editEmailInternal" value="${safeText(legacyLoginValue(target.email_internal))}" disabled>
+        <small id="editEmailInternalPreview" style="font-size:.65rem;color:var(--text-muted);">Preview otomatis mengikuti username + Office.</small>
       </div>
       <div class="field">
         <label>Office</label>
@@ -1476,19 +1540,24 @@ window.openEditKaryawan = async function(id) {
       ${getKontrakFormHtml('edit', target, !canEditAllFields)}
 
       <div class="field full" style="grid-column:1/-1; border-top:1px solid var(--border); padding-top:10px; margin-top:5px;">
-        <label style="color:var(--primary); font-weight:800;"><i class="fa fa-key"></i> ${isMe ? 'Ganti Password Anda' : 'Reset Password Karyawan'}</label>
-        <input type="password" id="editPassword" placeholder="Masukkan password baru jika ingin diubah">
-        <small style="font-size:.65rem; color:var(--text-muted);">Biarkan kosong jika tidak ingin mengganti password.</small>
+        <label style="color:var(--primary); font-weight:800;"><i class="fa fa-key"></i> Keamanan Akun</label>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:220px;"><input type="password" id="editPassword" placeholder="Password baru minimal 8 karakter" oninput="window.toggleEmployeeResetPasswordButton()"></div>
+          <button type="button" id="btnResetPasswordEmployee" class="btn-warning" style="display:none;" onclick="window.resetPasswordFromEmployeeModal('${target.id}', ${isMe})"><i class="fa fa-key"></i> Reset Password</button>
+        </div>
+        <small style="font-size:.65rem; color:var(--text-muted);">Simpan Data tidak akan mengubah password. Klik Reset Password hanya jika ingin mengganti password.</small>
       </div>
     </div>
 
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
-      <button class="btn-primary" onclick="window.saveEditKaryawan('${target.id}', ${canEditAllFields}, ${isMe})">
-        <i class="fa fa-save"></i> Perbarui Data
+      <button type="button" class="btn-secondary" onclick="window.closeUserModal()">Batal</button>
+      <button type="button" class="btn-primary" onclick="window.saveEditKaryawan('${target.id}', ${canEditAllFields}, ${isMe})">
+        <i class="fa fa-save"></i> Simpan Data
       </button>
     </div>
   `)
+  window.updateEditEmailInternalPreview()
+  window.toggleEmployeeResetPasswordButton()
 }
 
 window.reloadEditEmployeeDepartments = async function(clientId) {
@@ -1525,31 +1594,83 @@ async function resetEmployeePassword(targetUserId, newPassword) {
   return result
 }
 
-/* ================= SIMPAN HASIL MODAL EDIT KARYAWAN ================= */
-window.saveEditKaryawan = async function(id, canEditAll, isMe) {
+
+window.toggleEmployeeResetPasswordButton = function() {
+  const input = document.getElementById('editPassword')
+  const btn = document.getElementById('btnResetPasswordEmployee')
+  if (!btn) return
+  btn.style.display = input?.value ? 'inline-flex' : 'none'
+}
+
+function normalizeOfficeCodeForPreview(code) {
+  return String(code || '').trim().toLowerCase().replace(/^@/, '')
+}
+
+window.updateEditEmailInternalPreview = function() {
+  const username = (document.getElementById('editUsername')?.value || '').trim().toLowerCase()
+  const officeId = document.getElementById('editOffice')?.value
+  const office = (window._editEmployeeOfficeOptions || []).find(c => String(c.id) === String(officeId))
+  const code = normalizeOfficeCodeForPreview(office?.kode_client || office?.domain_login || document.getElementById('editOfficeDomain')?.value)
+  const preview = username && code ? `${username}@${code}.local` : (document.getElementById('editEmailInternal')?.value || '-')
+  const input = document.getElementById('editEmailInternal')
+  const hint = document.getElementById('editEmailInternalPreview')
+  if (input && username && code) input.value = preview
+  if (hint) hint.textContent = `Preview: ${preview}`
+}
+
+async function updateEmployeeLoginIdentity(userId, username, clientId, departmentId = '') {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sesi login tidak valid. Silakan login ulang.')
+  const res = await fetch('/.netlify/functions/update-employee-login-identity', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ user_id: userId, username, client_id: clientId, department_id: departmentId })
+  })
+  const result = await res.json().catch(() => ({}))
+  if (!res.ok || !result.success) throw new Error(result.error || 'Gagal memperbarui username/Office login.')
+  return result
+}
+
+window.resetPasswordFromEmployeeModal = async function(id, isMe) {
   const passwordInput = document.getElementById('editPassword')
   const newPassword = passwordInput?.value || ''
+  if (newPassword.length < 8) {
+    showToast('Password minimal 8 karakter', 'warning')
+    passwordInput?.focus()
+    return
+  }
+  const btn = document.getElementById('btnResetPasswordEmployee')
+  const oldHtml = btn?.innerHTML
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Memproses...' }
+  try {
+    if (isMe) {
+      const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
+      if (passErr) throw passErr
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.id) await supabase.from('profiles').update({ must_change_password: false, password_changed_at: new Date().toISOString() }).eq('id', user.id)
+    } else {
+      await resetEmployeePassword(id, newPassword)
+    }
+    passwordInput.value = ''
+    window.toggleEmployeeResetPasswordButton()
+    showToast('Password berhasil diperbarui.', 'success')
+  } catch (err) {
+    console.error('resetPasswordFromEmployeeModal error:', err)
+    showToast('Gagal reset password: ' + (err.message || err), 'error')
+    passwordInput?.focus()
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = oldHtml || '<i class="fa fa-key"></i> Reset Password' }
+  }
+}
+
+/* ================= SIMPAN HASIL MODAL EDIT KARYAWAN ================= */
+window.saveEditKaryawan = async function(id, canEditAll, isMe) {
   const selectEl       = document.getElementById('editTitikRadius')
   const titikRadiusBaru = selectEl ? (selectEl.value || null) : null
 
   try {
     const targetProfile = (window._allUsers || []).find(u => u.id === id) || null
     assertSameDepartment(window.currentUser, targetProfile)
-    if (newPassword) {
-      if (newPassword.length < 8) {
-        showToast('Password minimal 8 karakter', 'warning')
-        passwordInput?.focus()
-        return
-      }
-      if (isMe) {
-        const { error: passErr } = await supabase.auth.updateUser({ password: newPassword })
-        if (passErr) throw passErr
-      } else {
-        await resetEmployeePassword(id, newPassword)
-      }
-      if (passwordInput) passwordInput.value = ''
-      showToast('Password berhasil diperbarui.', 'success')
-    }
     if (canEditAll) {
       const kontrakPayload = readKontrakForm('edit')
       if (!validateKontrakPayload(kontrakPayload)) return
@@ -1572,9 +1693,16 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
 
       if (role === 'super_admin') {
         if (!selectedOfficeId) { showToast('Office wajib dipilih.', 'warning'); return }
-        const { data: office, error: officeErr } = await supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').eq('id', selectedOfficeId).eq('status', 'active').maybeSingle()
+        const { data: office, error: officeErr } = await supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').eq('id', selectedOfficeId).maybeSingle()
         if (officeErr) throw officeErr
-        if (!office) { showToast('Office tidak valid atau nonaktif.', 'warning'); return }
+        if (!office || !['active','aktif'].includes(String(office.status || '').toLowerCase())) { showToast('Office tidak valid atau nonaktif.', 'warning'); return }
+        const nextUsername = document.getElementById('editUsername')?.value.trim().toLowerCase() || ''
+        const identityChanged = nextUsername !== String(targetProfile?.username || '').toLowerCase() || String(office.id) !== String(targetProfile?.client_id || '')
+        if (identityChanged) {
+          const identity = await updateEmployeeLoginIdentity(id, nextUsername, office.id, selectedDepartmentId)
+          updatePayload.username = identity.username
+          updatePayload.email_internal = identity.email_internal
+        }
         updatePayload.client_id = office.id
       }
 
@@ -1586,10 +1714,9 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
           .select('id,nama_department,client_id,status')
           .eq('id', selectedDepartmentId)
           .eq('client_id', departmentOfficeId)
-          .eq('status', 'active')
           .maybeSingle()
         if (deptErr) throw deptErr
-        if (!selectedDepartment) { showToast('Department tidak valid untuk Office yang dipilih.', 'warning'); return }
+        if (!selectedDepartment || !['active','aktif'].includes(String(selectedDepartment.status || '').toLowerCase())) { showToast('Department tidak valid untuk Office yang dipilih.', 'warning'); return }
         updatePayload.department_id = selectedDepartment.id
         updatePayload.departemen = selectedDepartment.nama_department
       } else {
