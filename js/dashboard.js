@@ -6,27 +6,63 @@ import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
 import { getSisaCuti } from './services/leave-service.js'
 import { applyTenantFilter, isSuperAdmin, isStaff } from './access-control.js'
 
+const FILTER_KEY = 'genpro_dashboard_filter_v1'
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]))
+}
+
+function addDays(date, days) {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+function monthRange(today = getTodayLokal()) {
+  const [y, m] = today.split('-').map(Number)
+  return {
+    dateFrom: new Date(Date.UTC(y, m - 1, 1)).toISOString().split('T')[0],
+    dateTo: new Date(Date.UTC(y, m, 0)).toISOString().split('T')[0],
+    preset: 'month'
+  }
+}
+
+function getRange() {
+  const fallback = monthRange()
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}')
+    const dateFrom = saved.dateFrom || fallback.dateFrom
+    const dateTo = saved.dateTo || fallback.dateTo
+    if (dateFrom > dateTo) return fallback
+    return { dateFrom, dateTo, preset: saved.preset || 'custom' }
+  } catch { return fallback }
+}
+
+function saveRange(dateFrom, dateTo, preset = 'custom') {
+  if (!dateFrom || !dateTo || dateFrom > dateTo) {
+    window.showToast?.('Range tanggal dashboard tidak valid.', 'warning')
+    return false
+  }
+  localStorage.setItem(FILTER_KEY, JSON.stringify({ dateFrom, dateTo, preset }))
+  return true
+}
+
 async function fetchAbsensiRowsForUser({ userId, nama, dateFrom = null, dateTo = null, tanggal = null, select = '*' } = {}) {
-  async function applyFilters(query) {
-    if (tanggal) return query.eq('tanggal', tanggal)
-    let q = query
+  const filter = async q => {
+    if (tanggal) return q.eq('tanggal', tanggal)
     if (dateFrom) q = q.gte('tanggal', dateFrom)
     if (dateTo) q = q.lte('tanggal', dateTo)
     return q
   }
-
   if (userId) {
-    let byUser = applyTenantFilter(supabase.from('absensi').select(select).eq('user_id', userId), { userColumn: 'user_id' })
-    byUser = await applyFilters(byUser)
-    const { data, error } = await byUser
+    let q = applyTenantFilter(supabase.from('absensi').select(select).eq('user_id', userId), { userColumn: 'user_id' })
+    const { data, error } = await filter(q)
     if (error) throw error
     if (Array.isArray(data) ? data.length : data) return data
   }
-
   if (!nama) return tanggal ? null : []
-  let byName = applyTenantFilter(supabase.from('absensi').select(select).eq('nama', nama), { userColumn: 'user_id' })
-  byName = await applyFilters(byName)
-  const { data, error } = await byName
+  let q = applyTenantFilter(supabase.from('absensi').select(select).eq('nama', nama), { userColumn: 'user_id' })
+  const { data, error } = await filter(q)
   if (error) throw error
   return data || (tanggal ? null : [])
 }
@@ -36,451 +72,95 @@ async function fetchAbsensiSingleForUser(options) {
   return Array.isArray(rows) ? (rows[0] || null) : rows
 }
 
+function stat(label, value, note, icon, tone = '') {
+  return `<div class="gp-stat-card ${tone}"><div class="gp-stat-icon"><i class="fa ${icon}"></i></div><small>${label}</small><strong>${value}</strong><span>${note}</span></div>`
+}
+
+function badgeClass(status) {
+  const s = String(status || '').toLowerCase()
+  if (s.includes('complete') || s.includes('hadir') || s.includes('tepat')) return 'gp-badge-green'
+  if (s.includes('open') || s.includes('pending') || s.includes('menunggu') || s.includes('terlambat')) return 'gp-badge-yellow'
+  if (s.includes('lupa') || s.includes('tidak') || s.includes('alpha') || s.includes('tolak')) return 'gp-badge-red'
+  return 'gp-badge-blue'
+}
+
+function filterHtml({ dateFrom, dateTo, preset }) {
+  return `<div class="gp-filter-card"><div><div style="font-size:.72rem;font-weight:900;text-transform:uppercase;color:var(--gp-slate);margin-bottom:8px;">Filter Data Dashboard</div><div class="gp-filter-fields"><div class="gp-field"><label>Dari Tanggal</label><input id="dashboardDateFrom" type="date" value="${dateFrom}"></div><div class="gp-field"><label>Sampai Tanggal</label><input id="dashboardDateTo" type="date" value="${dateTo}"></div><div class="gp-field"><label>Periode Cepat</label><select id="dashboardPreset"><option value="custom" ${preset === 'custom' ? 'selected' : ''}>Custom</option><option value="today" ${preset === 'today' ? 'selected' : ''}>Hari Ini</option><option value="last7" ${preset === 'last7' ? 'selected' : ''}>7 Hari Terakhir</option><option value="month" ${preset === 'month' ? 'selected' : ''}>Bulan Berjalan</option></select></div></div></div><div class="gp-filter-actions"><button class="gp-btn gp-btn-soft" onclick="window.resetDashboardFilter?.()"><i class="fa fa-rotate-left"></i> Reset</button><button class="gp-btn gp-btn-primary" onclick="window.applyDashboardFilter?.()"><i class="fa fa-filter"></i> Terapkan</button></div></div>`
+}
+
+function shortcuts(isAdmin) {
+  const items = isAdmin
+    ? [['approval-absensi','fa-clipboard-check','Approval Absensi','Cek pending'],['perbaikan-absen','fa-pencil-alt','Perbaikan Absen','Request staff'],['users','fa-users','Data Karyawan','Kelola karyawan'],['jadwal','fa-calendar-week','Jadwal','Kelola shift'],['laporan-keseluruhan','fa-file-lines','Laporan','Download laporan']]
+    : [['absensi','fa-right-to-bracket','Absen Masuk','Mulai kerja'],['absensi','fa-right-from-bracket','Absen Pulang','Selesai kerja'],['pengajuan','fa-file-alt','Pengajuan','Cuti / sakit / izin'],['perbaikan-absen','fa-pencil-alt','Perbaikan','Koreksi absen']]
+  return `<div class="gp-panel"><div class="gp-panel-title"><strong>Shortcut</strong><span>Akses cepat menu utama</span></div><div class="gp-shortcut-row">${items.map(i => `<button class="gp-shortcut" onclick="window.navigate('${i[0]}')"><i class="fa ${i[1]}"></i><span><strong>${i[2]}</strong><span>${i[3]}</span></span></button>`).join('')}</div></div>`
+}
+
+function bindDashboardFilterEvents() {
+  const presetEl = document.getElementById('dashboardPreset')
+  const fromEl = document.getElementById('dashboardDateFrom')
+  const toEl = document.getElementById('dashboardDateTo')
+  if (!presetEl || !fromEl || !toEl) return
+  presetEl.addEventListener('change', () => {
+    const today = getTodayLokal()
+    if (presetEl.value === 'today') fromEl.value = toEl.value = today
+    if (presetEl.value === 'last7') { fromEl.value = addDays(today, -6); toEl.value = today }
+    if (presetEl.value === 'month') { const r = monthRange(today); fromEl.value = r.dateFrom; toEl.value = r.dateTo }
+  })
+}
+
+window.applyDashboardFilter = function () {
+  const dateFrom = document.getElementById('dashboardDateFrom')?.value
+  const dateTo = document.getElementById('dashboardDateTo')?.value
+  const preset = document.getElementById('dashboardPreset')?.value || 'custom'
+  if (saveRange(dateFrom, dateTo, preset)) renderDashboard()
+}
+
+window.resetDashboardFilter = function () {
+  localStorage.setItem(FILTER_KEY, JSON.stringify(monthRange()))
+  renderDashboard()
+}
+
 export async function renderDashboard() {
   const content = document.getElementById('content')
   const user = window.currentUser
-
-  if (!user) {
-    content.innerHTML = `<div class="card"><p>Silakan login dulu</p></div>`
-    return
-  }
+  if (!user) { content.innerHTML = `<div class="card"><p>Silakan login dulu</p></div>`; return }
 
   try {
-    if (isSuperAdmin(user)) {
-      await renderSuperAdminDashboard(content)
-      return
-    }
+    if (isSuperAdmin(user)) { await renderSuperAdminDashboard(content); return }
 
-  // Attendance approval workflow: jangan mengunci lupa absen pulang menjadi final.
-  // Dashboard hanya memastikan record lama tetap berada di status OPEN/MENUNGGU_VERIFIKASI
-  // agar admin/SPV yang memutuskan final status melalui menu Approval Absensi.
-  try {
-    const todayStr = getTodayLokal()
-    const todayDate = new Date(todayStr + 'T00:00:00Z')
-    todayDate.setUTCDate(todayDate.getUTCDate() - 1)
-    const tanggalKemarinStr = todayDate.toISOString().split('T')[0]
-
-    const absenKemarin = await fetchAbsensiSingleForUser({
-      userId: user.id,
-      nama: user.nama_lengkap || user.email,
-      tanggal: tanggalKemarinStr,
-      select: '*'
-    })
-
-    if (absenKemarin?.waktu_masuk && !absenKemarin?.waktu_pulang) {
-      await supabase
-        .from('absensi')
-        .update({ status_absensi: 'OPEN', status_kehadiran: 'MENUNGGU_VERIFIKASI' })
-        .eq('id', absenKemarin.id)
-    }
-  } catch (e) {
-    console.error('Gagal sinkronisasi status OPEN absensi:', e)
-  }
-
-  const dashboardServerIso = await getServerTimeIso()
-
-  // Get profile terbaru
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  const fullName = profile?.nama_lengkap || user.email
-  let saldoCutiTahunan = { sisa: profile?.sisa_cuti || 0, status: '-', periode_mulai: null, periode_selesai: null }
-  try {
-    saldoCutiTahunan = await getSisaCuti(user.id, profile?.tanggal_bergabung || user.tanggal_bergabung)
-  } catch (err) {
-    console.error('Gagal memuat saldo cuti tahunan:', err)
-  }
-  const sisaCuti = saldoCutiTahunan.sisa || 0
-
-  if (profile?.foto_url && profile.foto_url !== window.currentUser.foto_url) {
-    window.currentUser.foto_url = profile.foto_url
-  }
-
-  // Date range (current month)
-  // Gunakan tanggal lokal (dari titik radius) sebagai basis bulan
-  const todayLocal = getTodayLokal()
-  const [tyear, tmonth] = todayLocal.split('-').map(Number)
-  const firstDay = new Date(Date.UTC(tyear, tmonth - 1, 1))
-  const lastDay  = new Date(Date.UTC(tyear, tmonth, 0))
-  const dateFrom = firstDay.toISOString().split('T')[0]
-  const dateTo   = lastDay.toISOString().split('T')[0]
-
-  const isAdmin = canApproveAttendance(user) && !isStaff(user)
-
-  // Get total jam kerja (personal user login)
-  const absensiMonthAll = await fetchAbsensiRowsForUser({
-    userId: user.id,
-    nama: fullName,
-    dateFrom,
-    dateTo,
-    select: 'tanggal, waktu_masuk, waktu_pulang, status_masuk, status_absensi, status_kehadiran'
-  })
-  const absensiMonth = (absensiMonthAll || []).filter(a => a.status_absensi === 'COMPLETE')
-
-  let totalJamKerja = 0
-  absensiMonth?.forEach(a => {
-    if (a.waktu_masuk && a.waktu_pulang) {
-      const durasiMenit = getDurasiMenit(a.waktu_masuk, a.waktu_pulang)
-      if (durasiMenit !== null) totalJamKerja += durasiMenit / 60
-    }
-  })
-
-  // Batasi menu utama hanya 4 tombol
-  const menuItems = [
-    { nav: 'absensi',       icon: 'fa-sign-in-alt',  label: 'Masuk',            color: '#f59e0b', color2: '#fbbf24' },
-    { nav: 'absensi',       icon: 'fa-sign-out-alt', label: 'Pulang',           color: '#3b82f6', color2: '#60a5fa' },
-    { nav: 'pengajuan',     icon: 'fa-file-alt',     label: 'Pengajuan',        color: '#8b5cf6', color2: '#a78bfa' },
-    { nav: 'perbaikan-absen',icon: 'fa-pencil-alt',    label: 'Perbaikan Absen',  color: '#ef4444', color2: '#f87171' }
-  ]
-
-  const menuHtml = menuItems.map(m => `
-    <button
-      onclick="window.navigate('${m.nav}')"
-      class="fav-btn"
-      style="
-        background: linear-gradient(135deg, ${m.color2} 0%, ${m.color} 100%);
-        border: none;
-        border-radius: 14px;
-        cursor: pointer;
-        text-align: center;
-        color: white;
-        font-weight: 700;
-        padding: 14px 8px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        min-width: 85px;
-        width: 85px;
-        flex-shrink: 0;
-        transition: all 0.2s;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-      ">
-      <i class="fa ${m.icon}" style="font-size:1.5rem;"></i>
-      <span style="font-size:.7rem; line-height:1.2; white-space: nowrap;">${m.label}</span>
-    </button>
-  `).join('')
-
-  // ===== WIDGET STATISTIK KEHADIRAN REAL-TIME KHUSUS ADMIN =====
-  let adminWidgetHtml = ''
-  
-  if (isAdmin) {
     try {
-      const hariIniStr = getTodayLokal()
-      
-      const { data: absenHariIni } = await applyTenantFilter(supabase.from('absensi').select('*').eq('tanggal', hariIniStr), { user })
-      const { data: jadwalHariIni } = await applyTenantFilter(supabase.from('jadwal').select('*').eq('tanggal', hariIniStr), { user })
-      
-      let tepatWaktu = 0, terlambat = 0, sedangKerja = 0, liburAtauCuti = 0, openApproval = 0, outRadius = 0, lupaAbsen = 0
-      
-      absenHariIni?.forEach(a => {
-        if (a.status_absensi === 'OPEN') openApproval++
-        if (a.radius_status === RADIUS_STATUS.OUT_RADIUS) outRadius++
-        if (a.approval_flag === 'LATE_CHECKIN_MISSING' || (a.waktu_masuk && !a.waktu_pulang)) lupaAbsen++
-        if (a.waktu_masuk && a.waktu_pulang && a.status_absensi === 'COMPLETE') {
-          if (a.status_masuk === 'Terlambat') terlambat++
-          else tepatWaktu++
-        } else if (a.waktu_masuk && !a.waktu_pulang) {
-          sedangKerja++
-        }
-      })
-      
-      jadwalHariIni?.forEach(j => {
-        if (['OFF', 'cuti', 'sakit', 'izin'].includes(j.status_override) || j.shift_code === '8') {
-          liburAtauCuti++
-        }
-      })
-      
-      adminWidgetHtml = `
-        <div class="card fade-up" style="padding: 16px; margin-bottom: 20px;">
-          <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">
-            <i class="fa fa-chart-line" style="color: var(--primary);"></i> Live Monitoring Kehadiran Hari Ini
-          </div>
-          ${openApproval > 0 ? `<button onclick="window.navigate('approval-absensi')" style="width:100%;margin-bottom:10px;border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:10px;padding:9px;font-weight:900;cursor:pointer;"><i class="fa fa-bell"></i> Absensi Menunggu Approval (${openApproval})</button>` : ''}
-          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center;">
-            <div style="background: #dcfce7; padding: 10px 4px; border-radius: 10px;">
-              <div style="font-size: 1.2rem; font-weight: 900; color: #166534;">${tepatWaktu}</div>
-              <div style="font-size: .6rem; color: #166534; font-weight: 700;">Tepat Waktu</div>
-            </div>
-            <div style="background: #fffbeb; padding: 10px 4px; border-radius: 10px;">
-              <div style="font-size: 1.2rem; font-weight: 900; color: #b45309;">${sedangKerja}</div>
-              <div style="font-size: .6rem; color: #b45309; font-weight: 700;">On Duty</div>
-            </div>
-            <div style="background: #fee2e2; padding: 10px 4px; border-radius: 10px;">
-              <div style="font-size: 1.2rem; font-weight: 900; color: #991b1b;">${terlambat}</div>
-              <div style="font-size: .6rem; color: #991b1b; font-weight: 700;">Terlambat</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 10px 4px; border-radius: 10px;">
-              <div style="font-size: 1.2rem; font-weight: 900; color: #475569;">${liburAtauCuti}</div>
-              <div style="font-size: .6rem; color: #475569; font-weight: 700;">Off / Cuti</div>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;margin-top:8px;">
-            <div style="background:#fffbeb;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#b45309;">${openApproval}</div><div style="font-size:.6rem;color:#b45309;font-weight:700;">Menunggu Approval</div></div>
-            <div style="background:#fee2e2;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#991b1b;">${outRadius}</div><div style="font-size:.6rem;color:#991b1b;font-weight:700;">Out Radius</div></div>
-            <div style="background:#fef3c7;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#92400e;">${lupaAbsen}</div><div style="font-size:.6rem;color:#92400e;font-weight:700;">Lupa Absen</div></div>
-            <div style="background:#dbeafe;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#1d4ed8;">${sedangKerja}</div><div style="font-size:.6rem;color:#1d4ed8;font-weight:700;">Shift Aktif</div></div>
-          </div>
-        </div>
-      `
-    } catch (err) {
-      console.error("Gagal memuat widget live monitoring hrd:", err)
-    }
-  }
+      const yesterday = addDays(getTodayLokal(), -1)
+      const absenKemarin = await fetchAbsensiSingleForUser({ userId: user.id, nama: user.nama_lengkap || user.email, tanggal: yesterday, select: '*' })
+      if (absenKemarin?.waktu_masuk && !absenKemarin?.waktu_pulang) {
+        await supabase.from('absensi').update({ status_absensi: 'OPEN', status_kehadiran: 'MENUNGGU_VERIFIKASI' }).eq('id', absenKemarin.id)
+      }
+    } catch (e) { console.error('Gagal sinkronisasi status OPEN absensi:', e) }
 
-  // ===== DASHBOARD PERSONAL STAFF =====
-  const absensiHariIni = await fetchAbsensiSingleForUser({
-    userId: user.id,
-    nama: fullName,
-    tanggal: todayLocal,
-    select: 'waktu_masuk, waktu_pulang, status_absensi, status_kehadiran'
-  })
+    const serverIso = await getServerTimeIso()
+    const range = getRange()
+    const todayLocal = getTodayLokal()
+    const isAdmin = canApproveAttendance(user) && !isStaff(user)
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
+    const fullName = profile?.nama_lengkap || user.email
+    let saldo = { sisa: profile?.sisa_cuti || 0, status: '-', periode_mulai: null, periode_selesai: null }
+    try { saldo = await getSisaCuti(user.id, profile?.tanggal_bergabung || user.tanggal_bergabung) } catch (err) { console.error('Gagal memuat saldo cuti tahunan:', err) }
+    if (profile?.foto_url && profile.foto_url !== window.currentUser.foto_url) window.currentUser.foto_url = profile.foto_url
 
-  const { data: shiftHariIni } = await supabase
-    .from('jadwal')
-    .select('shift_code, status_override')
-    .eq('user_id', user.id)
-    .eq('tanggal', todayLocal)
-    .maybeSingle()
+    const body = isAdmin
+      ? await adminBody(user, range)
+      : await personalBody({ user, fullName, range, todayLocal, sisaCuti: saldo.sisa || 0, saldo })
 
-  const totalHadirBulanIni = absensiMonth?.filter(a => a.waktu_masuk && a.status_absensi === 'COMPLETE').length || 0
-  const totalTerlambatBulanIni = absensiMonth?.filter(a => a.status_masuk === 'Terlambat').length || 0
-  const totalLupaPulangBulanIni = absensiMonth?.filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG').length || 0
+    content.innerHTML = `<div class="gp-dashboard-shell"><div class="gp-dashboard-hero"><div><div style="font-size:.72rem;font-weight:900;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:8px;">GenPro Absensi App</div><h2>Dashboard ${isAdmin ? 'Admin' : 'Personal'}</h2><p>${esc(fullName)} · Ringkasan berdasarkan filter tanggal</p></div><div class="gp-hero-clock"><span>Waktu Server</span><strong id="dashboardLiveClock">--:--:--</strong><span id="dashboardLiveDate">Memuat waktu server...</span></div></div>${filterHtml(range)}${body.html}${chartsSection(range)}<div class="gp-panel"><div class="gp-panel-title"><strong>Kalender HRD</strong><span>Jadwal kerja dan agenda</span></div><div style="padding:12px;text-align:center;border:1.5px dashed var(--gp-line);border-radius:16px;background:#f8fafc;"><p style="font-size:.85rem;color:var(--gp-slate);margin-bottom:10px;">Lihat jadwal kerja dan agenda perusahaan.</p><button class="gp-btn gp-btn-primary" onclick="window.navigate('kalender')"><i class="fa fa-eye"></i> Buka Kalender HRD</button></div></div></div>`
 
-  const riwayatTerbaru = (absensiMonthAll || [])
-    .slice()
-    .sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)))
-    .slice(0, 5)
-
-  const personalHtml = `
-    <div style="margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Dashboard Personal</div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Hadir Bulan Ini</div><div style="font-size:1.2rem;font-weight:800">${totalHadirBulanIni}</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Terlambat Bulan Ini</div><div style="font-size:1.2rem;font-weight:800">${totalTerlambatBulanIni}</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Lupa Absen Pulang</div><div style="font-size:1.2rem;font-weight:800">${totalLupaPulangBulanIni}</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Jam Kerja Bulan Ini</div><div style="font-size:1.2rem;font-weight:800">${totalJamKerja.toFixed(1)} jam</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Shift Hari Ini</div><div style="font-size:1rem;font-weight:800">${shiftHariIni?.status_override || shiftHariIni?.shift_code || '-'}</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Status Absensi Hari Ini</div><div style="font-size:1rem;font-weight:800">${absensiHariIni?.status_absensi || 'Belum Absen'}</div></div>
-      </div>
-    </div>
-
-    <div class="card fade-up" style="padding: 16px; margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Riwayat Absensi Terbaru</div>
-      ${(riwayatTerbaru || []).map(r => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>${toTanggalAbsensiLokal(r?.tanggal, r?.waktu_masuk || r?.waktu_pulang)}</span><span>${r.waktu_masuk ? toJamLokal(r.waktu_masuk) : '-'} → ${r.waktu_pulang ? toJamLokal(r.waktu_pulang) : '-'}</span><strong>${r.status_absensi || '-'}</strong></div>`).join('') || '<div style="font-size:.82rem;color:var(--text-muted)">Belum ada riwayat absensi.</div>'}
-    </div>
-  `
-
-  // ===== HR ANALYTICS GLOBAL (ADMIN / SUPER ADMIN) =====
-  let adminGlobalHtml = ''
-  if (isAdmin) {
-    let globalAbsensiQuery = supabase
-      .from('absensi')
-      .select('user_id, nama, tanggal, status_masuk, status_absensi, status_kehadiran, waktu_masuk, waktu_pulang, menit_pulang_cepat, client_id, department_id, departemen')
-      .gte('tanggal', dateFrom)
-      .lte('tanggal', dateTo)
-    globalAbsensiQuery = applyTenantFilter(globalAbsensiQuery, { user, legacyDepartmentColumn: 'departemen' })
-    const { data: globalAbsensi } = await globalAbsensiQuery
-
-    let globalJadwalQuery = supabase
-      .from('jadwal')
-      .select('user_id, tanggal, shift_code, status_override, client_id, department_id, departemen')
-      .gte('tanggal', dateFrom)
-      .lte('tanggal', dateTo)
-    globalJadwalQuery = applyTenantFilter(globalJadwalQuery, { user, legacyDepartmentColumn: 'departemen' })
-    const { data: globalJadwal } = await globalJadwalQuery
-
-    const todayValue = todayLocal
-    const completedAbsensi = (globalAbsensi || []).filter(a => a.status_absensi === 'COMPLETE')
-    const hadirGlobal = completedAbsensi.filter(a => a.waktu_masuk).length
-    const terlambatGlobal = completedAbsensi.filter(a => a.status_masuk === 'Terlambat' || a.status_kehadiran === 'TERLAMBAT').length
-    const pulangCepatGlobal = completedAbsensi.filter(a => a.status_kehadiran === 'PULANG_CEPAT' || Number(a.menit_pulang_cepat || 0) > 0).length
-    const lupaPulangGlobal = (globalAbsensi || []).filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG').length
-    const openApprovalGlobal = (globalAbsensi || []).filter(a => a.status_absensi === 'OPEN').length
-    const cutiGlobal = (globalJadwal || []).filter(j => j.status_override === 'cuti').length
-    const izinGlobal = (globalJadwal || []).filter(j => j.status_override === 'izin').length
-    const sakitGlobal = (globalJadwal || []).filter(j => j.status_override === 'sakit').length
-    const offGlobal = (globalJadwal || []).filter(j => j.status_override === 'off' || j.shift_code === '8').length
-    const attendanceKeys = new Set((globalAbsensi || []).map(a => `${a.user_id || a.nama}|${a.tanggal}`))
-    const alphaGlobal = (globalJadwal || []).filter(j => {
-      if (!j.user_id || !j.tanggal || j.tanggal > todayValue) return false
-      if (['cuti', 'izin', 'sakit', 'off'].includes(j.status_override) || j.shift_code === '8') return false
-      return !attendanceKeys.has(`${j.user_id}|${j.tanggal}`)
-    }).length
-
-    const rankMap = {}
-    completedAbsensi.forEach(a => {
-      const key = a.nama || a.user_id
-      if (!key) return
-      if (!rankMap[key]) rankMap[key] = { nama: a.nama || 'Tanpa Nama', hadir: 0, tepat: 0, terlambat: 0, masalah: 0 }
-      if (a.waktu_masuk) rankMap[key].hadir += 1
-      const isLate = a.status_masuk === 'Terlambat' || a.status_kehadiran === 'TERLAMBAT'
-      if (isLate) rankMap[key].terlambat += 1
-      else if (a.waktu_masuk) rankMap[key].tepat += 1
-      if (isLate || ['LUPA_ABSEN_MASUK', 'LUPA_ABSEN_PULANG'].includes(a.status_kehadiran) || !a.waktu_masuk || !a.waktu_pulang) rankMap[key].masalah += 1
-    })
-    const rankRows = Object.values(rankMap)
-    const renderRankList = (rows, metric, suffix) => rows.length
-      ? rows.slice(0, 5).map((v, i) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>#${i + 1} ${v.nama}</span><strong>${v[metric]} ${suffix}</strong></div>`).join('')
-      : '<div style="font-size:.82rem;color:var(--text-muted);padding:10px 0;">Belum ada data bulan ini.</div>'
-    const rajinHtml = renderRankList([...rankRows].sort((a, b) => b.tepat - a.tepat), 'tepat', 'tepat waktu')
-    const terlambatRankHtml = renderRankList([...rankRows].sort((a, b) => b.terlambat - a.terlambat), 'terlambat', 'telat')
-    const baikHtml = renderRankList([...rankRows].sort((a, b) => (b.hadir - b.terlambat) - (a.hadir - a.terlambat)), 'hadir', 'hadir')
-    const burukHtml = renderRankList([...rankRows].sort((a, b) => b.masalah - a.masalah), 'masalah', 'masalah')
-
-    adminGlobalHtml = `
-      <div style="margin-bottom: 20px;">
-        <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">HR Analytics Global</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Hadir</div><div style="font-size:1.2rem;font-weight:800">${hadirGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Terlambat</div><div style="font-size:1.2rem;font-weight:800">${terlambatGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Pulang Cepat</div><div style="font-size:1.2rem;font-weight:800">${pulangCepatGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Cuti</div><div style="font-size:1.2rem;font-weight:800">${cutiGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Izin</div><div style="font-size:1.2rem;font-weight:800">${izinGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Sakit</div><div style="font-size:1.2rem;font-weight:800">${sakitGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Off</div><div style="font-size:1.2rem;font-weight:800">${offGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Alpha</div><div style="font-size:1.2rem;font-weight:800">${alphaGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Pending Approval</div><div style="font-size:1.2rem;font-weight:800">${openApprovalGlobal}</div></div>
-        </div>
-      </div>
-      <div class="card fade-up" style="padding:16px;margin-bottom:20px;" id="adminGlobalStats" data-hadir="${hadirGlobal}" data-terlambat="${terlambatGlobal}" data-pulang-cepat="${pulangCepatGlobal}" data-cuti="${cutiGlobal}" data-izin="${izinGlobal}" data-sakit="${sakitGlobal}" data-off="${offGlobal}" data-alpha="${alphaGlobal}" data-pending="${openApprovalGlobal}">
-        <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Ranking Kehadiran Bulan Ini</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
-          <div><strong style="font-size:.78rem;">Paling Rajin Tepat Waktu</strong>${rajinHtml}</div>
-          <div><strong style="font-size:.78rem;">Paling Sering Terlambat</strong>${terlambatRankHtml}</div>
-          <div><strong style="font-size:.78rem;">Kehadiran Paling Baik</strong>${baikHtml}</div>
-          <div><strong style="font-size:.78rem;">Kehadiran Paling Buruk</strong>${burukHtml}</div>
-        </div>
-      </div>
-      <div class="card fade-up" style="padding:16px;margin-bottom:20px;">
-        <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Grafik Global Kehadiran</div>
-        <div style="position:relative;width:100%;height:220px;"><canvas id="adminGlobalChart"></canvas></div>
-      </div>
-    `
-  }
-  content.innerHTML = `
-    <div class="page-header" style="margin-bottom: 20px;">
-      <h2 style="margin: 0;"><i class="fa fa-tachometer-alt"></i> Dashboard</h2>
-    </div>
-
-    <div class="card fade-up" style="padding: 16px; margin-bottom: 16px; text-align:center;">
-      <div style="font-size:.7rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;margin-bottom:4px;">Waktu Server</div>
-      <div id="dashboardLiveClock" style="font-family:monospace;font-size:1.8rem;font-weight:900;color:var(--primary);">--:--:--</div>
-      <div id="dashboardLiveDate" style="font-size:.8rem;color:var(--text-muted);margin-top:2px;">Memuat waktu server...</div>
-    </div>
-
-    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white; border: none;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div>
-          <div style="font-weight: 800; font-size: 1.1rem;">${fullName}</div>
-          <div style="font-size: .8rem; color: rgba(255,255,255,0.8); margin-top: 6px;">Saldo Cuti: <strong>${sisaCuti} hari</strong> · ${saldoCutiTahunan.status || '-'} (${saldoCutiTahunan.periode_mulai || '-'} s/d ${saldoCutiTahunan.periode_selesai || '-'})</div>
-        </div>
-        <div style="text-align: right; font-size: 2.2rem; opacity: 0.2;"><i class="fa fa-id-badge"></i></div>
-      </div>
-    </div>
-
-    ${adminWidgetHtml}
-    ${isAdmin ? adminGlobalHtml : personalHtml}
-
-    <div style="margin-bottom: 25px; display: flex; justify-content: center; width: 100%;">
-      <div style="
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 6px;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(0,0,0,0.15) transparent;
-        max-width: 100%;
-      ">
-        <div style="
-          display: flex;
-          flex-direction: row;
-          justify-content: center;
-          gap: 12px;
-          width: max-content;
-          padding: 4px 6px;
-          margin: 0 auto;
-        ">
-          ${menuHtml}
-        </div>
-      </div>
-    </div>
-
-    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; text-align: center;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 14px;">Total Jam Kerja</div>
-      <div style="position: relative; width: 160px; height: 160px; margin: 0 auto;">
-        <canvas id="jamKerjaChart"></canvas>
-        <div id="jamKerjaChart-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;"></div>
-      </div>
-    </div>
-
-    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Aktivitas Saya (Jam Datang & Pulang)</div>
-      <div style="font-size: .75rem; color: var(--text-muted); margin-bottom: 12px;">
-        ${toTanggalLokal(firstDay.toISOString())} - ${toTanggalLokal(lastDay.toISOString())}
-      </div>
-      <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-        <div style="position: relative; width: 100%; min-width: 600px; height: 300px;">
-          <canvas id="aktivitasChart"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Distribusi Absensi</div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-        <div class="card fade-up" style="padding: 14px;">
-          <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Kehadiran</div>
-          <div style="position: relative; width: 100%; height: 200px;">
-            <canvas id="absensiChartKehadiran"></canvas>
-          </div>
-        </div>
-        <div class="card fade-up" style="padding: 14px;">
-          <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Absen Masuk</div>
-          <div style="position: relative; width: 100%; height: 200px;">
-            <canvas id="absensiChartMasuk"></canvas>
-          </div>
-        </div>
-        <div class="card fade-up" style="padding: 14px;">
-          <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Absen Pulang</div>
-          <div style="position: relative; width: 100%; height: 200px;">
-            <canvas id="absensiChartPulang"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 14px;">
-        <i class="fa fa-calendar-alt" style="color: var(--primary);"></i> Kalender HRD
-      </div>
-      <div style="padding: 10px 0; text-align: center; border: 1.5px dashed var(--border); border-radius: var(--r-md); background: var(--gray-50);">
-        <p style="font-size: .85rem; color: var(--text-muted); margin-bottom: 8px;">Lihat jadwal kerja dan agenda perusahaan bulan ini</p>
-        <button class="btn-primary btn-sm" onclick="window.navigate('kalender')" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-          <i class="fa fa-eye"></i> Buka Kalender HRD
-        </button>
-      </div>
-    </div>
-
-    <style>
-      .fav-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18) !important; }
-      .fav-btn:active { transform: translateY(-1px); }
-    </style>
-  `
-
-  startServerDigitalClock({ key: 'dashboard', timeElementId: 'dashboardLiveClock', dateElementId: 'dashboardLiveDate', serverIso: dashboardServerIso || new Date().toISOString() })
-
-  if (typeof Chart === 'undefined') {
-    const script = document.createElement('script')
-    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
-    script.onload = () => { loadCharts(user.id, dateFrom, dateTo, totalJamKerja) }
-    document.head.appendChild(script)
-  } else {
-    loadCharts(user.id, dateFrom, dateTo, totalJamKerja)
-  }
+    bindDashboardFilterEvents()
+    startServerDigitalClock({ key: 'dashboard', timeElementId: 'dashboardLiveClock', dateElementId: 'dashboardLiveDate', serverIso: serverIso || new Date().toISOString() })
+    const totalJamKerja = isAdmin ? 0 : body.totalJamKerja
+    if (typeof Chart === 'undefined') {
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
+      script.onload = () => loadCharts(user.id, range.dateFrom, range.dateTo, totalJamKerja)
+      document.head.appendChild(script)
+    } else loadCharts(user.id, range.dateFrom, range.dateTo, totalJamKerja)
   } catch (err) {
     console.error('Gagal render dashboard:', err)
     content.innerHTML = `<div class="card" style="padding:18px;border-color:#fecaca;background:#fef2f2;color:#991b1b;"><strong>Dashboard gagal dimuat.</strong><p style="margin:.5rem 0 0;">Data tidak dapat ditampilkan. Coba muat ulang atau hubungi admin.</p></div>`
@@ -488,55 +168,65 @@ export async function renderDashboard() {
   }
 }
 
+async function personalBody({ user, fullName, range, todayLocal, sisaCuti, saldo }) {
+  const rows = await fetchAbsensiRowsForUser({ userId: user.id, nama: fullName, dateFrom: range.dateFrom, dateTo: range.dateTo, select: 'tanggal,waktu_masuk,waktu_pulang,status_masuk,status_absensi,status_kehadiran' })
+  const complete = (rows || []).filter(a => a.status_absensi === 'COMPLETE')
+  let totalJamKerja = 0
+  complete.forEach(a => { if (a.waktu_masuk && a.waktu_pulang) { const m = getDurasiMenit(a.waktu_masuk, a.waktu_pulang); if (m !== null) totalJamKerja += m / 60 } })
+  const today = await fetchAbsensiSingleForUser({ userId: user.id, nama: fullName, tanggal: todayLocal, select: 'waktu_masuk,waktu_pulang,status_absensi,status_kehadiran' })
+  const { data: shift } = await supabase.from('jadwal').select('shift_code,status_override').eq('user_id', user.id).eq('tanggal', todayLocal).maybeSingle()
+  const hadir = complete.filter(a => a.waktu_masuk).length
+  const telat = complete.filter(a => a.status_masuk === 'Terlambat' || a.status_kehadiran === 'TERLAMBAT').length
+  const lupa = (rows || []).filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG' || (a.waktu_masuk && !a.waktu_pulang)).length
+  const history = (rows || []).slice().sort((a,b) => String(b.tanggal).localeCompare(String(a.tanggal))).slice(0,5)
+  return { totalJamKerja, html: `<div class="gp-stat-grid">${stat('Hadir', hadir, 'Periode terpilih', 'fa-user-check', 'gp-stat-green')}${stat('Terlambat', telat, 'Periode terpilih', 'fa-clock', 'gp-stat-yellow')}${stat('Lupa Pulang', lupa, 'Butuh perhatian', 'fa-triangle-exclamation', 'gp-stat-red')}${stat('Jam Kerja', totalJamKerja.toFixed(1), 'Total jam periode', 'fa-business-time')}</div><div class="gp-chart-grid"><div class="gp-panel"><div class="gp-panel-title"><strong>Status Hari Ini</strong><span>${toTanggalLokal(todayLocal)}</span></div><div class="gp-mini-row"><span>Shift</span><strong>${esc(shift?.status_override || shift?.shift_code || '-')}</strong></div><div class="gp-mini-row"><span>Status Absen</span><strong><span class="gp-badge ${badgeClass(today?.status_absensi)}">${esc(today?.status_absensi || 'Belum Absen')}</span></strong></div><div class="gp-mini-row"><span>Masuk</span><strong>${today?.waktu_masuk ? toJamLokal(today.waktu_masuk) : '-'}</strong></div><div class="gp-mini-row"><span>Pulang</span><strong>${today?.waktu_pulang ? toJamLokal(today.waktu_pulang) : '-'}</strong></div><div class="gp-mini-row"><span>Saldo Cuti</span><strong>${sisaCuti} hari</strong></div><div style="margin-top:10px;font-size:.75rem;color:var(--gp-slate);">${esc(saldo.status || '-')} · ${esc(saldo.periode_mulai || '-')} s/d ${esc(saldo.periode_selesai || '-')}</div></div><div class="gp-panel"><div class="gp-panel-title"><strong>Riwayat Terbaru</strong><span>5 data terakhir</span></div>${history.length ? history.map(r => `<div class="gp-mini-row"><span>${toTanggalAbsensiLokal(r?.tanggal, r?.waktu_masuk || r?.waktu_pulang)}</span><span>${r.waktu_masuk ? toJamLokal(r.waktu_masuk) : '-'} → ${r.waktu_pulang ? toJamLokal(r.waktu_pulang) : '-'}</span><strong><span class="gp-badge ${badgeClass(r.status_absensi)}">${esc(r.status_absensi || '-')}</span></strong></div>`).join('') : '<div style="font-size:.82rem;color:var(--gp-slate);padding:10px 0;">Belum ada riwayat absensi.</div>'}</div></div>${shortcuts(false)}` }
+}
+
+async function adminBody(user, range) {
+  let aq = supabase.from('absensi').select('user_id,nama,tanggal,status_masuk,status_absensi,status_kehadiran,waktu_masuk,waktu_pulang,menit_pulang_cepat,approval_flag,radius_status,client_id,department_id,departemen').gte('tanggal', range.dateFrom).lte('tanggal', range.dateTo)
+  aq = applyTenantFilter(aq, { user, legacyDepartmentColumn: 'departemen' })
+  const { data: absensi, error: ae } = await aq
+  if (ae) throw ae
+  let jq = supabase.from('jadwal').select('user_id,tanggal,shift_code,status_override,client_id,department_id,departemen').gte('tanggal', range.dateFrom).lte('tanggal', range.dateTo)
+  jq = applyTenantFilter(jq, { user, legacyDepartmentColumn: 'departemen' })
+  const { data: jadwal, error: je } = await jq
+  if (je) throw je
+  const complete = (absensi || []).filter(a => a.status_absensi === 'COMPLETE')
+  const hadir = complete.filter(a => a.waktu_masuk).length
+  const telat = complete.filter(a => a.status_masuk === 'Terlambat' || a.status_kehadiran === 'TERLAMBAT').length
+  const pulangCepat = complete.filter(a => a.status_kehadiran === 'PULANG_CEPAT' || Number(a.menit_pulang_cepat || 0) > 0).length
+  const pending = (absensi || []).filter(a => a.status_absensi === 'OPEN').length
+  const outRadius = (absensi || []).filter(a => a.radius_status === RADIUS_STATUS.OUT_RADIUS).length
+  const lupa = (absensi || []).filter(a => String(a.status_kehadiran || '').includes('LUPA') || a.approval_flag === 'LATE_CHECKIN_MISSING').length
+  const byOverride = name => (jadwal || []).filter(j => String(j.status_override || '').toLowerCase() === name).length
+  const cuti = byOverride('cuti'), izin = byOverride('izin'), sakit = byOverride('sakit')
+  const off = (jadwal || []).filter(j => String(j.status_override || '').toLowerCase() === 'off' || j.shift_code === '8').length
+  const keys = new Set((absensi || []).map(a => `${a.user_id || a.nama}|${a.tanggal}`))
+  const alpha = (jadwal || []).filter(j => j.user_id && j.tanggal <= getTodayLokal() && !['cuti','izin','sakit','off'].includes(String(j.status_override || '').toLowerCase()) && j.shift_code !== '8' && !keys.has(`${j.user_id}|${j.tanggal}`)).length
+  const rank = {}
+  complete.forEach(a => { const k = a.nama || a.user_id; if (!k) return; rank[k] ||= { nama: a.nama || 'Tanpa Nama', hadir: 0, tepat: 0, telat: 0, masalah: 0 }; rank[k].hadir++; const late = a.status_masuk === 'Terlambat' || a.status_kehadiran === 'TERLAMBAT'; if (late) rank[k].telat++; else rank[k].tepat++; if (late || String(a.status_kehadiran || '').includes('LUPA') || !a.waktu_pulang) rank[k].masalah++ })
+  const list = (rows, key, suffix) => rows.length ? rows.slice(0,5).map((r,i) => `<div class="gp-mini-row"><span>#${i+1} ${esc(r.nama)}</span><strong>${r[key]} ${suffix}</strong></div>`).join('') : '<div style="font-size:.82rem;color:var(--gp-slate);padding:10px 0;">Belum ada data pada periode ini.</div>'
+  const ranks = Object.values(rank)
+  return { html: `<div class="gp-stat-grid">${stat('Hadir', hadir, 'Sesuai filter tanggal', 'fa-user-check', 'gp-stat-green')}${stat('Terlambat', telat, 'Masuk terlambat', 'fa-clock', 'gp-stat-yellow')}${stat('Tidak Hadir / Alpha', alpha, 'Berdasarkan jadwal', 'fa-user-xmark', 'gp-stat-red')}${stat('Pending Approval', pending, 'Absensi status OPEN', 'fa-file-signature')}</div><div class="gp-chart-grid"><div class="gp-panel"><div class="gp-panel-title"><strong>Grafik Global Kehadiran</strong><span>${toTanggalLokal(range.dateFrom)} - ${toTanggalLokal(range.dateTo)}</span></div><div style="position:relative;width:100%;height:260px;"><canvas id="adminGlobalChart"></canvas></div><div id="adminGlobalStats" data-hadir="${hadir}" data-terlambat="${telat}" data-pulang-cepat="${pulangCepat}" data-cuti="${cuti}" data-izin="${izin}" data-sakit="${sakit}" data-off="${off}" data-alpha="${alpha}" data-pending="${pending}"></div></div><div class="gp-panel"><div class="gp-panel-title"><strong>Ringkasan Status</strong><span>Periode terpilih</span></div><div class="gp-mini-row"><span>Cuti</span><strong>${cuti}</strong></div><div class="gp-mini-row"><span>Izin</span><strong>${izin}</strong></div><div class="gp-mini-row"><span>Sakit</span><strong>${sakit}</strong></div><div class="gp-mini-row"><span>Off</span><strong>${off}</strong></div><div class="gp-mini-row"><span>Out Radius</span><strong>${outRadius}</strong></div><div class="gp-mini-row"><span>Lupa Absen</span><strong>${lupa}</strong></div></div></div><div class="gp-panel"><div class="gp-panel-title"><strong>Ranking Kehadiran</strong><span>Berdasarkan filter tanggal</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;"><div><strong style="font-size:.78rem;">Paling Rajin Tepat Waktu</strong>${list([...ranks].sort((a,b)=>b.tepat-a.tepat),'tepat','tepat waktu')}</div><div><strong style="font-size:.78rem;">Paling Sering Terlambat</strong>${list([...ranks].sort((a,b)=>b.telat-a.telat),'telat','telat')}</div><div><strong style="font-size:.78rem;">Kehadiran Paling Baik</strong>${list([...ranks].sort((a,b)=>b.hadir-a.hadir),'hadir','hadir')}</div><div><strong style="font-size:.78rem;">Perlu Perhatian</strong>${list([...ranks].sort((a,b)=>b.masalah-a.masalah),'masalah','masalah')}</div></div></div>${shortcuts(true)}` }
+}
+
+function chartsSection(range) {
+  return `<div class="gp-panel"><div class="gp-panel-title"><strong>Total Jam Kerja</strong><span>${toTanggalLokal(range.dateFrom)} - ${toTanggalLokal(range.dateTo)}</span></div><div style="position:relative;width:170px;height:170px;margin:0 auto;"><canvas id="jamKerjaChart"></canvas><div id="jamKerjaChart-text" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;"></div></div></div><div class="gp-panel"><div class="gp-panel-title"><strong>Aktivitas Saya (Jam Datang & Pulang)</strong><span>${toTanggalLokal(range.dateFrom)} - ${toTanggalLokal(range.dateTo)}</span></div><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><div style="position:relative;width:100%;min-width:600px;height:300px;"><canvas id="aktivitasChart"></canvas></div></div></div><div class="gp-panel"><div class="gp-panel-title"><strong>Distribusi Absensi</strong><span>Semua chart mengikuti filter tanggal</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;"><div style="position:relative;width:100%;height:220px;"><canvas id="absensiChartKehadiran"></canvas></div><div style="position:relative;width:100%;height:220px;"><canvas id="absensiChartMasuk"></canvas></div><div style="position:relative;width:100%;height:220px;"><canvas id="absensiChartPulang"></canvas></div></div></div>`
+}
 
 async function renderSuperAdminDashboard(content) {
   try {
-    const { data: clients, error: clientsError } = await supabase
-      .from('clients')
-      .select('id,nama_client,kode_client,domain_login,status')
-      .order('nama_client')
-    if (clientsError) throw clientsError
-
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id,client_id,status_akun')
-    if (profilesError) throw profilesError
-
-    const { data: departments, error: departmentsError } = await supabase
-      .from('departments')
-      .select('id,client_id,status')
-    if (departmentsError) throw departmentsError
-
-    const rows = (clients || []).map(client => {
-      const employeeRows = (profiles || []).filter(p => String(p.client_id || '') === String(client.id))
-      const active = employeeRows.filter(p => ['aktif', 'active'].includes(String(p.status_akun || 'Aktif').toLowerCase())).length
-      const inactive = employeeRows.length - active
-      const deptTotal = (departments || []).filter(d => String(d.client_id || '') === String(client.id)).length
-      return { ...client, active, inactive, deptTotal }
-    })
-    const totalActive = rows.reduce((sum, row) => sum + row.active, 0)
-    const totalInactive = rows.reduce((sum, row) => sum + row.inactive, 0)
-    const tableRows = rows.map(row => `
-      <tr>
-        <td style="padding:10px;border-bottom:1px solid var(--border);font-weight:800;">${row.nama_client || '-'}</td>
-        <td style="padding:10px;border-bottom:1px solid var(--border);">${row.domain_login || row.kode_client || '-'}</td>
-        <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">${row.active}</td>
-        <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">${row.inactive}</td>
-        <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">${row.deptTotal}</td>
-        <td style="padding:10px;border-bottom:1px solid var(--border);"><span style="padding:4px 8px;border-radius:999px;background:${row.status === 'active' ? '#dcfce7' : '#fee2e2'};color:${row.status === 'active' ? '#166534' : '#991b1b'};font-weight:800;font-size:.72rem;">${row.status || '-'}</span></td>
-      </tr>`).join('')
-
-    content.innerHTML = `
-      <div class="page-header" style="margin-bottom:20px;"><h2 style="margin:0;"><i class="fa fa-building"></i> Dashboard Super Admin</h2><p style="margin:6px 0 0;color:var(--text-muted);">Ringkasan Office untuk owner/developer.</p></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
-        <div class="card" style="padding:16px;"><div style="font-size:.72rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Total Office</div><div style="font-size:1.8rem;font-weight:900;">${rows.length}</div></div>
-        <div class="card" style="padding:16px;"><div style="font-size:.72rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Karyawan Aktif</div><div style="font-size:1.8rem;font-weight:900;">${totalActive}</div></div>
-        <div class="card" style="padding:16px;"><div style="font-size:.72rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Karyawan Nonaktif</div><div style="font-size:1.8rem;font-weight:900;">${totalInactive}</div></div>
-      </div>
-      <div class="card" style="padding:16px;overflow:auto;">
-        <div style="font-size:.75rem;font-weight:900;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;">List Office</div>
-        ${rows.length ? `<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr style="text-align:left;color:var(--text-muted);"><th style="padding:10px;">Office</th><th style="padding:10px;">Kode Domain</th><th style="padding:10px;text-align:right;">Aktif</th><th style="padding:10px;text-align:right;">Nonaktif</th><th style="padding:10px;text-align:right;">Department</th><th style="padding:10px;">Status</th></tr></thead><tbody>${tableRows}</tbody></table>` : `<div style="padding:20px;text-align:center;color:var(--text-muted);">Belum ada Office.</div>`}
-      </div>`
+    const { data: clients, error: ce } = await supabase.from('clients').select('id,nama_client,kode_client,domain_login,status').order('nama_client')
+    if (ce) throw ce
+    const { data: profiles, error: pe } = await supabase.from('profiles').select('id,client_id,status_akun')
+    if (pe) throw pe
+    const { data: departments, error: de } = await supabase.from('departments').select('id,client_id,status')
+    if (de) throw de
+    const rows = (clients || []).map(c => { const emp = (profiles || []).filter(p => String(p.client_id || '') === String(c.id)); const active = emp.filter(p => ['aktif','active'].includes(String(p.status_akun || 'Aktif').toLowerCase())).length; return { ...c, active, inactive: emp.length - active, deptTotal: (departments || []).filter(d => String(d.client_id || '') === String(c.id)).length } })
+    const totalActive = rows.reduce((s,r) => s + r.active, 0)
+    const totalInactive = rows.reduce((s,r) => s + r.inactive, 0)
+    const tableRows = rows.map(r => `<tr><td style="padding:10px;border-bottom:1px solid var(--border);font-weight:800;">${esc(r.nama_client || '-')}</td><td style="padding:10px;border-bottom:1px solid var(--border);">${esc(r.domain_login || r.kode_client || '-')}</td><td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">${r.active}</td><td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">${r.inactive}</td><td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">${r.deptTotal}</td><td style="padding:10px;border-bottom:1px solid var(--border);"><span class="gp-badge ${r.status === 'active' ? 'gp-badge-green' : 'gp-badge-red'}">${esc(r.status || '-')}</span></td></tr>`).join('')
+    content.innerHTML = `<div class="gp-dashboard-shell"><div class="gp-dashboard-hero"><div><div style="font-size:.72rem;font-weight:900;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:8px;">Owner / Developer</div><h2>Dashboard Super Admin</h2><p>Ringkasan Office dan Department GenPro.</p></div></div><div class="gp-stat-grid">${stat('Total Office', rows.length, 'Tenant terdaftar', 'fa-building')}${stat('Karyawan Aktif', totalActive, 'Akun aktif', 'fa-user-check', 'gp-stat-green')}${stat('Karyawan Nonaktif', totalInactive, 'Akun nonaktif', 'fa-user-xmark', 'gp-stat-red')}${stat('Department', rows.reduce((s,r)=>s+r.deptTotal,0), 'Total department', 'fa-sitemap')}</div><div class="gp-panel gp-table-card"><div class="gp-panel-title"><strong>List Office</strong><span>Data tenant aktif</span></div>${rows.length ? `<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr style="text-align:left;color:var(--text-muted);"><th style="padding:10px;">Office</th><th style="padding:10px;">Kode Domain</th><th style="padding:10px;text-align:right;">Aktif</th><th style="padding:10px;text-align:right;">Nonaktif</th><th style="padding:10px;text-align:right;">Department</th><th style="padding:10px;">Status</th></tr></thead><tbody>${tableRows}</tbody></table>` : `<div style="padding:20px;text-align:center;color:var(--text-muted);">Belum ada Office.</div>`}</div></div>`
   } catch (err) {
     console.error('Gagal render dashboard super_admin:', err)
     content.innerHTML = `<div class="card" style="padding:18px;border-color:#fecaca;background:#fef2f2;color:#991b1b;"><strong>Dashboard super admin gagal dimuat.</strong></div>`
@@ -551,27 +241,12 @@ async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
     createAbsensiChart('absensiChartKehadiran', 'absensiChartMasuk', 'absensiChartPulang', userId, dateFrom, dateTo).catch(err => console.warn('Gagal render chart absensi:', err))
     if (typeof Chart !== 'undefined' && canApproveAttendance(window.currentUser) && document.getElementById('adminGlobalChart')) {
       const ctx = document.getElementById('adminGlobalChart')
-      const statsEl = document.getElementById('adminGlobalStats')
-      const hadir = Number(statsEl?.dataset?.hadir || 0)
-      const terlambat = Number(statsEl?.dataset?.terlambat || 0)
-      const pulangCepat = Number(statsEl?.dataset?.pulangCepat || 0)
-      const cuti = Number(statsEl?.dataset?.cuti || 0)
-      const izin = Number(statsEl?.dataset?.izin || 0)
-      const sakit = Number(statsEl?.dataset?.sakit || 0)
-      const off = Number(statsEl?.dataset?.off || 0)
-      const alpha = Number(statsEl?.dataset?.alpha || 0)
-      const pending = Number(statsEl?.dataset?.pending || 0)
+      const el = document.getElementById('adminGlobalStats')
+      const vals = ['hadir','terlambat','pulangCepat','cuti','izin','sakit','off','alpha','pending'].map(k => Number(el?.dataset?.[k] || 0))
       window.appCharts = window.appCharts || {}
       window.appCharts.adminGlobalChart?.destroy()
       Chart.getChart(ctx)?.destroy()
-      window.appCharts.adminGlobalChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: ['Hadir', 'Terlambat', 'Pulang Cepat', 'Cuti', 'Izin', 'Sakit', 'Off', 'Alpha', 'Pending'],
-          datasets: [{ data: [hadir, terlambat, pulangCepat, cuti, izin, sakit, off, alpha, pending], backgroundColor: ['#16a34a', '#d97706', '#0ea5e9', '#22c55e', '#3b82f6', '#f59e0b', '#64748b', '#dc2626', '#8b5cf6'] }]
-        },
-        options: { responsive: true, plugins: { legend: { display: false } } }
-      })
+      window.appCharts.adminGlobalChart = new Chart(ctx, { type: 'bar', data: { labels: ['Hadir','Terlambat','Pulang Cepat','Cuti','Izin','Sakit','Off','Alpha','Pending'], datasets: [{ data: vals, backgroundColor: ['#10b981','#f59e0b','#0ea5e9','#22c55e','#3b82f6','#f97316','#64748b','#ef4444','#8b5cf6'], borderRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } })
     }
   }, 100)
 }
