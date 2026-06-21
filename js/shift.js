@@ -36,6 +36,45 @@ async function countLegacyShiftsWithoutOffice() {
   }
 }
 
+
+function getSelectedShiftIds() {
+  return Array.from(document.querySelectorAll('.shift-select-checkbox')).filter(el => el.checked).map(el => el.value)
+}
+
+function renderShiftSuperAdminToolbar(rows = []) {
+  if (!isSuperAdmin(window.currentUser)) return ''
+  return `<div class="card" style="padding:12px 14px;margin-bottom:12px;border:1px solid #fecaca;background:#fff7f7;">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
+      <div><strong style="color:#991b1b;"><i class="fa fa-shield-halved"></i> Super Admin Bulk Action</strong><div style="font-size:.75rem;color:var(--text-muted);">Shift sesuai tampilan/filter: ${rows.length}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn-danger btn-sm" onclick="window.superAdminDeleteSelectedShifts()"><i class="fa fa-trash"></i> Hapus Item Terpilih</button>
+        <button type="button" class="btn-danger btn-sm" onclick="window.superAdminDeleteFilteredShifts()"><i class="fa fa-layer-group"></i> Hapus Semua Sesuai Filter</button>
+        <button type="button" class="btn-secondary btn-sm" disabled title="Reset menu ini belum tersedia."><i class="fa fa-rotate-left"></i> Reset Data Sesuai Filter</button>
+      </div>
+    </div>
+  </div>`
+}
+
+async function runSuperAdminShiftDelete(ids, label) {
+  if (!ids.length) { showToast('Pilih minimal 1 shift.', 'warning'); return }
+  if (!(await confirmAction(`${label}: ${ids.length} shift akan dihapus jika tidak dipakai jadwal. Lanjutkan?`, 'Lanjutkan'))) return
+  const typed = window.prompt(`Ketik HAPUS untuk konfirmasi ${label}.`)
+  if (String(typed || '').trim().toUpperCase() !== 'HAPUS') { showToast('Konfirmasi dibatalkan.', 'warning'); return }
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sesi login tidak valid.')
+  const res = await fetch('/.netlify/functions/super-admin-data-action', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ action: 'delete_selected', menu_key: 'shifts', ids, confirm_text: 'HAPUS' }) })
+  const result = await res.json().catch(() => ({}))
+  if (!res.ok || !result.success) throw new Error(result.error || 'Gagal menghapus shift.')
+  resetShiftMasterCache(); showToast(`Shift terhapus: ${result.affected_count || 0}`, 'success'); renderShiftManagement()
+}
+
+window.superAdminDeleteSelectedShifts = async function() {
+  try { await runSuperAdminShiftDelete(getSelectedShiftIds(), 'Hapus Item Terpilih') } catch (err) { console.error('superAdminDeleteSelectedShifts error:', err); showToast(err.message || 'Gagal hapus shift.', 'error') }
+}
+window.superAdminDeleteFilteredShifts = async function() {
+  try { await runSuperAdminShiftDelete((window._shiftRows || []).map(s => String(s.id)), 'Hapus Semua Sesuai Filter') } catch (err) { console.error('superAdminDeleteFilteredShifts error:', err); showToast(err.message || 'Gagal hapus shift.', 'error') }
+}
+
 export async function renderShiftManagement() {
   const content = document.getElementById('content')
   const superAdmin = isSuperAdmin(window.currentUser)
@@ -66,6 +105,7 @@ export async function renderShiftManagement() {
     </div>
 
     ${error ? `<div class="alert danger"><i class="fa fa-exclamation-circle"></i> Gagal memuat data shift</div>` : ''}
+    ${renderShiftSuperAdminToolbar(visibleShifts)}
     ${legacyShiftWarningCount ? `
       <div class="alert warning" style="margin-bottom:12px;">
         <i class="fa fa-triangle-exclamation"></i>
@@ -80,6 +120,7 @@ export async function renderShiftManagement() {
         ? `<div class="empty-state"><i class="fa fa-clock"></i><p>Belum ada shift</p></div>`
         : visibleShifts.map(s => `
           <div class="shift-card">
+            ${superAdmin ? `<label style="display:flex;align-items:center;padding-right:4px;"><input type="checkbox" class="shift-select-checkbox" value="${safeText(s.id)}"></label>` : ''}
             <div class="sc-icon"><i class="fa fa-clock"></i></div>
             <div class="sc-info">
               <div class="sc-name">

@@ -62,7 +62,7 @@ exports.handler = async (event) => {
     if (!target) return json({ success: false, error: 'Profil target tidak ditemukan.' }, 404)
     if (!canResetPassword(caller, target)) return json({ success: false, error: 'Anda tidak memiliki izin reset password user ini.' }, 403)
 
-    await admin(`/auth/v1/admin/users/${target.id}`, { method: 'PATCH', body: JSON.stringify({ password: newPassword }) })
+    await admin(`/auth/v1/admin/users/${target.id}`, { method: 'PUT', body: JSON.stringify({ password: newPassword }) })
     await admin(`/rest/v1/profiles?id=eq.${target.id}`, {
       method: 'PATCH',
       headers: { prefer: 'return=minimal' },
