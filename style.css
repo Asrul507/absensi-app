@@ -362,6 +362,26 @@ a { color: var(--primary); text-decoration: none; }
 }
 .topbar-user-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 
+.topbar-office-context {
+  max-width: min(260px, 34vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+  color: rgba(255,255,255,.96);
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 800;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.topbar-user-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+
 .btn-menu,
 .btn-logout-top {
   background: rgba(255,255,255,.14);
@@ -4473,6 +4493,7 @@ html.dark .sidebar-badge-info {
   .topbar-left { gap: 8px; }
   .topbar-title { font-size: .94rem; letter-spacing: .2px; }
   .topbar-right { gap: 6px; }
-  .topbar-user-name { max-width: 34vw; font-size: .8rem; }
+  .topbar-user-name { max-width: 30vw; font-size: .8rem; }
+  .topbar-office-context { max-width: 36vw; font-size: .7rem; padding: 5px 8px; }
   .btn-theme-toggle, .btn-logout-top, .btn-menu { width: 34px !important; height: 34px; }
 }

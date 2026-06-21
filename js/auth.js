@@ -149,6 +149,7 @@ export async function createEmployeeAccount(payload) {
 
 /* ================= LOGOUT ================= */
 export async function logout() {
+  sessionStorage.removeItem('tenantContext')
   await supabase.auth.signOut()
   location.reload()
 }

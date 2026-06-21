@@ -1,9 +1,11 @@
 import { supabase } from './supabase.js'
 import { showToast, confirmAction } from './feedback.js'
 import { resetTimezoneCache } from './timezone.js'
-import { isSuperAdmin } from './access-control.js'
+import { applyTenantFilter, isSuperAdmin } from './access-control.js'
+import { ensureSuperAdminOfficeContext, readTenantContext } from './office-context.js'
 
 export async function renderPengaturanLokasi() {
+  if (!(await ensureSuperAdminOfficeContext('admin-lokasi', 'Pilih Office untuk Setting Radius'))) return
   const content = document.getElementById('content')
   
   content.innerHTML = `
@@ -66,7 +68,7 @@ window.superAdminDeleteFilteredLocations = async function() { try { await runSup
 async function muatDaftarLokasiAdmin() {
   const container = document.getElementById('tabelLokasiContainer')
   try {
-    const { data: list, error } = await supabase.from('lokasi_absen').select('*').order('created_at', { ascending: false })
+    const { data: list, error } = await applyTenantFilter(supabase.from('lokasi_absen').select('*').order('created_at', { ascending: false }), { user: window.currentUser, clientColumn: 'client_id', departmentColumn: null, userColumn: null, enforceSelf: false, enforceDepartment: false })
     if (error) throw error
     window._lokasiRows = list || []
     const toolbar = document.getElementById('lokasiBulkToolbar')
@@ -128,8 +130,10 @@ window.tangkapDanSimpanLokasi = function() {
 
   navigator.geolocation.getCurrentPosition(async (pos) => {
     try {
+      const activeClientId = isSuperAdmin(window.currentUser) ? readTenantContext().client_id : window.currentUser?.client_id
       const { error } = await supabase.from('lokasi_absen').insert([{
         nama_titik: nama,
+        client_id: activeClientId || null,
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
         radius_meter: parseInt(radius) || 50
@@ -157,7 +161,7 @@ window.tangkapDanSimpanLokasi = function() {
 window.hapusTitikLokasi = async function(id) {
   if (!(await confirmAction('Hapus titik lokasi patokan ini?', 'Ya, hapus'))) return
   try {
-    const { error } = await supabase.from('lokasi_absen').delete().eq('id', id)
+    const { error } = await applyTenantFilter(supabase.from('lokasi_absen').delete().eq('id', id), { user: window.currentUser, clientColumn: 'client_id', departmentColumn: null, userColumn: null, enforceSelf: false, enforceDepartment: false })
     if (error) throw error
     resetTimezoneCache()
     await muatDaftarLokasiAdmin()

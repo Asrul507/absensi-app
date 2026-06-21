@@ -24,6 +24,7 @@ import { renderKalenderHR } from './kalender.js'
 import { hitungMasaKerja, formatMasaKerja, getSisaCuti, hitungJatahCuti, resetCutiKaryawan, syncEligibleCutiTahunanForProfiles, buildKontrakPayload, canManageCutiTahunan, formatMasaKontrak, getSisaHariKontrak, getStatusKontrak, hitungKontrakBerakhir, prosesHangusCutiTahunan } from './services/leave-service.js'
 import './chart-helpers.js'
 import { renderPengaturanLokasi } from './admin_lokasi.js'
+import { ensureSuperAdminOfficeContext, getActiveOfficeContextLabel, clearSuperAdminOfficeContext } from './office-context.js'
 import { initTimezone, resetTimezoneCache, getTodayLokal, toTanggalJamLokal } from './timezone.js?v=20260609-6'
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 import { showToast, confirmAction } from './feedback.js'
@@ -108,6 +109,7 @@ async function checkUser() {
 
     const userNameEl = document.getElementById('userName')
     if (userNameEl) userNameEl.innerText = profile.nama_lengkap || user.email
+    window.updateHeaderOfficeContext?.()
 
     if (profile?.foto_url) window.currentUser.foto_url = profile.foto_url
 
@@ -222,6 +224,22 @@ function getCurrentOfficeLabel(user) {
 }
 
 window.getCurrentOfficeLabel = getCurrentOfficeLabel
+
+window.updateHeaderOfficeContext = function () {
+  const el = document.getElementById('activeOfficeContext')
+  if (!el) return
+  const label = getActiveOfficeContextLabel(window.currentUser)
+  if (!label) { el.style.display = 'none'; el.textContent = ''; return }
+  el.textContent = `Office Aktif: ${label}`
+  el.title = normalizeRole(window.currentUser?.role) === 'super_admin' ? 'Klik untuk ganti Office aktif' : 'Office akun'
+  el.style.display = 'inline-flex'
+}
+
+window.changeActiveOfficeContext = async function () {
+  if (normalizeRole(window.currentUser?.role) === 'super_admin') {
+    await clearSuperAdminOfficeContext(window.currentPage || 'dashboard')
+  }
+}
 
 function renderMenu(role) {
   const sidebar = document.getElementById('sidebar')
@@ -461,6 +479,8 @@ window.navigate = async function (page) {
     page = 'dashboard'
   }
 
+  window.currentPage = page
+
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
   document.getElementById(`menu-${page}`)?.classList.add('active')
   document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'))
@@ -639,6 +659,7 @@ window.uploadFotoProfil = async function (input) {
 
 /* ================= KARYAWAN MANAGEMENT SECTION (ADMIN) ================= */
 async function renderUsers() {
+  if (!(await ensureSuperAdminOfficeContext('users', 'Pilih Office untuk Data Karyawan'))) return
   const content    = document.getElementById('content')
   const viewerRole = window.currentUser.role
   const isAllDepartmentViewer = canAccessAllDepartments(window.currentUser)
@@ -826,6 +847,7 @@ function kontrakBerubah(before, after) {
 }
 
 async function renderPersonalia() {
+  if (!(await ensureSuperAdminOfficeContext('personalia', 'Pilih Office untuk HR Personalia'))) return
   const content = document.getElementById('content')
   if (!canManageCutiTahunan(window.currentUser)) {
     content.innerHTML = `<div class="card"><p class="text-danger">Akses HR Personalia hanya untuk admin/HR.</p></div>`

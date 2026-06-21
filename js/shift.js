@@ -2,6 +2,7 @@ import { supabase } from './supabase.js'
 import { showToast, confirmAction, setButtonLoading } from './feedback.js'
 import { resetShiftMasterCache } from './shift-resolver.js'
 import { applyTenantFilter, isSuperAdmin } from './access-control.js'
+import { ensureSuperAdminOfficeContext, readTenantContext } from './office-context.js'
 
 function safeText(value, fallback = '-') {
   const text = value === null || value === undefined || value === '' ? fallback : String(value)
@@ -76,6 +77,7 @@ window.superAdminDeleteFilteredShifts = async function() {
 }
 
 export async function renderShiftManagement() {
+  if (!(await ensureSuperAdminOfficeContext('shift', 'Pilih Office untuk Kelola Shift'))) return
   const content = document.getElementById('content')
   const superAdmin = isSuperAdmin(window.currentUser)
 
@@ -89,7 +91,7 @@ export async function renderShiftManagement() {
   let officeOptions = []
   if (superAdmin) {
     try {
-      officeOptions = await fetchActiveOffices()
+      officeOptions = (await fetchActiveOffices()).filter(c => String(c.id) === String(readTenantContext().client_id))
     } catch (err) {
       console.error('Gagal memuat Office untuk Shift:', err)
       showToast('Gagal memuat daftar Office untuk Shift.', 'warning')
@@ -183,7 +185,7 @@ export async function renderShiftManagement() {
     const masuk    = document.getElementById('sJamMasuk').value
     const pulang   = document.getElementById('sJamPulang').value
     const ket      = document.getElementById('sKet').value.trim()
-    const clientId = superAdmin ? document.getElementById('sOffice')?.value : window.currentUser?.client_id
+    const clientId = superAdmin ? (readTenantContext().client_id || document.getElementById('sOffice')?.value) : window.currentUser?.client_id
     if (!nama || !masuk || !pulang) { showToast('Lengkapi data shift', 'warning'); return }
     if (!clientId) { showToast('Office wajib dipilih untuk shift baru.', 'warning'); return }
     const btn = document.querySelector('#shiftModal .btn-primary')
@@ -241,7 +243,7 @@ window.saveAssignShiftOffice = async function(id) {
 
 window.deleteShift = async function (id) {
   if (!(await confirmAction('Hapus shift ini?', 'Ya, hapus'))) return
-  const { error } = await supabase.from('shift').delete().eq('id', id)
+  const { error } = await applyTenantFilter(supabase.from('shift').delete().eq('id', id), { user: window.currentUser, clientColumn: 'client_id', departmentColumn: null, userColumn: null, enforceSelf: false, enforceDepartment: false })
   if (error) { showToast('Gagal hapus shift: ' + error.message, 'error'); return }
   resetShiftMasterCache()
   showToast('Shift dihapus', 'success')

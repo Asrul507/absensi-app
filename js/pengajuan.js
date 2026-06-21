@@ -27,10 +27,12 @@ import {
   validateRentangPengajuan
 } from './services/leave-service.js'
 import { showToast, setButtonLoading } from './feedback.js'
+import { ensureSuperAdminOfficeContext } from './office-context.js'
 import { applyTenantFilter, assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess } from './access-control.js'
 
 
 export async function renderPengajuan(user) {
+  if (!(await ensureSuperAdminOfficeContext('pengajuan', 'Pilih Office untuk Pengajuan'))) return
   const content = document.getElementById('content')
   const isAdmin = canManageCutiTahunan(user)
 
