@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js'
 import { showToast } from './feedback.js'
 import { applyTenantFilter, canAccessAllDepartments, getAccessibleProfiles, normalizeRole } from './access-control.js'
+import { ATTENDANCE_REPORT_SELECT, filterRowsByReportControls, filterRowsByUserScope, getRowDepartment, getRowEmployeeName, getRowOffice, getRowOfficeDomain, getRowUsername } from './report-scope.js'
 
 /* ===============================================================
    HELPER: Konversi menit ke HH:MM:SS
@@ -144,22 +145,8 @@ window.applyRekapFilter = async function (user) {
       accessibleIds = profiles.map(p => p.id).filter(Boolean)
     }
     if (tab === 'absensi') {
-      let query = applyTenantFilter(supabase.from('absensi').select('*').eq('status_absensi', 'COMPLETE').order('tanggal', { ascending: false }), { user })
-      if (isAdmin && !canAccessAllDepartments(user)) {
-        query = accessibleIds.length ? query.in('user_id', accessibleIds) : null
-      }
-
-      if (!query) {
-        window._currentRekapData = []
-        renderRekapTable([], isAdmin)
-        return
-      }
-      if (!isAdmin) {
-        query = query.eq('user_id', user.id)
-      } else if (namaPencarian) {
-        // FITUR UTAMA: Filter nama spesifik secara realtime ke database
-        query = query.ilike('nama', `%${namaPencarian}%`)
-      }
+      let query = supabase.from('absensi').select(ATTENDANCE_REPORT_SELECT).eq('status_absensi', 'COMPLETE').order('tanggal', { ascending: false })
+      if (!isAdmin) query = query.eq('user_id', user.id)
 
       if (dari) query = query.gte('tanggal', dari)
       if (sampai) query = query.lte('tanggal', sampai)
@@ -167,7 +154,8 @@ window.applyRekapFilter = async function (user) {
       const { data: absensiData, error } = await query
       if (error) throw error
 
-      const rekap = calculateRekapAbsensi(absensiData || [], isAdmin, user.nama_lengkap)
+      const scopedRows = filterRowsByReportControls(filterRowsByUserScope(absensiData || [], user), { name: namaPencarian })
+      const rekap = calculateRekapAbsensi(scopedRows, isAdmin, user.nama_lengkap)
       window._currentRekapData = rekap.detail
 
       // Update widget summary angka
@@ -231,18 +219,20 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
     totalTerlambat: '00:00:00'
   }
 
-  const groupedByName = {}
+  const groupedByUser = {}
   absensiData.forEach(a => {
-    if (!groupedByName[a.nama]) groupedByName[a.nama] = []
-    groupedByName[a.nama].push(a)
+    const key = a.user_id || `${getRowEmployeeName(a)}-${getRowUsername(a)}`
+    if (!groupedByUser[key]) groupedByUser[key] = []
+    groupedByUser[key].push(a)
   })
 
   let totalJamKerjaMinutes = 0
   let totalTerlambatMinutes = 0
   let totalHariKerja = 0
 
-  Object.keys(groupedByName).forEach(nama => {
-    const absenList = groupedByName[nama]
+  Object.keys(groupedByUser).forEach(key => {
+    const absenList = groupedByUser[key]
+    const first = absenList[0] || {}
     let hariKerja = absenList.length
     let jamKerjaMinutes = 0
     let terlambatMinutes = 0
@@ -266,7 +256,12 @@ function calculateRekapAbsensi(absensiData, isAdmin, currentUserName) {
     totalHariKerja += hariKerja
 
     detail.push({
-      nama,
+      user_id: first.user_id || key,
+      nama: getRowEmployeeName(first),
+      username: getRowUsername(first),
+      office: getRowOffice(first),
+      domain: getRowOfficeDomain(first),
+      department: getRowDepartment(first),
       hariKerja,
       jamKerja: minutesToHMS(jamKerjaMinutes),
       jamKerjaMinutes,
@@ -304,7 +299,7 @@ function renderRekapTable(rekap, isAdmin) {
         <table>
           <thead>
             <tr>
-              ${isAdmin ? '<th style="text-align: left; padding: 12px;">Nama Karyawan</th>' : ''}
+              <th style="text-align: left; padding: 12px;">Nama Karyawan</th><th>Username</th><th>Office</th><th>Department</th>
               <th>Hari Kerja</th>
               <th>Total Jam Kerja</th>
               <th>Total Terlambat (Jam:Min:Det)</th>
@@ -313,7 +308,7 @@ function renderRekapTable(rekap, isAdmin) {
           <tbody>
             ${rekap.detail.map(r => `
               <tr>
-                ${isAdmin ? `<td style="font-weight: 600; text-align: left; padding: 12px;">${r.nama}</td>` : ''}
+                <td style="font-weight: 600; text-align: left; padding: 12px;">${r.nama}</td><td>${r.username || '-'}</td><td>${r.office || '-'}<div style="font-size:.7rem;color:var(--text-muted);">${r.domain || '-'}</div></td><td>${r.department || '-'}</td>
                 <td style="text-align: center; font-weight: 700;">${r.hariKerja} Hari</td>
                 <td style="font-weight: 700; color: var(--success); text-align: center;">${r.jamKerja}</td>
                 <td style="font-weight: 700; color: ${r.terlambatMinutes > 0 ? 'var(--danger)' : 'var(--text-muted)'}; text-align: center;">${r.terlambat}</td>
@@ -403,6 +398,10 @@ window.downloadExcelRekap = function () {
     }
 
     const dataExcel = window._currentRekapData.map(r => ({
+      'Office': r.office || '-',
+      'Domain Office': r.domain || '-',
+      'Department': r.department || '-',
+      'Username': r.username || '-',
       'Nama Karyawan': r.nama,
       'Total Hari Kerja': r.hariKerja,
       'Total Jam Kerja (HH:MM:SS)': r.jamKerja,

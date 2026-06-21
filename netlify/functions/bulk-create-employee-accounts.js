@@ -56,11 +56,11 @@ exports.handler = async (event) => {
         clientId = caller.client_id
         if (!['admin','staff'].includes(role)) throw new Error(`Baris ${emp._index || idx + 2}: Admin HR hanya boleh membuat admin/staff.`)
       }
-      const client = await first('clients', `select=id,nama_client,kode_client,status&id=eq.${clientId}`)
-      if (!client || client.status !== 'active') throw new Error(`Baris ${emp._index || idx + 2}: Office tidak valid/nonaktif.`)
+      const client = await first('clients', `select=id,nama_client,kode_client,domain_login,status&id=eq.${clientId}`)
+      if (!client || !['active','aktif'].includes(String(client.status || '').toLowerCase())) throw new Error(`Baris ${emp._index || idx + 2}: Office tidak valid/nonaktif.`)
       const dept = await first('departments', `select=id,nama_department,client_id,status&id=eq.${departmentId}&client_id=eq.${client.id}`)
-      if (!dept || dept.status !== 'active') throw new Error(`Baris ${emp._index || idx + 2}: Department tidak valid untuk Office.`)
-      const emailInternal = `${username}@${cleanCode(client.kode_client)}.local`
+      if (!dept || !['active','aktif'].includes(String(dept.status || '').toLowerCase())) throw new Error(`Baris ${emp._index || idx + 2}: Department tidak valid untuk Office.`)
+      const emailInternal = `${username}@${cleanCode(client.kode_client || client.domain_login)}.local`
       if (await first('profiles', `select=id&client_id=eq.${client.id}&username=eq.${encodeURIComponent(username)}`)) throw new Error(`Baris ${emp._index || idx + 2}: username sudah dipakai di Office ini.`)
       if (await first('profiles', `select=id&email_internal=eq.${encodeURIComponent(emailInternal)}`)) throw new Error(`Baris ${emp._index || idx + 2}: email internal sudah dipakai.`)
       const created = await admin('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: emailInternal, password, email_confirm: true, user_metadata: { username, nama_lengkap: nama, role, client_id: client.id, department_id: dept.id } }) })
@@ -71,10 +71,10 @@ exports.handler = async (event) => {
     }
     return json({ success: true, created_count: results.length, results })
   } catch (error) {
-    console.error('BULK_CREATE_EMPLOYEE_ACCOUNTS_ERROR:', error)
+    console.error('BULK_CREATE_EMPLOYEE_ACCOUNTS_ERROR:', { message: error?.message })
     for (const id of createdAuthIds.reverse()) {
-      try { await admin(`/rest/v1/profiles?id=eq.${id}`, { method: 'DELETE' }) } catch (rollbackError) { console.error('Rollback profile failed:', id, rollbackError) }
-      try { await admin(`/auth/v1/admin/users/${id}`, { method: 'DELETE' }) } catch (rollbackError) { console.error('Rollback auth user failed:', id, rollbackError) }
+      try { await admin(`/rest/v1/profiles?id=eq.${id}`, { method: 'DELETE' }) } catch (rollbackError) { console.error('Rollback profile failed:', { id, message: rollbackError?.message }) }
+      try { await admin(`/auth/v1/admin/users/${id}`, { method: 'DELETE' }) } catch (rollbackError) { console.error('Rollback auth user failed:', { id, message: rollbackError?.message }) }
     }
     return json({ success: false, error: error.message || 'Gagal bulk create akun.' }, 500)
   }
