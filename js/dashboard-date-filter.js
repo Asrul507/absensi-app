@@ -30,8 +30,13 @@ function clearSavedRange() {
   window.__dashboardDateFilter = getDefaultRange()
 }
 
+function getActiveRange() {
+  window.__dashboardDateFilter = window.__dashboardDateFilter || getSavedRange()
+  return window.__dashboardDateFilter
+}
+
 function isDashboardFilterActive(table, column) {
-  const filter = window.__dashboardDateFilter || getSavedRange()
+  const filter = getActiveRange()
   return Boolean(
     filter?.active &&
     filter.from &&
@@ -42,39 +47,49 @@ function isDashboardFilterActive(table, column) {
   )
 }
 
-function wrapQueryBuilder(builder, table) {
-  if (!builder || builder.__dashboardDateWrapped) return builder
+function wrapFilterBuilder(builder, table) {
+  if (!builder || builder.__dashboardDateFilterWrapped) return builder
   const originalGte = typeof builder.gte === 'function' ? builder.gte.bind(builder) : null
   const originalLte = typeof builder.lte === 'function' ? builder.lte.bind(builder) : null
 
   if (originalGte) {
     builder.gte = function(column, value) {
-      if (isDashboardFilterActive(table, column)) {
-        return originalGte(column, window.__dashboardDateFilter.from)
-      }
+      if (isDashboardFilterActive(table, column)) return originalGte(column, getActiveRange().from)
       return originalGte(column, value)
     }
   }
 
   if (originalLte) {
     builder.lte = function(column, value) {
-      if (isDashboardFilterActive(table, column)) {
-        return originalLte(column, window.__dashboardDateFilter.to)
-      }
+      if (isDashboardFilterActive(table, column)) return originalLte(column, getActiveRange().to)
       return originalLte(column, value)
     }
   }
 
-  builder.__dashboardDateWrapped = true
+  builder.__dashboardDateFilterWrapped = true
   return builder
+}
+
+function wrapQueryBuilder(queryBuilder, table) {
+  if (!queryBuilder || queryBuilder.__dashboardDateQueryWrapped) return queryBuilder
+  const originalSelect = typeof queryBuilder.select === 'function' ? queryBuilder.select.bind(queryBuilder) : null
+
+  if (originalSelect) {
+    queryBuilder.select = function(...args) {
+      return wrapFilterBuilder(originalSelect(...args), table)
+    }
+  }
+
+  queryBuilder.__dashboardDateQueryWrapped = true
+  return queryBuilder
 }
 
 function installSupabaseDashboardDateFilter() {
   if (!supabase?.from || supabase.from.__dashboardDateWrapped) return
   const originalFrom = supabase.from.bind(supabase)
   const wrappedFrom = function(table) {
-    const builder = originalFrom(table)
-    return wrapQueryBuilder(builder, table)
+    const queryBuilder = originalFrom(table)
+    return wrapQueryBuilder(queryBuilder, table)
   }
   wrappedFrom.__dashboardDateWrapped = true
   supabase.from = wrappedFrom
