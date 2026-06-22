@@ -1,5 +1,6 @@
 import { renderLaporanKeseluruhan } from './laporan-keseluruhan.js'
 import { normalizeRole } from './access-control.js'
+import './report-excel-workbook.js'
 
 const ADMIN_REPORT_ROLES = new Set(['super_admin', 'admin_all', 'admin_hr', 'admin'])
 
