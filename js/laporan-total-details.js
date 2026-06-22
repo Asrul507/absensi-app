@@ -238,8 +238,16 @@ function hookNavigate() {
   }
   window.navigate.__totalDetailWrapped = true
 }
-
-setInterval(() => {
+function retryInstallHook(attempt = 0) {
   hookNavigate()
   if (document.getElementById('lkTableArea')) installReportTotalDetails()
-}, 600)
+  if (attempt < 30 && typeof window.navigate !== 'function') {
+    setTimeout(() => retryInstallHook(attempt + 1), 400)
+  }
+}
+
+retryInstallHook()
+document.addEventListener('DOMContentLoaded', () => retryInstallHook())
+document.addEventListener('click', () => {
+  if (document.getElementById('lkTableArea')) setTimeout(installReportTotalDetails, 50)
+})
