@@ -3,6 +3,7 @@ import { toJamLokal, getDurasiMenit, buildTimestampLokal, toTanggalJamLokal } fr
 import { getShiftDetailByCode } from './shift-resolver.js'
 import { getServerTimeIso } from './server-time.js'
 import { applyTenantFilter, assertSameDepartment, buildDepartmentScopeInfo, canAccessAllDepartments, getAccessibleProfiles, getProfileForAccess, getProfileForAccessByName, isAdmin, isAdminAll, isAdminHR, isSuperAdmin } from './access-control.js'
+import { logAuditEvent } from './audit-trail.js'
 
 export const STATUS_ABSENSI = {
   OPEN: 'OPEN',
@@ -161,7 +162,6 @@ export function getTotalJamKerja(row) {
   return `${(durasi / 60).toFixed(2)} jam`
 }
 
-
 function localInputToMakassarIso(value) {
   if (!value) return null
   const raw = String(value).trim()
@@ -256,7 +256,7 @@ window.loadAttendanceApproval = async function () {
 
   const rows = data || []
   if (!rows.length) {
-    container.innerHTML = `<div class="card" style="text-align:center;padding:28px;color:var(--text-muted);"><i class="fa fa-circle-check" style="font-size:2rem;color:var(--success);"></i><p style="font-weight:800;margin-top:8px;">${canAccessAllDepartments(window.currentUser) ? 'Tidak ada absensi OPEN.' : 'Tidak ada data untuk departemen Anda.'}</p></div>`
+    container.innerHTML = `<div class="card" style="text-align:center;padding:28px;color:var(--text-muted);"><i class="fa fa-circle-check" style="font-size:2rem;color:var(--success);"></i><p style="font-weight:800;margin-top:8px;">${canAccessAllDepartments(window.currentUser) ? 'Tidak ada absensi yang menunggu approval.' : 'Tidak ada data untuk departemen Anda.'}</p></div>`
     return
   }
 
@@ -321,11 +321,11 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
     const serverIso = await getServerTimeIso()
 
     const { data: currentRow, error: currentError } = await supabase
-    .from('absensi')
-    .select('*')
-    .eq('id', id)
-    .eq('status_absensi', STATUS_ABSENSI.OPEN)
-    .maybeSingle()
+      .from('absensi')
+      .select('*')
+      .eq('id', id)
+      .eq('status_absensi', STATUS_ABSENSI.OPEN)
+      .maybeSingle()
     if (currentError) throw new Error('Gagal memuat absensi: ' + currentError.message)
     if (!currentRow) throw new Error('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
 
@@ -334,49 +334,61 @@ window.approveAttendance = async function (id, finalStatus, actionButton = null)
       : await getProfileForAccessByName(currentRow.nama)
     assertSameDepartment(window.currentUser, targetProfile)
 
-  const nextRow = { ...currentRow }
-  if (masuk) nextRow.waktu_masuk = localInputToMakassarIso(masuk)
-  if (pulang) nextRow.waktu_pulang = localInputToMakassarIso(pulang)
+    const nextRow = { ...currentRow }
+    if (masuk) nextRow.waktu_masuk = localInputToMakassarIso(masuk)
+    if (pulang) nextRow.waktu_pulang = localInputToMakassarIso(pulang)
 
-  const shiftInfo = currentRow.shift_code ? await getShiftDetailByCode(currentRow.shift_code) : null
-  const recalculated = recalculateAttendanceStatus(nextRow, shiftInfo || {})
-  const payload = {
-    status_absensi: STATUS_ABSENSI.COMPLETE,
-    status_kehadiran: recalculated.status_kehadiran,
-    status_pulang: recalculated.status_pulang,
-    menit_pulang_cepat: recalculated.menit_pulang_cepat,
-    approved_by: window.currentUser?.id || null,
-    approved_at: serverIso,
-    approval_note: note || null
-  }
-  if (nextRow.waktu_masuk !== currentRow.waktu_masuk) payload.waktu_masuk = nextRow.waktu_masuk
-  if (nextRow.waktu_pulang !== currentRow.waktu_pulang) payload.waktu_pulang = nextRow.waktu_pulang
+    const shiftInfo = currentRow.shift_code ? await getShiftDetailByCode(currentRow.shift_code) : null
+    const recalculated = recalculateAttendanceStatus(nextRow, shiftInfo || {})
+    const payload = {
+      status_absensi: STATUS_ABSENSI.COMPLETE,
+      status_kehadiran: recalculated.status_kehadiran,
+      status_pulang: recalculated.status_pulang,
+      menit_pulang_cepat: recalculated.menit_pulang_cepat,
+      approved_by: window.currentUser?.id || null,
+      approved_at: serverIso,
+      approval_note: note || null
+    }
+    if (nextRow.waktu_masuk !== currentRow.waktu_masuk) payload.waktu_masuk = nextRow.waktu_masuk
+    if (nextRow.waktu_pulang !== currentRow.waktu_pulang) payload.waktu_pulang = nextRow.waktu_pulang
 
-  console.log('[APPROVAL ABSENSI] before approve update', { id, payload, manualActionLabel: finalStatus })
-  const updateResult = await supabase
-    .from('absensi')
-    .update(payload)
-    .eq('id', id)
-    .eq('status_absensi', STATUS_ABSENSI.OPEN)
-    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang,status_pulang,menit_pulang_cepat')
-    .maybeSingle()
-  console.log('[APPROVAL ABSENSI] approve update response', updateResult)
+    const updateResult = await supabase
+      .from('absensi')
+      .update(payload)
+      .eq('id', id)
+      .eq('status_absensi', STATUS_ABSENSI.OPEN)
+      .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang,status_pulang,menit_pulang_cepat')
+      .maybeSingle()
 
     if (updateResult.error) throw new Error('Gagal approve: ' + updateResult.error.message)
     if (!updateResult.data) throw new Error('Approval gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
 
-  const verifyResult = await supabase
-    .from('absensi')
-    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang,status_pulang,menit_pulang_cepat')
-    .eq('id', id)
-    .maybeSingle()
-  console.log('[APPROVAL ABSENSI] approve verify from DB', verifyResult)
+    const verifyResult = await supabase
+      .from('absensi')
+      .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note,waktu_masuk,waktu_pulang,status_pulang,menit_pulang_cepat')
+      .eq('id', id)
+      .maybeSingle()
 
     if (verifyResult.error) throw new Error('Gagal cek ulang approval: ' + verifyResult.error.message)
-  if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.COMPLETE) {
+    if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.COMPLETE) {
       throw new Error('Approval belum tersimpan sebagai COMPLETE. Silakan coba lagi.')
-  }
+    }
 
+    await logAuditEvent({
+      action: 'approve_attendance',
+      entityType: 'absensi',
+      entityId: id,
+      before: currentRow,
+      after: verifyResult.data,
+      metadata: {
+        note: note || null,
+        requested_status: finalStatus || null,
+        edited_waktu_masuk: nextRow.waktu_masuk !== currentRow.waktu_masuk,
+        edited_waktu_pulang: nextRow.waktu_pulang !== currentRow.waktu_pulang
+      }
+    })
+
+    window.showToast?.('Absensi berhasil di-approve.', 'success')
     await window.loadAttendanceApproval()
   } catch (err) {
     alert(err.message || 'Gagal approve absensi.')
@@ -396,7 +408,7 @@ window.rejectAttendance = async function (id, actionButton = null) {
     const serverIso = await getServerTimeIso()
     const { data: currentRow, error: currentError } = await supabase
       .from('absensi')
-      .select('id,user_id,nama,status_absensi')
+      .select('id,user_id,nama,status_absensi,status_kehadiran,waktu_masuk,waktu_pulang,approval_note,approved_by,approved_at')
       .eq('id', id)
       .eq('status_absensi', STATUS_ABSENSI.OPEN)
       .maybeSingle()
@@ -408,37 +420,44 @@ window.rejectAttendance = async function (id, actionButton = null) {
     assertSameDepartment(window.currentUser, targetProfile)
 
     const payload = {
-    status_absensi: STATUS_ABSENSI.REJECTED,
-    approved_by: window.currentUser?.id || null,
-    approved_at: serverIso,
-    approval_note: note || null
-  }
+      status_absensi: STATUS_ABSENSI.REJECTED,
+      approved_by: window.currentUser?.id || null,
+      approved_at: serverIso,
+      approval_note: note || null
+    }
 
-  console.log('[APPROVAL ABSENSI] before reject update', { id, payload })
-  const updateResult = await supabase
-    .from('absensi')
-    .update(payload)
-    .eq('id', id)
-    .eq('status_absensi', STATUS_ABSENSI.OPEN)
-    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
-    .maybeSingle()
-  console.log('[APPROVAL ABSENSI] reject update response', updateResult)
+    const updateResult = await supabase
+      .from('absensi')
+      .update(payload)
+      .eq('id', id)
+      .eq('status_absensi', STATUS_ABSENSI.OPEN)
+      .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
+      .maybeSingle()
 
     if (updateResult.error) throw new Error('Gagal reject: ' + updateResult.error.message)
     if (!updateResult.data) throw new Error('Reject gagal: absensi sudah diproses atau tidak lagi berstatus OPEN.')
 
-  const verifyResult = await supabase
-    .from('absensi')
-    .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
-    .eq('id', id)
-    .maybeSingle()
-  console.log('[APPROVAL ABSENSI] reject verify from DB', verifyResult)
+    const verifyResult = await supabase
+      .from('absensi')
+      .select('id,status_absensi,status_kehadiran,approved_by,approved_at,approval_note')
+      .eq('id', id)
+      .maybeSingle()
 
     if (verifyResult.error) throw new Error('Gagal cek ulang reject: ' + verifyResult.error.message)
-  if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.REJECTED) {
+    if (verifyResult.data?.status_absensi !== STATUS_ABSENSI.REJECTED) {
       throw new Error('Reject belum tersimpan sebagai REJECTED. Silakan coba lagi.')
-  }
+    }
 
+    await logAuditEvent({
+      action: 'reject_attendance',
+      entityType: 'absensi',
+      entityId: id,
+      before: currentRow,
+      after: verifyResult.data,
+      metadata: { note: note || null }
+    })
+
+    window.showToast?.('Absensi berhasil ditolak.', 'success')
     await window.loadAttendanceApproval()
   } catch (err) {
     alert(err.message || 'Gagal reject absensi.')
