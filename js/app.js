@@ -970,7 +970,7 @@ window.saveKontrakKaryawan = async function(id, isExtend = false) {
 
 async function fetchOfficeOptionsForEmployeeForm() {
   if (window.currentUser?.role === 'super_admin') {
-    const { data, error } = await supabase.from('clients').select('id,nama_client,kode_client,status').order('nama_client')
+    const { data, error } = await supabase.from('clients').select('id,nama_client,kode_client,status').in('status', ['active', 'aktif']).order('nama_client')
     if (error) throw error
     return data || []
   }
@@ -983,7 +983,7 @@ async function fetchDepartmentOptionsForOffice(clientId) {
     .from('departments')
     .select('id,nama_department,status')
     .eq('client_id', clientId)
-    .eq('status', 'active')
+    .in('status', ['active', 'aktif'])
     .order('nama_department')
   if (error) throw error
   return data || []
@@ -997,7 +997,11 @@ function renderDepartmentOptions(departments = [], selectedId = '') {
 window.openFormTambah = async function() {
   const role = normalizeRole(window.currentUser?.role)
   if (role === 'admin' || role === 'staff') {
-    showToast('Hanya Super Admin, Admin All, dan Admin HR yang dapat menambah karyawan.', 'warning')
+    showToast('Hanya Super Admin dan Admin HR yang dapat menambah karyawan.', 'warning')
+    return
+  }
+  if (!['super_admin', 'admin_hr'].includes(role)) {
+    showToast('Role Anda tidak diizinkan membuat akun karyawan.', 'warning')
     return
   }
 
@@ -1140,6 +1144,7 @@ window.savePendingKaryawan = async function() {
     showToast(`${nama} berhasil dibuat dengan username dan password awal`, 'success')
     await renderUsers()
   } catch (error) {
+    console.error('savePendingKaryawan error:', error)
     showToast(error.message || 'Gagal membuat akun karyawan', 'error')
   }
 }

@@ -149,13 +149,21 @@ export async function login(username, password, clientCode = '') {
 export async function createEmployeeAccount(payload) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.access_token) throw new Error('Sesi login tidak ditemukan.')
+  const safePayload = { ...(payload || {}), password_awal: payload?.password_awal ? '********' : '' }
   const res = await fetch('/.netlify/functions/create-employee-account', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
     body: JSON.stringify(payload)
   })
   const body = await res.json().catch(() => ({}))
-  if (!res.ok || !body.success) throw new Error(body.error || 'Gagal membuat akun karyawan.')
+  if (!res.ok || !body.success) {
+    console.error('CREATE_EMPLOYEE_ACCOUNT_FRONTEND_ERROR:', {
+      status: res.status,
+      response: body,
+      payload: safePayload
+    })
+    throw new Error(body.error || body.message || `Gagal membuat akun karyawan. HTTP ${res.status}`)
+  }
   return body
 }
 
