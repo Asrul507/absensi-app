@@ -33,7 +33,7 @@ async function fetchDeveloperStats() {
     supabase.from('clients').select('*').order('nama_client'),
     supabase.from('profiles').select('id,client_id,role,status_akun'),
     supabase.from('departments').select('id,client_id,status'),
-    supabase.from('lokasi_absen').select('id,client_id,status'),
+    supabase.from('lokasi_absen').select('id,client_id'),
   ])
 
   if (clientsRes.error) throw clientsRes.error
@@ -51,7 +51,7 @@ async function fetchDeveloperStats() {
     const activeEmployees = clientProfiles.filter(p => p.status_akun !== 'Non-Aktif')
     const admins = activeEmployees.filter(p => ['admin_all', 'admin_hr', 'admin'].includes(String(p.role || '').toLowerCase()))
     const activeDepartments = departments.filter(d => String(d.client_id) === String(client.id) && d.status !== 'inactive')
-    const activeLocations = locations.filter(l => String(l.client_id) === String(client.id) && l.status !== 'inactive')
+    const clientLocations = locations.filter(l => String(l.client_id) === String(client.id))
 
     return {
       ...client,
@@ -59,7 +59,7 @@ async function fetchDeveloperStats() {
         employees: activeEmployees.length,
         admins: admins.length,
         departments: activeDepartments.length,
-        gps_points: activeLocations.length,
+        gps_points: clientLocations.length,
       },
     }
   })
@@ -133,7 +133,7 @@ export async function renderDeveloperPanel(user = window.currentUser) {
               ${usageLine('Karyawan aktif', c.usage.employees, c.max_employees)}
               ${usageLine('Admin aktif', c.usage.admins, c.max_admins)}
               ${usageLine('Department aktif', c.usage.departments, c.max_departments)}
-              ${usageLine('Titik GPS aktif', c.usage.gps_points, c.max_gps_points)}
+              ${usageLine('Titik GPS terdaftar', c.usage.gps_points, c.max_gps_points)}
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
               <button class="btn-secondary btn-sm" onclick="navigate('settings-app')"><i class="fa fa-gear"></i> Kelola Paket</button>
