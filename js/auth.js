@@ -24,7 +24,18 @@ async function fetchClientByCode(clientCode) {
 function buildInternalEmail(username, clientCode = 'global') {
   const cleanUsername = String(username || '').trim().toLowerCase()
   const cleanCode = normalizeClientCode(clientCode) || 'global'
-  return `${cleanUsername}@${cleanCode}.local`
+  return `${cleanUsername}+${cleanCode}@gpro.my.id`
+}
+
+async function findTenantProfileByUsername(username, clientId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,username,email_internal,role,client_id,department_id,nama_lengkap,status_akun')
+    .eq('username', String(username || '').trim().toLowerCase())
+    .eq('client_id', clientId)
+    .maybeSingle()
+  if (error) throw error
+  return data || null
 }
 
 function buildTenantContext(profile, selectedClient = null, globalMode = false) {
@@ -91,7 +102,8 @@ export async function login(username, password, clientCode = '') {
       selectedClient = await fetchClientByCode(cleanClientCode)
       if (!selectedClient) { showLoginError('Kode kantor tidak ditemukan. Periksa kembali kode/domain login kantor Anda.'); return false }
       if (!['active','aktif'].includes(String(selectedClient.status || '').toLowerCase())) { showLoginError('Office ini sedang nonaktif. Hubungi administrator.'); return false }
-      emailInternal = buildInternalEmail(cleanUsername, selectedClient.kode_client || selectedClient.domain_login)
+      const tenantProfile = await findTenantProfileByUsername(cleanUsername, selectedClient.id)
+      emailInternal = tenantProfile?.email_internal || buildInternalEmail(cleanUsername, selectedClient.kode_client || selectedClient.domain_login)
     } else {
       const superProfile = await findSuperAdminProfileByUsername(cleanUsername)
       if (!superProfile?.email_internal) { showLoginError('Kode kantor wajib diisi untuk akun kantor. Super admin dapat login tanpa kode kantor.'); return false }
