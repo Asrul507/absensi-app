@@ -5,13 +5,28 @@ import { renderSettingsApp } from './settings-app.js'
 
 const SUPER_ADMIN_ALLOWED_PAGES = new Set(['developer-panel', 'settings-app', 'profile'])
 const OPERATIONAL_PAGE_FALLBACK = 'developer-panel'
+const FULL_APP_MODE_KEY = 'genproSuperAdminFullAppMode'
 
 function isSuperAdminUser() {
   return normalizeRole(window.currentUser?.role) === 'super_admin'
 }
 
+function isFullAppMode() {
+  return sessionStorage.getItem(FULL_APP_MODE_KEY) === 'true'
+}
+
 function closeSidebarSafe() {
   try { window.closeSidebar?.() } catch (_) {}
+}
+
+window.openSuperAdminFullApp = function() {
+  sessionStorage.setItem(FULL_APP_MODE_KEY, 'true')
+  location.reload()
+}
+
+window.backToDeveloperPanel = function() {
+  sessionStorage.removeItem(FULL_APP_MODE_KEY)
+  location.reload()
 }
 
 function renderDeveloperSidebar() {
@@ -27,6 +42,7 @@ function renderDeveloperSidebar() {
       <div class="sidebar-section-title">DEVELOPER</div>
       <a href="#" id="menu-developer-panel" onclick="navigate('developer-panel'); closeSidebar(); return false;"><i class="fa fa-code"></i> Developer Panel</a>
       <a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Client & Package Settings</a>
+      <a href="#" id="menu-full-app" onclick="openSuperAdminFullApp(); closeSidebar(); return false;"><i class="fa fa-layer-group"></i> Buka Aplikasi Penuh</a>
 
       <div class="sidebar-section-title">AKUN OWNER</div>
       <a href="#" id="menu-profile" onclick="navigate('profile'); closeSidebar(); return false;"><i class="fa fa-user-gear"></i> Profil Owner</a>
@@ -39,9 +55,22 @@ function renderDeveloperSidebar() {
   `
 }
 
+function injectBackToDeveloperButton() {
+  if (!isSuperAdminUser() || !isFullAppMode()) return
+  const sidebar = document.getElementById('sidebar')
+  if (!sidebar || document.getElementById('menu-back-developer')) return
+  const nav = sidebar.querySelector('.sidebar-nav') || sidebar
+  const wrap = document.createElement('div')
+  wrap.innerHTML = `
+    <div class="sidebar-section-title">OWNER MODE</div>
+    <a href="#" id="menu-back-developer" onclick="backToDeveloperPanel(); closeSidebar(); return false;"><i class="fa fa-code"></i> Kembali Developer Panel</a>
+  `
+  nav.insertBefore(wrap, nav.firstChild)
+}
+
 function hideDeveloperBottomNav() {
   const nav = document.getElementById('bottomNav')
-  if (nav && isSuperAdminUser()) nav.innerHTML = ''
+  if (nav && isSuperAdminUser() && !isFullAppMode()) nav.innerHTML = ''
 }
 
 function setActiveDeveloperMenu(page) {
@@ -56,7 +85,7 @@ async function navigateDeveloper(page = OPERATIONAL_PAGE_FALLBACK) {
   let targetPage = page
   if (!SUPER_ADMIN_ALLOWED_PAGES.has(targetPage)) {
     targetPage = OPERATIONAL_PAGE_FALLBACK
-    if (page !== 'dashboard') showToast('Menu operasional tidak tersedia untuk Super Admin. Gunakan Developer Panel.', 'warning')
+    if (page !== 'dashboard') showToast('Menu operasional tidak tersedia untuk Super Admin. Gunakan Developer Panel atau Buka Aplikasi Penuh.', 'warning')
   }
 
   window.currentPage = targetPage
@@ -89,26 +118,26 @@ function installDeveloperRouter() {
   window.__genproOriginalNavigate = window.navigate
 
   window.navigate = async function(page) {
-    if (isSuperAdminUser()) return navigateDeveloper(page)
+    if (isSuperAdminUser() && !isFullAppMode()) return navigateDeveloper(page)
     return window.__genproOriginalNavigate(page)
   }
 
-  // Jika app.js sudah selesai login dan sudah sempat render dashboard lama, paksa pindah ke Developer Panel.
   setTimeout(() => {
-    if (isSuperAdminUser()) navigateDeveloper(window.currentPage || OPERATIONAL_PAGE_FALLBACK)
+    if (isSuperAdminUser() && !isFullAppMode()) navigateDeveloper(window.currentPage || OPERATIONAL_PAGE_FALLBACK)
+    if (isSuperAdminUser() && isFullAppMode()) injectBackToDeveloperButton()
   }, 0)
 }
 
-// Modul ini dimuat setelah app.js. Pasang router segera, lalu ulang beberapa kali untuk kasus app.js belum selesai inisialisasi.
 installDeveloperRouter()
 let tries = 0
 const timer = setInterval(() => {
   installDeveloperRouter()
-  if (isSuperAdminUser()) {
+  if (isSuperAdminUser() && !isFullAppMode()) {
     renderDeveloperSidebar()
     hideDeveloperBottomNav()
     if (!SUPER_ADMIN_ALLOWED_PAGES.has(window.currentPage)) navigateDeveloper(OPERATIONAL_PAGE_FALLBACK)
   }
+  if (isSuperAdminUser() && isFullAppMode()) injectBackToDeveloperButton()
   tries += 1
   if (window.__developerRouterInstalled && tries > 20) clearInterval(timer)
 }, 250)
