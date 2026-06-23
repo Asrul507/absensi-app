@@ -114,12 +114,38 @@
     console.warn('App masih dimuat, coba lagi beberapa detik.')
   }
 </script>
-<script type="module" src="js/app.js?v=20260623-employee-auth"></script>
+<script type="module" src="https://cdn.jsdelivr.net/gh/Asrul507/absensi-app@c1e01c2644943b066e7ce23e8ecddce086c4c58a/js/app.js"></script>
 <script type="module" src="js/developer-router.js?v=20260623-1"></script>
 <script type="module" src="js/package-guard.js?v=20260623-1"></script>
 <script type="module" src="js/approval-audit-panel.js?v=20260622-1"></script>
 <script type="module" src="js/laporan-total-details.js?v=20260622-1"></script>
 <script type="module" src="js/admin-report-access.js?v=20260622-1"></script>
+<script>
+  (function patchAdminHrRoleOptions(){
+    const timer = setInterval(function(){
+      if (typeof window.openFormTambah !== 'function' || window.openFormTambah.__adminHrRolePatch) return
+      const originalOpenFormTambah = window.openFormTambah
+      window.openFormTambah = async function(){
+        const result = await originalOpenFormTambah.apply(this, arguments)
+        setTimeout(function(){
+          const currentRole = String(window.currentUser && window.currentUser.role || '').trim().toLowerCase()
+          const roleSelect = document.getElementById('pRole')
+          if (currentRole !== 'admin_hr' || !roleSelect) return
+          const hasAdmin = Array.from(roleSelect.options).some(function(option){ return option.value === 'admin' })
+          if (hasAdmin) return
+          const option = document.createElement('option')
+          option.value = 'admin'
+          option.textContent = 'Admin Department'
+          roleSelect.insertBefore(option, roleSelect.options[1] || null)
+        }, 0)
+        return result
+      }
+      window.openFormTambah.__adminHrRolePatch = true
+      clearInterval(timer)
+    }, 100)
+    setTimeout(function(){ clearInterval(timer) }, 10000)
+  })()
+</script>
 
 <script>
   document.addEventListener('click', function(e) {
