@@ -14,13 +14,37 @@ function packageBadgeClass(packageType) {
 }
 
 function clientStatusBadgeClass(status) {
-  return status === 'active' ? 'badge-green' : 'badge-gray'
+  return status === 'active' ? 'badge-green'
+    : status === 'inactive' ? 'badge-gray'
+    : 'badge-gray'
 }
 
 function subscriptionBadgeClass(status) {
   if (status === 'active') return 'badge-green'
   if (status === 'suspended') return 'badge-yellow'
   return 'badge-gray'
+}
+
+function buildSafeUsername(value = '') {
+  return String(value || 'client')
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, '')
+    .replace(/[^a-z0-9._-]/g, '')
+    .slice(0, 26)
+}
+
+async function createEmployeeAccountFromSettings(payload) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sesi login tidak ditemukan.')
+  const res = await fetch('/.netlify/functions/create-employee-account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify(payload),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || !body.success) throw new Error(body.error || 'Gagal membuat akun Admin HR.')
+  return body
 }
 
 export async function renderSettingsApp(user = window.currentUser) {
@@ -36,7 +60,7 @@ export async function renderSettingsApp(user = window.currentUser) {
     <div class="page-header">
       <div>
         <h2><i class="fa fa-building-user"></i> Client & Package Settings</h2>
-        <p style="margin:6px 0 0;color:var(--text-muted);font-size:.86rem;">Kelola domain kantor, paket client, limit penggunaan, dan department.</p>
+        <p style="margin:6px 0 0;color:var(--text-muted);font-size:.86rem;">Kelola domain kantor, paket client, limit penggunaan, department, dan akun Admin HR.</p>
       </div>
       <button class="btn-primary btn-sm" onclick="openClientForm()"><i class="fa fa-plus"></i> Tambah Client</button>
     </div>
@@ -83,8 +107,11 @@ async function loadSettingsApp() {
                   <span class="badge badge-gray">${buildPackageLimitText(c)}</span>
                 </div>
               </div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
                 <button class="btn-secondary btn-sm" onclick="openClientForm('${c.id}')"><i class="fa fa-edit"></i> Edit Client</button>
+                <button class="btn-secondary btn-sm" onclick="openAdminHrForm('${c.id}')" ${deptCount ? '' : 'disabled title="Buat department dulu sebelum membuat Admin HR"'}>
+                  <i class="fa fa-user-shield"></i> Tambah Admin HR
+                </button>
                 <button class="btn-primary btn-sm" onclick="openDepartmentForm('${c.id}')" ${deptFull ? 'disabled title="Limit department paket sudah penuh"' : ''}>
                   <i class="fa fa-plus"></i> Department ${deptCount}/${c.max_departments}
                 </button>
@@ -202,6 +229,69 @@ window.saveClient = async function(id = '') {
   closeUserModal()
   showToast('Client dan paket tersimpan.', 'success')
   await loadSettingsApp()
+}
+
+window.openAdminHrForm = function(clientId) {
+  const c = (window._settingsClients || []).find(x => x.id === clientId) || {}
+  const activeDepartments = (c.departments || []).filter(d => d.status !== 'inactive')
+  if (!c.id) return showToast('Client tidak ditemukan.', 'error')
+  if (!activeDepartments.length) return showToast('Buat department aktif dulu sebelum membuat Admin HR.', 'warning')
+
+  const defaultUsername = `${buildSafeUsername(c.kode_client || c.domain_login)}_hr`
+  const defaultName = `Admin HR ${c.nama_client || c.kode_client || ''}`.trim()
+
+  window.showUserModal(`
+    <div class="modal-header"><h3>Tambah Admin HR</h3><button class="modal-close" onclick="closeUserModal()"><i class="fa fa-times"></i></button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;padding-top:10px;">
+      <div class="field"><label>Client / Office</label><input value="${escapeAttr(c.nama_client || '-')} (${escapeAttr(c.domain_login || c.kode_client || '-')})" disabled></div>
+      <div class="field"><label>Department <span class="req">*</span></label><select id="adminHrDepartment">${activeDepartments.map(d => `<option value="${escapeAttr(d.id)}">${escapeAttr(d.nama_department)}</option>`).join('')}</select></div>
+      <div class="field"><label>Username <span class="req">*</span></label><input id="adminHrUsername" value="${escapeAttr(defaultUsername)}" placeholder="adminhr_client"></div>
+      <div class="field"><label>Password Awal <span class="req">*</span></label><input id="adminHrPassword" value="Admin12345!" placeholder="Minimal 8 karakter"></div>
+      <div class="field"><label>Nama Lengkap <span class="req">*</span></label><input id="adminHrName" value="${escapeAttr(defaultName)}"></div>
+      <div class="field"><label>Jabatan</label><input id="adminHrJabatan" value="Admin HR"></div>
+    </div>
+    <div style="margin-top:10px;color:var(--text-muted);font-size:.8rem;line-height:1.5;">
+      Akun akan dibuat dengan role <strong>admin_hr</strong> dan dapat login memakai username, password awal, serta domain office client ini.
+    </div>
+    <div class="modal-actions"><button class="btn-secondary" onclick="closeUserModal()">Batal</button><button id="btnSaveAdminHr" class="btn-primary" onclick="saveAdminHr('${clientId}')"><i class="fa fa-user-shield"></i> Buat Admin HR</button></div>
+  `)
+}
+
+window.saveAdminHr = async function(clientId) {
+  const c = (window._settingsClients || []).find(x => x.id === clientId) || {}
+  const payload = {
+    username: document.getElementById('adminHrUsername')?.value.trim().toLowerCase(),
+    password_awal: document.getElementById('adminHrPassword')?.value || '',
+    nama_lengkap: document.getElementById('adminHrName')?.value.trim(),
+    role: 'admin_hr',
+    jabatan: document.getElementById('adminHrJabatan')?.value.trim() || 'Admin HR',
+    client_id: clientId,
+    department_id: document.getElementById('adminHrDepartment')?.value,
+    tanggal_bergabung: new Date().toISOString().slice(0, 10),
+    jenis_kontrak: 'tetap',
+    status_kontrak: 'aktif',
+    sisa_cuti: 0,
+    jatah_cuti: 0,
+  }
+
+  if (!payload.username || !payload.password_awal || !payload.nama_lengkap || !payload.department_id) return showToast('Username, password, nama, dan department wajib diisi.', 'warning')
+  if (payload.password_awal.length < 8) return showToast('Password awal minimal 8 karakter.', 'warning')
+
+  const btn = document.getElementById('btnSaveAdminHr')
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Membuat...' }
+
+  try {
+    const result = await createEmployeeAccountFromSettings(payload)
+    closeUserModal()
+    showToast(`Admin HR ${result.username || payload.username} berhasil dibuat.`, 'success')
+    await loadSettingsApp()
+  } catch (err) {
+    console.error('saveAdminHr error:', err)
+    showToast('Gagal membuat Admin HR: ' + (err.message || err), 'error')
+  } finally {
+    const btnAfter = document.getElementById('btnSaveAdminHr')
+    if (btnAfter) { btnAfter.disabled = false; btnAfter.innerHTML = '<i class="fa fa-user-shield"></i> Buat Admin HR' }
+  }
 }
 
 window.openDepartmentForm = function(clientId, deptId = '') {
