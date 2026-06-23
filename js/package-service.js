@@ -130,7 +130,7 @@ export function packageHasFeature(clientOrPackageType, featureKey) {
 export function getPackageOptionsHtml(selected = 'basic') {
   const current = normalizePackageType(selected)
   return Object.values(PACKAGE_DEFINITIONS)
-    .map(pkg => `<option value="${pkg.key}" ${pkg.key === current ? 'selected' : ''}>${pkg.label} — ${pkg.price_label}</option>`)
+    .map(pkg => `<option value="${pkg.key}" ${pkg.key === current ? 'selected' : ''}>${pkg.label}</option>`)
     .join('')
 }
 
