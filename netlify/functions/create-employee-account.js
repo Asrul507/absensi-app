@@ -87,7 +87,7 @@ exports.handler = async (event) => {
     if (!client || !['active','aktif'].includes(String(client.status || '').toLowerCase())) return json({ success: false, error: 'Office tidak valid atau nonaktif.' }, 400)
     const dept = await first('departments', `select=id,nama_department,client_id,status&id=eq.${departmentId}&client_id=eq.${client.id}`)
     if (!dept || !['active','aktif'].includes(String(dept.status || '').toLowerCase())) return json({ success: false, error: 'Department tidak valid untuk Office ini.' }, 400)
-    const emailInternal = `${username}@${cleanCode(client.kode_client || client.domain_login)}.local`
+    const emailInternal = `${username}+${cleanCode(client.kode_client || client.domain_login)}@gpro.my.id`
     if (await first('profiles', `select=id&client_id=eq.${client.id}&username=eq.${encodeURIComponent(username)}`)) return json({ success: false, error: 'Username sudah dipakai di Office ini.' }, 409)
     if (await first('profiles', `select=id&email_internal=eq.${encodeURIComponent(emailInternal)}`)) return json({ success: false, error: 'Email internal sudah dipakai.' }, 409)
     const created = await supabaseAdminRequest('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: emailInternal, password, email_confirm: true, user_metadata: { username, nama_lengkap: nama, role, client_id: client.id, department_id: dept.id } }) })
