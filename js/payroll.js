@@ -1,17 +1,28 @@
 import { supabase } from './supabase.js'
 import { showToast, confirmAction, promptAction } from './feedback.js'
-import { applyTenantFilter, canAccessAllDepartments, getAccessibleProfiles } from './access-control.js'
+import { applyTenantFilter, getAccessibleProfiles, normalizeRole } from './access-control.js'
+import { packageHasFeature } from './package-service.js'
 
 const money = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })
 const esc = (v = '') => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))
 const val = id => document.getElementById(id)?.value?.trim() || ''
 const num = id => Number(document.getElementById(id)?.value || 0)
 const clientId = () => window.currentUser?.client_id || null
+const payrollRoles = Object.freeze(['admin_all', 'admin_hr'])
+
+export function canAccessPayroll(user = window.currentUser) {
+  const role = normalizeRole(user?.role)
+  const client = Array.isArray(user?.clients) ? user.clients[0] : user?.clients
+  return payrollRoles.includes(role) && packageHasFeature(client?.package_type || 'basic', 'payroll')
+}
+
+export function canManagePayroll(user = window.currentUser) {
+  return canAccessPayroll(user)
+}
 
 function scoped(query, opts = {}) { return applyTenantFilter(query, { user: window.currentUser, userColumn: null, ...opts }) }
 function content() { return document.getElementById('content') }
-function isPayrollAllowed() { return window.canUsePackageFeature?.('payroll') !== false }
-function guard() { if (isPayrollAllowed()) return true; content().innerHTML = `<div class="card"><h2><i class="fa fa-lock"></i> Payroll terkunci</h2><p>Payroll hanya tersedia untuk paket Standard dan Pro.</p></div>`; return false }
+function guard() { if (canAccessPayroll()) return true; content().innerHTML = `<div class="card"><h2><i class="fa fa-lock"></i> Payroll terkunci</h2><p>Payroll hanya tersedia untuk Admin HR/Admin All pada paket Standard dan Pro.</p></div>`; return false }
 
 async function loadComponents(activeOnly = false) {
   let q = scoped(supabase.from('payroll_components').select('*').order('sort_order').order('component_name'))
@@ -20,7 +31,55 @@ async function loadComponents(activeOnly = false) {
   if (error) throw error
   return data || []
 }
-async function loadTemplates() { const { data, error } = await scoped(supabase.from('payroll_templates').select('*').order('template_name')); if (error) throw error; return data || [] }
+export async function loadPayrollTemplatesForOffice(officeId = clientId(), { activeOnly = true } = {}) {
+  if (!officeId || !canAccessPayroll()) return []
+  let query = supabase.from('payroll_templates').select('id,template_name,client_id,is_active').eq('client_id', officeId).order('template_name')
+  if (activeOnly) query = query.eq('is_active', true)
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
+}
+async function loadTemplates() { return loadPayrollTemplatesForOffice(clientId(), { activeOnly: false }) }
+
+export async function validatePayrollTemplateForOffice(templateId, officeId = clientId()) {
+  if (!templateId) return null
+  const { data, error } = await supabase.from('payroll_templates').select('id,template_name,client_id,is_active').eq('id', templateId).eq('client_id', officeId).maybeSingle()
+  if (error) throw error
+  return data || null
+}
+
+export function validateBankAccountNumber(accountNumber) {
+  const value = String(accountNumber || '').trim()
+  return !value || /^[0-9]{1,34}$/.test(value)
+}
+
+export async function renderPayrollEmployeeFields(prefix, employee = {}, officeId = clientId()) {
+  if (!canAccessPayroll()) return ''
+  const templates = await loadPayrollTemplatesForOffice(officeId)
+  return `<div class="field full" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:12px;margin-top:6px;"><label style="font-weight:900;color:var(--primary);"><i class="fa fa-money-check-dollar"></i> Payroll</label></div>
+    <div class="field"><label>Payroll Template <span class="req">*</span></label><select id="${prefix}PayrollTemplate"><option value="">-- Pilih Payroll Template --</option>${templates.map(t => `<option value="${t.id}" ${String(t.id) === String(employee.payroll_template_id || '') ? 'selected' : ''}>${esc(t.template_name)}</option>`).join('')}</select></div>
+    <div class="field"><label>Bank</label><input id="${prefix}BankName" list="bankOptions" value="${esc(employee.bank_name || '')}" placeholder="BCA / Mandiri / BRI"><datalist id="bankOptions"><option value="BCA"><option value="Mandiri"><option value="BRI"><option value="BNI"><option value="CIMB Niaga"><option value="BSI"><option value="Permata"></datalist></div>
+    <div class="field"><label>Account Number</label><input id="${prefix}BankAccountNumber" inputmode="numeric" maxlength="34" value="${esc(employee.bank_account_number || '')}" placeholder="Hanya angka"></div>
+    <div class="field"><label>Account Holder Name</label><input id="${prefix}BankAccountHolder" value="${esc(employee.bank_account_holder || employee.nama_lengkap || '')}" placeholder="Nama pemilik rekening"></div>`
+}
+
+export function readPayrollEmployeePayload(prefix) {
+  if (!canAccessPayroll() || !document.getElementById(`${prefix}PayrollTemplate`)) return {}
+  return {
+    payroll_template_id: val(`${prefix}PayrollTemplate`) || null,
+    bank_name: val(`${prefix}BankName`) || null,
+    bank_account_number: val(`${prefix}BankAccountNumber`) || null,
+    bank_account_holder: val(`${prefix}BankAccountHolder`) || null,
+  }
+}
+
+export async function validatePayrollEmployeePayload(payload, officeId = clientId(), { requiredTemplate = true } = {}) {
+  if (!canAccessPayroll()) return true
+  if (requiredTemplate && !payload.payroll_template_id) { showToast('Payroll Template wajib dipilih.', 'warning'); return false }
+  if (payload.payroll_template_id && !(await validatePayrollTemplateForOffice(payload.payroll_template_id, officeId))) { showToast('Payroll Template tidak valid untuk Office ini.', 'warning'); return false }
+  if (!validateBankAccountNumber(payload.bank_account_number)) { showToast('Nomor rekening hanya boleh angka maksimal 34 digit.', 'warning'); return false }
+  return true
+}
 
 export async function renderPayroll(tab = 'dashboard') {
   if (!guard()) return
@@ -70,7 +129,7 @@ async function renderPayrollSlips() { const { data } = await scoped(supabase.fro
 window.viewSalarySlip = async id => { const { data:r } = await supabase.from('payroll_runs').select('*, payroll_periods(period_name), profiles(nama_lengkap), payroll_run_details(*)').eq('id',id).single(); window.showUserModal(`<div class="modal-header"><h3>Salary Slip</h3><button class="modal-close" onclick="closeUserModal()">×</button></div><div id="salarySlipPrint"><h3>${esc(r.profiles?.nama_lengkap)}</h3><p>${esc(r.payroll_periods?.period_name)}</p>${table(['Component','Type','Source','Amount'], (r.payroll_run_details||[]).map(d=>[esc(d.component_name),esc(d.type),esc(d.source),money.format(d.amount||0)]))}<h3>Net Salary: ${money.format(r.net_salary||0)}</h3></div><button class="btn-primary" onclick="window.print()">Export PDF</button>`) }
 async function renderPayrollHistory() { await renderPayrollSlips() }
 
-export async function renderEmployeePayroll(employee) { if (!guard()) return ''; const [templates, comps, active] = await Promise.all([loadTemplates(), loadComponents(true), supabase.from('employee_payroll_components').select('*, payroll_components(*), payroll_templates(template_name)').eq('employee_id', employee.id).order('sort_order')]); return `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><h4>Payroll Configuration</h4><div><select id="empTemplateId"><option value="">Assign Template</option>${templates.map(t=>`<option value="${t.id}">${esc(t.template_name)}</option>`)}</select><button class="btn-primary btn-sm" onclick="window.assignEmployeePayrollTemplate('${employee.id}')">Assign Template</button></div></div>${table(['Component','Source','Value','Actions'], (active.data||[]).map(r=>[esc(r.payroll_components?.component_name),esc(r.source),money.format(r.component_value||0),`<button class="action-btn edit" onclick="window.editEmployeePayrollComponent('${r.id}', ${r.component_value||0})">Override Value</button> <button class="action-btn view" onclick="window.restoreEmployeePayrollComponent('${r.id}')">Restore Template</button> <button class="action-btn delete" onclick="window.deleteEmployeePayrollComponent('${r.id}', '${employee.id}')">Delete</button>`]))}<div class="field"><label>Add Component</label><select id="empCompId">${comps.map(c=>`<option value="${c.id}">${esc(c.component_name)}</option>`)}</select></div><div class="field"><label>Value</label><input type="number" id="empCompValue" value="0"></div><button class="btn-primary btn-sm" onclick="window.addEmployeePayrollComponent('${employee.id}')">Add Component</button>` }
+export async function renderEmployeePayroll(employee) { if (!guard()) return ''; const template = employee.payroll_template_id ? await validatePayrollTemplateForOffice(employee.payroll_template_id, employee.client_id) : null; const [templates, comps, active] = await Promise.all([loadTemplates(), loadComponents(true), supabase.from('employee_payroll_components').select('*, payroll_components(*), payroll_templates(template_name)').eq('employee_id', employee.id).order('sort_order')]); return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:12px;"><div><strong>Payroll Template</strong><br>${esc(template?.template_name || '-')}</div><div><strong>Bank</strong><br>${esc(employee.bank_name || '-')}</div><div><strong>Account Number</strong><br>${esc(employee.bank_account_number || '-')}</div><div><strong>Account Holder</strong><br>${esc(employee.bank_account_holder || employee.nama_lengkap || '-')}</div></div><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><h4>Payroll Components</h4><div><select id="empTemplateId"><option value="">Assign Template</option>${templates.map(t=>`<option value="${t.id}" ${String(t.id) === String(employee.payroll_template_id || '') ? 'selected' : ''}>${esc(t.template_name)}</option>`)}</select><button class="btn-primary btn-sm" onclick="window.assignEmployeePayrollTemplate('${employee.id}')">Assign Template</button><button class="btn-secondary btn-sm" onclick="window.openEditKaryawan('${employee.id}')">Edit Bank Information</button></div></div>${table(['Component','Source','Override','Value','Actions'], (active.data||[]).map(r=>[esc(r.payroll_components?.component_name),esc(r.source),r.is_override ? 'Override' : 'Template',money.format(r.component_value||0),`<button class="action-btn edit" onclick="window.editEmployeePayrollComponent('${r.id}', ${r.component_value||0})">Override Value</button> <button class="action-btn view" onclick="window.restoreEmployeePayrollComponent('${r.id}')">Restore Template</button> <button class="action-btn delete" onclick="window.deleteEmployeePayrollComponent('${r.id}', '${employee.id}')">Delete</button>`]))}<div class="field"><label>Add Component</label><select id="empCompId">${comps.map(c=>`<option value="${c.id}">${esc(c.component_name)}</option>`)}</select></div><div class="field"><label>Value</label><input type="number" id="empCompValue" value="0"></div><button class="btn-primary btn-sm" onclick="window.addEmployeePayrollComponent('${employee.id}')">Add Component</button>` }
 window.assignEmployeePayrollTemplate = async employeeId => { await applyTemplateToEmployees(val('empTemplateId'), [employeeId]); showToast('Template assigned','success'); window.openDetailKaryawan(employeeId, 'payroll') }
 window.addEmployeePayrollComponent = async employeeId => { await supabase.from('employee_payroll_components').insert({ employee_id:employeeId, component_id:val('empCompId'), component_value:num('empCompValue'), source:'Override', is_override:true, is_active:true }); window.openDetailKaryawan(employeeId, 'payroll') }
 window.editEmployeePayrollComponent = async (id, old) => { const v = await promptAction('Override value:', String(old)); if (v === null) return; await supabase.from('employee_payroll_components').update({ component_value:Number(v), source:'Override', is_override:true }).eq('id', id); window.openDetailKaryawan(window._currentDetailEmployeeId, 'payroll') }

@@ -82,7 +82,7 @@ exports.handler = async (event) => {
     const jwt = String(event.headers.authorization || event.headers.Authorization || '').replace(/^Bearer\s+/i, '')
     if (!jwt) return json({ success: false, error: 'Sesi login wajib dikirim.' }, 401)
     const authUser = await supabaseUserRequest('/auth/v1/user', jwt, { method: 'GET' })
-    const caller = await first('profiles', `select=id,role,client_id,department_id,nama_lengkap&id=eq.${authUser.id}`)
+    const caller = await first('profiles', `select=id,role,client_id,department_id,nama_lengkap,clients:client_id(package_type)&id=eq.${authUser.id}`)
     if (!caller) return json({ success: false, error: 'Profil pembuat akun tidak ditemukan.' }, 403)
     const callerRole = normalizeRole(caller.role)
     if (!['super_admin', 'admin_hr'].includes(callerRole)) return json({ success: false, error: 'Hanya super_admin/admin_hr yang boleh membuat akun.' }, 403)
@@ -92,14 +92,23 @@ exports.handler = async (event) => {
     } catch {
       return json({ success: false, error: 'Body JSON tidak valid.' }, 400)
     }
-    const username = String(body.username || '').trim().toLowerCase(); const password = String(body.password_awal || ''); const role = normalizeRole(body.role); const nama = String(body.nama_lengkap || '').trim(); const jabatan = String(body.jabatan || '').trim(); let clientId = body.client_id; const departmentId = body.department_id
+    const username = String(body.username || '').trim().toLowerCase(); const password = String(body.password_awal || ''); const role = normalizeRole(body.role); const nama = String(body.nama_lengkap || '').trim(); const jabatan = String(body.jabatan || '').trim(); let clientId = body.client_id; const departmentId = body.department_id; const payrollTemplateId = body.payroll_template_id || null; const bankAccountNumber = String(body.bank_account_number || '').trim(); const payrollRequested = Boolean(payrollTemplateId || body.bank_name || bankAccountNumber || body.bank_account_holder)
     if (!/^[a-z0-9._-]{3,40}$/.test(username)) return json({ success: false, error: 'Username wajib 3-40 karakter: huruf kecil, angka, titik, underscore, strip.' }, 400)
     if (password.length < 8) return json({ success: false, error: 'Password awal minimal 8 karakter.' }, 400)
     if (!clientId || !departmentId || !nama || !jabatan) return json({ success: false, error: 'Data wajib belum lengkap.' }, 400)
     if (callerRole === 'admin_hr') { if (!['admin', 'staff'].includes(role)) return json({ success: false, error: 'Admin HR hanya boleh membuat role admin atau staff.' }, 403); clientId = caller.client_id }
     if (callerRole === 'super_admin' && !['admin_all','admin_hr','admin','staff'].includes(role)) return json({ success: false, error: 'Role tujuan tidak valid untuk form karyawan.' }, 400)
-    const client = await first('clients', `select=id,nama_client,kode_client,domain_login,status&id=eq.${clientId}`)
+    const client = await first('clients', `select=id,nama_client,kode_client,domain_login,status,package_type&id=eq.${clientId}`)
     if (!client || !['active','aktif'].includes(String(client.status || '').toLowerCase())) return json({ success: false, error: 'Office tidak valid atau nonaktif.' }, 400)
+    if (payrollRequested) {
+      if (!payrollTemplateId) return json({ success: false, error: 'Payroll Template wajib dipilih saat mengisi payroll employee.' }, 400)
+      const clientPackage = String(client.package_type || caller.clients?.package_type || 'basic').toLowerCase()
+      if (!['standard','pro'].includes(clientPackage)) return json({ success: false, error: 'Payroll hanya tersedia untuk paket Standard/Pro.' }, 403)
+      if (!['admin_all','admin_hr'].includes(callerRole)) return json({ success: false, error: 'Hanya Admin All/Admin HR yang boleh mengatur Payroll.' }, 403)
+      const template = await first('payroll_templates', `select=id,client_id,is_active&id=eq.${payrollTemplateId}&client_id=eq.${client.id}`)
+      if (!template || template.is_active === false) return json({ success: false, error: 'Payroll Template tidak valid untuk Office ini.' }, 400)
+      if (bankAccountNumber && !/^[0-9]{1,34}$/.test(bankAccountNumber)) return json({ success: false, error: 'Nomor rekening hanya boleh angka maksimal 34 digit.' }, 400)
+    }
     const dept = await first('departments', `select=id,nama_department,client_id,status&id=eq.${departmentId}&client_id=eq.${client.id}`)
     if (!dept || !['active','aktif'].includes(String(dept.status || '').toLowerCase())) return json({ success: false, error: 'Department tidak valid untuk Office ini.' }, 400)
     const emailInternal = `${username}+${cleanCode(client.kode_client || client.domain_login)}@gpro.my.id`
@@ -107,7 +116,7 @@ exports.handler = async (event) => {
     if (await first('profiles', `select=id&email_internal=eq.${encodeURIComponent(emailInternal)}`)) return json({ success: false, error: 'Email internal sudah dipakai.' }, 409)
     const created = await supabaseAdminRequest('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: emailInternal, password, email_confirm: true, user_metadata: { username, nama_lengkap: nama, role, client_id: client.id, department_id: dept.id } }) })
     if (!created?.id) throw new HttpError('Supabase Auth tidak mengembalikan user id.', 500)
-    const profile = { id: created.id, username, email_internal: emailInternal, email: emailInternal, nama_lengkap: nama, role, client_id: client.id, department_id: dept.id, departemen: dept.nama_department, jabatan, no_hp: body.no_hp || '', tanggal_bergabung: body.tanggal_bergabung || null, tanggal_lahir: body.tanggal_lahir || null, jenis_kontrak: body.jenis_kontrak || null, kontrak_mulai: body.kontrak_mulai || null, durasi_kontrak: body.durasi_kontrak || null, satuan_durasi_kontrak: body.satuan_durasi_kontrak || 'bulan', masa_kontrak: body.masa_kontrak || null, kontrak_berakhir: body.kontrak_berakhir || null, status_kontrak: body.status_kontrak || 'aktif', status_akun: 'Aktif', foto_url: body.foto_url || '', sisa_cuti: body.sisa_cuti || 0, jatah_cuti: body.jatah_cuti || 0, titik_radius: body.titik_radius || null, must_change_password: true, created_by: caller.id }
+    const profile = { id: created.id, username, email_internal: emailInternal, email: emailInternal, nama_lengkap: nama, role, client_id: client.id, department_id: dept.id, departemen: dept.nama_department, jabatan, no_hp: body.no_hp || '', tanggal_bergabung: body.tanggal_bergabung || null, tanggal_lahir: body.tanggal_lahir || null, jenis_kontrak: body.jenis_kontrak || null, kontrak_mulai: body.kontrak_mulai || null, durasi_kontrak: body.durasi_kontrak || null, satuan_durasi_kontrak: body.satuan_durasi_kontrak || 'bulan', masa_kontrak: body.masa_kontrak || null, kontrak_berakhir: body.kontrak_berakhir || null, status_kontrak: body.status_kontrak || 'aktif', status_akun: 'Aktif', foto_url: body.foto_url || '', sisa_cuti: body.sisa_cuti || 0, jatah_cuti: body.jatah_cuti || 0, titik_radius: body.titik_radius || null, payroll_template_id: payrollTemplateId, bank_name: body.bank_name || null, bank_account_number: bankAccountNumber || null, bank_account_holder: body.bank_account_holder || nama, must_change_password: true, created_by: caller.id }
     try {
       await supabaseAdminRequest('/rest/v1/profiles', { method: 'POST', headers: { prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(profile) })
     } catch (profileError) {
