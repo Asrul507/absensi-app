@@ -6,6 +6,7 @@ const PAGE_FEATURE_MAP = Object.freeze({
   'approval-absensi': 'approval_absensi_open',
   personalia: 'personalia_kontrak',
   'laporan-keseluruhan': 'laporan_keseluruhan',
+  payroll: 'payroll',
 })
 
 const FEATURE_LABELS = Object.freeze({
@@ -13,6 +14,7 @@ const FEATURE_LABELS = Object.freeze({
   personalia_kontrak: 'HR Personalia / Kontrak',
   laporan_keseluruhan: 'Laporan Keseluruhan',
   employee_excel_import: 'Upload Excel Karyawan',
+  payroll: 'Payroll',
 })
 
 function isSuperAdmin() {

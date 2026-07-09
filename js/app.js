@@ -32,6 +32,7 @@ import { logAuditEvent } from './audit-trail.js'
 import { renderAttendanceApproval, canApproveAttendance } from './attendance-approval.js'
 import { assertSameDepartment, canAccessAllDepartments, canManageUserByDepartment, getAccessibleProfiles, getUserDepartment, normalizeRole, isSuperAdmin, isAdminAll, isAdminHR, isAdmin, isStaff, applyTenantFilter } from './access-control.js'
 import { renderSettingsApp } from './settings-app.js'
+import { renderPayroll, renderEmployeePayroll } from './payroll.js'
 
 /* ================= GLOBAL VARIABLES ================= */
 window.currentUser  = null
@@ -282,6 +283,7 @@ function renderMenu(role) {
       <a href="#" id="menu-users" onclick="navigate('users'); closeSidebar(); return false;"><i class="fa fa-users"></i> Data Karyawan</a>
       <a href="#" id="menu-personalia" onclick="navigate('personalia'); closeSidebar(); return false;"><i class="fa fa-id-card-clip"></i> HR Personalia / Kontrak</a>
       <a href="#" id="menu-admin-lokasi" onclick="navigate('admin-lokasi'); closeSidebar(); return false;"><i class="fa fa-map-location-dot"></i> Titik Radius GPS</a>
+      <a href="#" id="menu-payroll" onclick="navigate('payroll'); closeSidebar(); return false;"><i class="fa fa-money-check-dollar"></i> Payroll</a>
 
       <div class="sidebar-section-title">LAPORAN REKAPITULASI</div>
       <a href="#" id="menu-daftar-absensi" onclick="navigate('daftar-absensi'); closeSidebar(); return false;"><i class="fa fa-list-check"></i> Log Kehadiran Ringkas</a>
@@ -460,7 +462,7 @@ function renderBottomNav(role) {
 
 const ADMIN_ROLES = ['super_admin', 'admin_all', 'admin_hr', 'admin']
 const STAFF_PAGES = ['dashboard', 'absensi', 'perbaikan-absen', 'pengajuan', 'kalender', 'daftar-absensi', 'rekap-inout', 'rekap', 'profile']
-const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'daftar-absensi', 'rekap-inout', 'rekap', 'laporan-keseluruhan', 'profile', 'settings-app']
+const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'payroll', 'daftar-absensi', 'rekap-inout', 'rekap', 'laporan-keseluruhan', 'profile', 'settings-app']
 
 function isAdminRole(role) {
   return ADMIN_ROLES.includes(normalizeRole(role))
@@ -502,6 +504,7 @@ window.navigate = async function (page) {
     case 'profile':   renderProfile(); break
     case 'users':     await renderUsers(); break
     case 'admin-lokasi': renderPengaturanLokasi(); break
+    case 'payroll': await renderPayroll(); break
     case 'laporan-keseluruhan': renderLaporanKeseluruhan(window.currentUser); break
     case 'settings-app': renderSettingsApp(window.currentUser); break
     default:
@@ -1335,11 +1338,18 @@ function renderUserList(list) {
 
 
 /* ================= POPUP MODAL: DETAIL KARYAWAN ================= */
-window.openDetailKaryawan = function(id) {
+window.openDetailKaryawan = async function(id, activeTab = 'personal') {
   const target = (window._allUsers || []).find(u => u.id === id)
   if (!target) return
   const avatarLetter = safeText((target.nama_lengkap || '?')[0] || '?')
   const roleLabel = safeText(normalizeRole(target.role || 'staff').toUpperCase())
+  window._currentDetailEmployeeId = id
+  const payrollAllowed = window.canUsePackageFeature?.('payroll') !== false
+  if (activeTab === 'payroll' && !payrollAllowed) activeTab = 'personal'
+  const payrollHtml = activeTab === 'payroll' ? await renderEmployeePayroll(target) : ''
+  const tabs = ['personal','employment','schedule', ...(payrollAllowed ? ['payroll'] : []), 'documents','history']
+  const tabLabels = { personal:'Personal', employment:'Employment', schedule:'Schedule', payroll:'Payroll', documents:'Documents', history:'History' }
+  const tabNav = `<div style="display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:12px;">${tabs.map(t => `<button class="${t === activeTab ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="window.openDetailKaryawan('${safeText(id)}','${t}')">${tabLabels[t]}</button>`).join('')}</div>`
 
   window.showUserModal(`
     <div class="modal-header">
@@ -1354,7 +1364,8 @@ window.openDetailKaryawan = function(id) {
        <h4 style="margin:6px 0 2px; font-size:1.1rem;">${safeText(target.nama_lengkap)}</h4>
        <span class="badge badge-gray">${roleLabel}</span>
     </div>
-    <div style="display: flex; flex-direction: column; gap: 10px; font-size: .85rem;">
+    ${tabNav}
+    ${activeTab !== 'payroll' ? `<div style="display: flex; flex-direction: column; gap: 10px; font-size: .85rem;">` : `<div>${payrollHtml}</div><div style="display:none;">`}
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Username:</span><strong>${safeText(legacyLoginValue(target.username))}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Email Internal:</span><strong>${safeText(legacyLoginValue(target.email_internal))}</strong></div>
       <div style="display:flex; justify-content:space-between; gap:16px;"><span style="color:var(--text-muted);">Office:</span><strong>${safeText(getOfficeLabel(target))}</strong></div>
