@@ -24,6 +24,7 @@ export const PACKAGE_DEFINITIONS = Object.freeze({
       laporan_keseluruhan: false,
       custom_branding: false,
       priority_support: false,
+      payroll: false,
     }),
   }),
   standard: Object.freeze({
@@ -51,6 +52,7 @@ export const PACKAGE_DEFINITIONS = Object.freeze({
       laporan_keseluruhan: false,
       custom_branding: false,
       priority_support: false,
+      payroll: true,
     }),
   }),
   pro: Object.freeze({
@@ -78,6 +80,7 @@ export const PACKAGE_DEFINITIONS = Object.freeze({
       laporan_keseluruhan: true,
       custom_branding: true,
       priority_support: true,
+      payroll: true,
     }),
   }),
 })
