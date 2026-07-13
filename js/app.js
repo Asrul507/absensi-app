@@ -32,7 +32,7 @@ import { logAuditEvent } from './audit-trail.js'
 import { renderAttendanceApproval, canApproveAttendance } from './attendance-approval.js'
 import { assertSameDepartment, canAccessAllDepartments, canManageUserByDepartment, getAccessibleProfiles, getUserDepartment, normalizeRole, isSuperAdmin, isAdminAll, isAdminHR, isAdmin, isStaff, applyTenantFilter } from './access-control.js'
 import { renderSettingsApp } from './settings-app.js'
-import { renderPayroll, renderEmployeePayroll, canAccessPayroll, renderPayrollEmployeeFields, readPayrollEmployeePayload, validatePayrollEmployeePayload } from './payroll.js'
+import { renderPayroll, renderEmployeePayroll, canAccessPayroll, renderPayrollEmployeeFields, readPayrollEmployeePayload, validatePayrollEmployeePayload, syncEmployeePayrollComponents } from './payroll.js'
 
 /* ================= GLOBAL VARIABLES ================= */
 window.currentUser  = null
@@ -1131,9 +1131,6 @@ window.savePendingKaryawan = async function() {
   if (!selectedOfficeId) { showToast('Office wajib dipilih.', 'warning'); return }
   if (!selectedDepartmentId) { showToast('Department wajib dipilih.', 'warning'); return }
     const payrollPayload = readPayrollEmployeePayload('p')
-  console.log('DEBUG payrollPayload (tambah):', payrollPayload)
-  showToast('DEBUG: ' + JSON.stringify(payrollPayload), 'warning')
-
   if (!(await validatePayrollEmployeePayload(payrollPayload, selectedOfficeId))) return
   const departments = await fetchDepartmentOptionsForOffice(selectedOfficeId)
   const selectedDepartment = departments.find(d => String(d.id) === String(selectedDepartmentId))
@@ -1708,9 +1705,6 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       const selectedOfficeId = role === 'super_admin' ? document.getElementById('editOffice')?.value || null : targetProfile?.client_id || null
       const selectedDepartmentId = canEditDepartmentForEmployee(window.currentUser) ? document.getElementById('editDepartment')?.value || null : targetProfile?.department_id || null
             const payrollPayload = readPayrollEmployeePayload('edit')
-      console.log('DEBUG payrollPayload (edit):', payrollPayload)
-      showToast('DEBUG: ' + JSON.stringify(payrollPayload), 'warning')
-
       const updatePayload = {
         nama_lengkap:  document.getElementById('editNama')?.value.trim()    || '',
         email:         document.getElementById('editEmail')?.value.trim()   || null,
@@ -1771,6 +1765,9 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
         .eq('id', id)
 
       if (profileErr) throw profileErr
+      if (payrollPayload.payroll_template_id !== undefined) {
+        await syncEmployeePayrollComponents(id, payrollPayload.payroll_template_id, updatePayload.client_id || targetProfile?.client_id)
+      }
     }
 
     // Update data cache lokal window agar UI sinkron instan

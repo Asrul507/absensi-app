@@ -75,6 +75,25 @@ async function first(table, query) {
   return Array.isArray(rows) ? rows[0] || null : rows
 }
 
+async function syncEmployeePayrollTemplate(employeeId, templateId) {
+  if (!employeeId || !templateId) return
+  const rows = await supabaseAdminRequest(`/rest/v1/payroll_template_components?select=*&template_id=eq.${templateId}&order=sort_order.asc`, { headers: { accept: 'application/json' } })
+  await supabaseAdminRequest('/rest/v1/employee_payroll_profiles', { method: 'POST', headers: { prefer: 'resolution=merge-duplicates' }, body: JSON.stringify({ employee_id: employeeId, template_id: templateId }) })
+  await supabaseAdminRequest(`/rest/v1/employee_payroll_components?employee_id=eq.${employeeId}&is_override=eq.false`, { method: 'DELETE' })
+  const components = (Array.isArray(rows) ? rows : []).map(c => ({
+    employee_id: employeeId,
+    template_id: templateId,
+    template_component_id: c.id,
+    component_id: c.component_id,
+    component_value: Number(c.component_value || 0),
+    source: 'Template',
+    is_override: false,
+    is_active: true,
+    sort_order: c.sort_order || 0
+  }))
+  if (components.length) await supabaseAdminRequest('/rest/v1/employee_payroll_components', { method: 'POST', body: JSON.stringify(components) })
+}
+
 exports.handler = async (event) => {
   try {
     if (event.httpMethod !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405)
@@ -104,7 +123,7 @@ exports.handler = async (event) => {
       if (!payrollTemplateId) return json({ success: false, error: 'Payroll Template wajib dipilih saat mengisi payroll employee.' }, 400)
       const clientPackage = String(client.package_type || caller.clients?.package_type || 'basic').toLowerCase()
       if (!['standard','pro'].includes(clientPackage)) return json({ success: false, error: 'Payroll hanya tersedia untuk paket Standard/Pro.' }, 403)
-      if (!['admin_all','admin_hr'].includes(callerRole)) return json({ success: false, error: 'Hanya Admin All/Admin HR yang boleh mengatur Payroll.' }, 403)
+      if (!['super_admin','admin_all','admin_hr'].includes(callerRole)) return json({ success: false, error: 'Hanya Super Admin/Admin All/Admin HR yang boleh mengatur Payroll.' }, 403)
       const template = await first('payroll_templates', `select=id,client_id,is_active&id=eq.${payrollTemplateId}&client_id=eq.${client.id}`)
       if (!template || template.is_active === false) return json({ success: false, error: 'Payroll Template tidak valid untuk Office ini.' }, 400)
       if (bankAccountNumber && !/^[0-9]{1,34}$/.test(bankAccountNumber)) return json({ success: false, error: 'Nomor rekening hanya boleh angka maksimal 34 digit.' }, 400)
@@ -119,6 +138,7 @@ exports.handler = async (event) => {
     const profile = { id: created.id, username, email_internal: emailInternal, email: emailInternal, nama_lengkap: nama, role, client_id: client.id, department_id: dept.id, departemen: dept.nama_department, jabatan, no_hp: body.no_hp || '', tanggal_bergabung: body.tanggal_bergabung || null, tanggal_lahir: body.tanggal_lahir || null, jenis_kontrak: body.jenis_kontrak || null, kontrak_mulai: body.kontrak_mulai || null, durasi_kontrak: body.durasi_kontrak || null, satuan_durasi_kontrak: body.satuan_durasi_kontrak || 'bulan', masa_kontrak: body.masa_kontrak || null, kontrak_berakhir: body.kontrak_berakhir || null, status_kontrak: body.status_kontrak || 'aktif', status_akun: 'Aktif', foto_url: body.foto_url || '', sisa_cuti: body.sisa_cuti || 0, jatah_cuti: body.jatah_cuti || 0, titik_radius: body.titik_radius || null, payroll_template_id: payrollTemplateId, bank_name: body.bank_name || null, bank_account_number: bankAccountNumber || null, bank_account_holder: body.bank_account_holder || nama, must_change_password: true, created_by: caller.id }
     try {
       await supabaseAdminRequest('/rest/v1/profiles', { method: 'POST', headers: { prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(profile) })
+      await syncEmployeePayrollTemplate(created.id, payrollTemplateId)
     } catch (profileError) {
       await supabaseAdminRequest(`/auth/v1/admin/users/${created.id}`, { method: 'DELETE' }).catch(() => null)
       throw profileError

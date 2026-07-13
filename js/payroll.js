@@ -9,6 +9,7 @@ const val = id => document.getElementById(id)?.value?.trim() || ''
 const num = id => Number(document.getElementById(id)?.value || 0)
 const clientId = () => window.currentUser?.client_id || null
 const payrollRoles = Object.freeze(['admin_all', 'admin_hr'])
+const payrollManageRoles = Object.freeze(['super_admin', 'admin_all', 'admin_hr'])
 
 export function canAccessPayroll(user = window.currentUser) {
   const role = normalizeRole(user?.role)
@@ -19,8 +20,13 @@ export function canAccessPayroll(user = window.currentUser) {
 }
 
 export function canManagePayroll(user = window.currentUser) {
-  return canAccessPayroll(user)
+  return payrollManageRoles.includes(normalizeRole(user?.role)) && canAccessPayroll(user)
 }
+
+function assertCanManagePayroll() {
+  if (!canManagePayroll()) throw new Error('Hanya Super Admin, Admin All, atau Admin HR yang boleh mengelola payroll.')
+}
+
 
 function scoped(query, opts = {}) { return applyTenantFilter(query, { user: window.currentUser, userColumn: null, ...opts }) }
 function content() { return document.getElementById('content') }
@@ -117,16 +123,47 @@ window.managePayrollTemplate = async id => { const [tc, comps] = await Promise.a
 window.addTemplateComponent = async id => { const { error } = await supabase.from('payroll_template_components').insert({ template_id:id, component_id:val('tplCompId'), component_value:num('tplCompVal'), sort_order:0 }); if (error) showToast('Gagal: '+error.message,'error'); else { window.managePayrollTemplate(id) } }
 window.editTemplateComponent = async (rowId, tplId, old) => { const v = await promptAction('Nilai komponen:', String(old)); if (v === null) return; const { error } = await supabase.from('payroll_template_components').update({ component_value: Number(v) }).eq('id', rowId); if (error) showToast('Gagal: '+error.message,'error'); else { window.managePayrollTemplate(tplId) } }
 window.removeTemplateComponent = async (rowId, tplId) => { if (await confirmAction('Remove component?','Remove')) { await supabase.from('payroll_template_components').delete().eq('id', rowId); await window.managePayrollTemplate(tplId) } }
-async function askTemplatePropagation(templateId) { const choice = await promptAction('Apply changes to: existing | new | selected. Ketik existing untuk update karyawan yang masih memakai Template ini:', 'existing'); return choice?.toLowerCase() }
-
 async function renderPayrollPeriods() { const { data } = await scoped(supabase.from('payroll_periods').select('*').order('start_date',{ascending:false})); document.getElementById('payrollBody').innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:12px;"><h3>Payroll Periods</h3><button class="btn-primary btn-sm" onclick="window.openPayrollPeriodForm()"><i class="fa fa-plus"></i> Tambah Period</button></div>${(data||[]).map(r=>`<div class="card" style="padding:12px;margin-bottom:10px;"><div style="display:flex;justify-content:space-between;"><div><strong>${esc(r.period_name)}</strong><div style="font-size:.8rem;color:var(--text-muted);">${r.start_date} s/d ${r.end_date} | Status: ${r.status}</div></div><div style="display:flex;gap:6px;"><button class="btn-secondary btn-sm" onclick="window.openPayrollPeriodForm('${r.id}')"><i class="fa fa-edit"></i> Edit</button><button class="btn-danger btn-sm" onclick="window.deletePayrollPeriod('${r.id}')"><i class="fa fa-trash"></i> Hapus</button></div></div></div>`).join('')}` }
 window.openPayrollPeriodForm = async id => { const row = id ? (await supabase.from('payroll_periods').select('*').eq('id',id).maybeSingle()).data : {}; window.showUserModal(`<div class="modal-header"><h3>${id?'Edit':'Tambah'} Payroll Period</h3><button class="modal-close" onclick="window.closeUserModal()"><i class="fa fa-times"></i></button></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px;"><div class="field full" style="grid-column:1/-1;"><label>Period Name</label><input id="ppName" value="${esc(row.period_name||'')}"></div><div class="field"><label>Start Date</label><input type="date" id="ppStart" value="${row.start_date||''}"></div><div class="field"><label>End Date</label><input type="date" id="ppEnd" value="${row.end_date||''}"></div><div class="field full" style="grid-column:1/-1;"><label>Status</label><select id="ppStatus"><option ${row.status==='Draft'?'selected':''}>Draft</option><option ${row.status==='Processing'?'selected':''}>Processing</option><option ${row.status==='Approved'?'selected':''}>Approved</option><option ${row.status==='Paid'?'selected':''}>Paid</option><option ${row.status==='Closed'?'selected':''}>Closed</option></select></div></div><div class="modal-actions"><button class="btn-secondary" onclick="window.closeUserModal()">Batal</button><button class="btn-primary" onclick="window.savePayrollPeriod('${id||''}')"><i class="fa fa-save"></i> Simpan</button></div>`) }
 window.savePayrollPeriod = async id => { const payload = { client_id:clientId(), period_name:val('ppName'), start_date:val('ppStart'), end_date:val('ppEnd'), status:val('ppStatus') }; const q = id ? supabase.from('payroll_periods').update(payload).eq('id', id) : supabase.from('payroll_periods').insert(payload); const { error } = await q; if (error) showToast('Gagal simpan: '+error.message,'error'); else { window.closeUserModal(); showToast(id?'Period updated':'Period created','success'); await renderPayrollPeriods() } }
 window.deletePayrollPeriod = async id => { if (await confirmAction('Hapus periode?','Hapus')) { const { error } = await supabase.from('payroll_periods').delete().eq('id', id); if (error) showToast('Gagal hapus: '+error.message,'error'); else { showToast('Period deleted','success'); await renderPayrollPeriods() } } }
 
 async function renderPayrollProcessing() { const [periods, employees] = await Promise.all([scoped(supabase.from('payroll_periods').select('*').order('start_date',{ascending:false})), getAccessibleProfiles(window.currentUser)]); document.getElementById('payrollBody').innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;"><div class="field"><label>Periode Payroll</label><select id="procPeriod"><option value="">-- Pilih Periode --</option>${(periods.data||[]).map(p=>`<option value="${p.id}">${esc(p.period_name)}</option>`).join('')}</select></div><div class="field"><label>Karyawan (kosongkan untuk semua)</label><select id="procEmployee"><option value="">-- Semua Karyawan --</option>${(employees||[]).map(e=>`<option value="${e.id}">${esc(e.nama_lengkap)}</option>`).join('')}</select></div></div><button class="btn-primary" onclick="window.generatePayroll()"><i class="fa fa-cogs"></i> Generate Payroll</button>` }
-window.generatePayroll = async () => { const periodId = val('procPeriod'); const employeeId = val('procEmployee'); const employees = employeeId ? [employeeId] : (await getAccessibleProfiles(window.currentUser)).map(e=>e.id); for (const empId of employees) { await generateEmployeePayroll(periodId, empId) }; showToast('Payroll generated','success'); await renderPayrollProcessing() }
-async function generateEmployeePayroll(periodId, employeeId) { const { data: comps } = await supabase.from('employee_payroll_components').select('*, payroll_components(*)').eq('employee_id', employeeId); const totalIncome = (comps?.filter(c=>c.payroll_components?.type==='Income')?.reduce((s,c)=>s+Number(c.component_value||0),0))||0; const totalDeduction = (comps?.filter(c=>c.payroll_components?.type==='Deduction')?.reduce((s,c)=>s+Number(c.component_value||0),0))||0; const { data: existing } = await supabase.from('payroll_runs').select('id').eq('period_id', periodId).eq('employee_id', employeeId).maybeSingle(); const payload = { period_id: periodId, employee_id: employeeId, total_income: totalIncome, total_deduction: totalDeduction, net_salary: totalIncome - totalDeduction, status: 'Draft', client_id: clientId() }; if (existing) await supabase.from('payroll_runs').update(payload).eq('id', existing.id); else await supabase.from('payroll_runs').insert(payload); }
+window.generatePayroll = async () => {
+  try {
+    assertCanManagePayroll()
+    const periodId = val('procPeriod')
+    if (!periodId) { showToast('Periode payroll wajib dipilih.', 'warning'); return }
+    const employeeId = val('procEmployee')
+    const employees = employeeId ? [employeeId] : (await getAccessibleProfiles(window.currentUser)).map(e => e.id)
+    for (const empId of employees) await generateEmployeePayroll(periodId, empId)
+    showToast('Payroll generated', 'success')
+    await renderPayrollProcessing()
+  } catch (err) {
+    console.error('generatePayroll error:', err)
+    showToast('Gagal generate payroll: ' + (err.message || err), 'error')
+  }
+}
+async function generateEmployeePayroll(periodId, employeeId) {
+  const { data: employee, error: employeeErr } = await supabase.from('profiles').select('id,client_id,payroll_template_id').eq('id', employeeId).maybeSingle()
+  if (employeeErr) throw employeeErr
+  if (!employee) throw new Error('Karyawan tidak ditemukan.')
+  await syncEmployeePayrollComponents(employeeId, employee.payroll_template_id, employee.client_id)
+  const { data: comps, error: compsErr } = await supabase.from('employee_payroll_components').select('*, payroll_components(id,component_name,type)').eq('employee_id', employeeId).eq('is_active', true).order('sort_order')
+  if (compsErr) throw compsErr
+  const totalIncome = (comps || []).filter(c => c.payroll_components?.type === 'Income').reduce((s, c) => s + Number(c.component_value || 0), 0)
+  const totalDeduction = (comps || []).filter(c => c.payroll_components?.type === 'Deduction').reduce((s, c) => s + Number(c.component_value || 0), 0)
+  const payload = { period_id: periodId, employee_id: employeeId, total_income: totalIncome, total_deduction: totalDeduction, net_salary: totalIncome - totalDeduction, status: 'Draft', client_id: employee.client_id || clientId(), generated_at: new Date().toISOString() }
+  const { data: run, error: runErr } = await supabase.from('payroll_runs').upsert(payload, { onConflict: 'period_id,employee_id' }).select('id').single()
+  if (runErr) throw runErr
+  const { error: deleteErr } = await supabase.from('payroll_run_details').delete().eq('payroll_id', run.id)
+  if (deleteErr) throw deleteErr
+  const details = (comps || []).map(c => ({ payroll_id: run.id, component_id: c.component_id, component_name: c.payroll_components?.component_name || '-', type: c.payroll_components?.type, source: c.is_override ? 'Override' : 'Template', amount: Number(c.component_value || 0) }))
+  if (details.length) {
+    const { error: detailErr } = await supabase.from('payroll_run_details').insert(details)
+    if (detailErr) throw detailErr
+  }
+}
 
 async function renderPayrollSlips() { 
   const { data } = await scoped(supabase.from('payroll_runs').select('*, payroll_periods(period_name), profiles(nama_lengkap)').order('created_at',{ascending:false}))
@@ -242,26 +279,40 @@ window.downloadPayrollPeriodExcel = async (periodId, periodName) => {
 
 export async function renderEmployeePayroll(employee) { if (!guard()) return ''; const template = employee.payroll_template_id ? await validatePayrollTemplateForOffice(employee.payroll_template_id, employee.client_id) : null; const { data: comps } = await supabase.from('employee_payroll_components').select('*, payroll_components(*)').eq('employee_id', employee.id); const { data: allComps } = await supabase.from('payroll_components').select('*').eq('client_id', employee.client_id); const income = (comps?.filter(c=>c.payroll_components?.type==='Income')||[]).reduce((s,c)=>s+Number(c.component_value||0),0); const deduction = (comps?.filter(c=>c.payroll_components?.type==='Deduction')||[]).reduce((s,c)=>s+Number(c.component_value||0),0); const net = income - deduction; return `<div style="padding:12px;background:var(--gray-50);border-radius:var(--r-md);margin-bottom:12px;"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:.85rem;"><div><span style="color:var(--text-muted);">Payroll Template:</span><div style="font-weight:700;">${template?.template_name || 'Not Assigned'}</div></div><div><span style="color:var(--text-muted);">Bank:</span><div style="font-weight:700;">${employee.bank_name || '-'} (${employee.bank_account_number || '-'})</div></div><div><span style="color:var(--text-muted);">Income:</span><div style="font-weight:700;color:var(--success);">${money.format(income)}</div></div><div><span style="color:var(--text-muted);">Deduction:</span><div style="font-weight:700;color:var(--danger);">${money.format(deduction)}</div></div><div style="grid-column:1/-1;"><span style="color:var(--text-muted);">Net Salary:</span><div style="font-weight:700;font-size:1.1rem;color:var(--primary);">${money.format(net)}</div></div></div></div><div style="margin-top:12px;"><label style="font-weight:700;margin-bottom:8px;display:block;">Payroll Components:</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.8rem;"><select id="empCompId" style="grid-column:1/-1;padding:8px;"><option value="">-- Add Component --</option>${(allComps||[]).filter(c=>!(comps||[]).find(x=>x.component_id===c.id)).map(c=>`<option value="${c.id}">${esc(c.component_name)}</option>`).join('')}</select><input type="number" id="empCompVal" placeholder="Value" style="padding:8px;"><button class="btn-primary btn-xs" onclick="window.addEmployeePayrollComponent('${employee.id}')" style="grid-column:1/-1;">Add Component</button></div><div style="margin-top:10px;">${(comps||[]).map(c=>`<div style="display:flex;justify-content:space-between;padding:6px;border-bottom:1px solid var(--border);align-items:center;"><div><strong>${esc(c.payroll_components?.component_name||'-')}</strong><div style="font-size:.7rem;color:var(--text-muted);">Value: ${c.component_value}</div></div><div style="display:flex;gap:4px;"><button class="btn-secondary btn-xs" onclick="window.editEmployeePayrollComponent('${c.id}',${c.component_value})"><i class="fa fa-edit"></i></button><button class="btn-danger btn-xs" onclick="window.deleteEmployeePayrollComponent('${c.id}','${employee.id}')"><i class="fa fa-trash"></i></button></div></div>`).join('')}</div></div></div>` }
 window.assignEmployeePayrollTemplate = async employeeId => { await applyTemplateToEmployees(val('empTemplateId'), [employeeId]); showToast('Template assigned','success'); window.openDetailKaryawan(employeeId, 'payroll') }
-window.addEmployeePayrollComponent = async employeeId => { await supabase.from('employee_payroll_components').insert({ employee_id:employeeId, component_id:val('empCompId'), component_value:num('empCompVal'), source:'Manual' }); window.openDetailKaryawan(employeeId, 'payroll') }
+window.addEmployeePayrollComponent = async employeeId => { assertCanManagePayroll(); await supabase.from('employee_payroll_components').insert({ employee_id:employeeId, component_id:val('empCompId'), component_value:num('empCompVal'), source:'Override', is_override:true }); window.openDetailKaryawan(employeeId, 'payroll') }
 window.editEmployeePayrollComponent = async (id, old) => { const v = await promptAction('Override value:', String(old)); if (v === null) return; await supabase.from('employee_payroll_components').update({ component_value: Number(v), is_override: true }).eq('id', id); const empId = window._currentDetailEmployeeId; window.openDetailKaryawan(empId, 'payroll') }
 window.restoreEmployeePayrollComponent = async id => { const { data:r } = await supabase.from('employee_payroll_components').select('template_component_id,employee_id').eq('id',id).single(); if (r) { const { data:tc } = await supabase.from('payroll_template_components').select('component_value').eq('id', r.template_component_id).maybeSingle(); await supabase.from('employee_payroll_components').update({ component_value: tc?.component_value||0, is_override: false }).eq('id',id) }; window.openDetailKaryawan(r.employee_id, 'payroll') }
 window.deleteEmployeePayrollComponent = async (id, employeeId) => { await supabase.from('employee_payroll_components').delete().eq('id', id); window.openDetailKaryawan(employeeId, 'payroll') }
 
-async function applyTemplateToEmployees(templateId, employeeIds = null) {
-  const { data: tcs } = await supabase.from('payroll_template_components').select('*').eq('template_id', templateId)
-  const ids = employeeIds || (await supabase.from('employee_payroll_profiles').select('employee_id').eq('template_id', templateId)).data?.map(r => r.employee_id) || []
-  for (const employeeId of ids) {
-    await supabase.from('employee_payroll_profiles').upsert({ employee_id: employeeId, template_id: templateId }, { onConflict: 'employee_id' })
-    for (const c of (tcs || [])) {
-      const { data: existing } = await supabase.from('employee_payroll_components').select('id,is_override').eq('employee_id', employeeId).eq('component_id', c.component_id).maybeSingle()
-      if (existing?.is_override) continue
-      if (existing?.id) {
-        await supabase.from('employee_payroll_components').update({ template_id: templateId, template_component_id: c.id, component_value: c.component_value, source: 'Template', is_override: false }).eq('id', existing.id)
-      } else {
-        await supabase.from('employee_payroll_components').insert({ employee_id: employeeId, template_id: templateId, template_component_id: c.id, component_id: c.component_id, component_value: c.component_value, source: 'Template', is_override: false })
-      }
-    }
+export async function syncEmployeePayrollComponents(employeeId, templateId, officeId = clientId()) {
+  assertCanManagePayroll()
+  if (!employeeId) throw new Error('Employee wajib dipilih untuk sinkronisasi payroll.')
+  if (!templateId) {
+    const { error: profileErr } = await supabase.from('employee_payroll_profiles').delete().eq('employee_id', employeeId)
+    if (profileErr) throw profileErr
+    const { error: compErr } = await supabase.from('employee_payroll_components').delete().eq('employee_id', employeeId).eq('is_override', false)
+    if (compErr) throw compErr
+    return
   }
+  const template = await validatePayrollTemplateForOffice(templateId, officeId)
+  if (!template) throw new Error('Payroll Template tidak valid untuk Office employee ini.')
+  const { data: tcs, error: tcErr } = await supabase.from('payroll_template_components').select('*, payroll_components(client_id)').eq('template_id', templateId).order('sort_order')
+  if (tcErr) throw tcErr
+  const { error: profileErr } = await supabase.from('employee_payroll_profiles').upsert({ employee_id: employeeId, template_id: templateId }, { onConflict: 'employee_id' })
+  if (profileErr) throw profileErr
+  const { error: deleteErr } = await supabase.from('employee_payroll_components').delete().eq('employee_id', employeeId).eq('is_override', false)
+  if (deleteErr) throw deleteErr
+  const rows = (tcs || []).map(c => ({ employee_id: employeeId, template_id: templateId, template_component_id: c.id, component_id: c.component_id, component_value: Number(c.component_value || 0), source: 'Template', is_override: false, is_active: true, sort_order: c.sort_order || 0 }))
+  if (rows.length) {
+    const { error: insertErr } = await supabase.from('employee_payroll_components').insert(rows)
+    if (insertErr) throw insertErr
+  }
+}
+
+async function applyTemplateToEmployees(templateId, employeeIds = null) {
+  assertCanManagePayroll()
+  const ids = employeeIds || (await supabase.from('employee_payroll_profiles').select('employee_id').eq('template_id', templateId)).data?.map(r => r.employee_id) || []
+  for (const employeeId of ids) await syncEmployeePayrollComponents(employeeId, templateId)
 }
 
 function table(head, rows) { return `<div class="table-responsive"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${head.length}" style="text-align:center;padding:20px;color:var(--text-muted);">No data</td></tr>`}</tbody></table></div>` }
