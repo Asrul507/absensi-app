@@ -19,7 +19,7 @@ begin
     delete from public.employee_payroll_components
     where employee_id = new.id
       and coalesce(is_override, false) = false
-      and coalesce(source, 'Template') = 'Template';
+      and (source = 'Template' or source is null);
 
     return new;
   end if;
@@ -66,7 +66,7 @@ begin
         is_active = true,
         sort_order = excluded.sort_order,
         updated_at = now()
-  where coalesce(public.employee_payroll_components.is_override, false) = false;
+  where coalesce(employee_payroll_components.is_override, false) = false;
 
   delete from public.employee_payroll_components epc
   where epc.employee_id = new.id

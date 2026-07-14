@@ -322,7 +322,10 @@ window.assignEmployeePayrollTemplate = async employeeId => { await applyTemplate
 window.addEmployeePayrollComponent = async employeeId => {
   const componentId = val('empCompId')
   if (!componentId) { showToast('Pilih komponen payroll terlebih dahulu.', 'warning'); return }
-  const { error } = await supabase.from('employee_payroll_components').insert({ employee_id:employeeId, component_id:componentId, component_value:num('empCompVal'), source:'Override', is_override:true })
+  const { error } = await supabase.from('employee_payroll_components').upsert(
+    { employee_id:employeeId, component_id:componentId, component_value:num('empCompVal'), source:'Override', is_override:true, is_active:true },
+    { onConflict: 'employee_id,component_id' }
+  )
   if (error) { showToast('Gagal menambahkan komponen payroll: ' + error.message, 'error'); return }
   window.openDetailKaryawan(employeeId, 'payroll')
 }
