@@ -230,6 +230,7 @@ async function renderPayrollHistory() {
 window.downloadPayrollPeriodExcel = async (periodId, periodName, triggerEl = null) => {
   let btn = null
   let oldHtml = null
+  const defaultButtonHtml = '<i class="fa fa-download"></i> Download Excel'
   try {
     if (typeof XLSX === 'undefined') {
       showToast('Library XLSX belum siap, coba lagi.', 'warning')
@@ -257,7 +258,7 @@ window.downloadPayrollPeriodExcel = async (periodId, periodName, triggerEl = nul
       showToast('Tidak ada data payroll untuk periode ini', 'warning')
       if (btn) {
         btn.disabled = false
-        btn.innerHTML = oldHtml || ''
+        btn.innerHTML = oldHtml || defaultButtonHtml
       }
       return
     }
@@ -303,7 +304,7 @@ window.downloadPayrollPeriodExcel = async (periodId, periodName, triggerEl = nul
     showToast(`Download ${data.length} payroll data berhasil!`, 'success')
     if (btn) {
       btn.disabled = false
-      btn.innerHTML = oldHtml || ''
+      btn.innerHTML = oldHtml || defaultButtonHtml
     }
 
   } catch (err) {
@@ -311,7 +312,7 @@ window.downloadPayrollPeriodExcel = async (periodId, periodName, triggerEl = nul
     showToast('Gagal download: ' + err.message, 'error')
     if (btn) {
       btn.disabled = false
-      btn.innerHTML = oldHtml || ''
+      btn.innerHTML = oldHtml || defaultButtonHtml
     }
   }
 }
