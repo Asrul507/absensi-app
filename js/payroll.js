@@ -147,8 +147,8 @@ async function generateEmployeePayroll(periodId, employeeId) {
     supabase.from('employee_payroll_components').select('*, payroll_components(*)').eq('employee_id', employeeId),
     supabase.from('profiles').select('payroll_type,gaji_per_hari,gaji_pokok_bulanan').eq('id', employeeId).maybeSingle()
   ])
-  if (compsError) throw compsError
-  if (profileError) throw profileError
+  if (compsError) throw new Error(`Gagal mengambil komponen payroll karyawan: ${compsError.message}`)
+  if (profileError) throw new Error(`Gagal mengambil profil payroll karyawan: ${profileError.message}`)
 
   const detailRows = (comps || [])
     .filter(c => c?.payroll_components?.type === 'Income' || c?.payroll_components?.type === 'Deduction')
@@ -237,7 +237,7 @@ window.downloadPayrollPeriodExcel = async (periodId, periodName, triggerEl = nul
     }
 
     // Tampilkan loading
-    btn = triggerEl || (typeof event !== 'undefined' ? event?.target?.closest?.('button') : null)
+    btn = triggerEl
     oldHtml = btn?.innerHTML || ''
     if (btn) {
       btn.disabled = true
@@ -318,7 +318,11 @@ window.downloadPayrollPeriodExcel = async (periodId, periodName, triggerEl = nul
 
 export async function renderEmployeePayroll(employee) { if (!guard()) return ''; const template = employee.payroll_template_id ? await validatePayrollTemplateForOffice(employee.payroll_template_id, employee.client_id) : null; const { data: comps } = await supabase.from('employee_payroll_components').select('*, payroll_components(*)').eq('employee_id', employee.id); const { data: allComps } = await supabase.from('payroll_components').select('*').eq('client_id', employee.client_id); const income = (comps?.filter(c=>c.payroll_components?.type==='Income')||[]).reduce((s,c)=>s+Number(c.component_value||0),0); const deduction = (comps?.filter(c=>c.payroll_components?.type==='Deduction')||[]).reduce((s,c)=>s+Number(c.component_value||0),0); const net = income - deduction; return `<div style="padding:12px;background:var(--gray-50);border-radius:var(--r-md);margin-bottom:12px;"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:.85rem;"><div><span style="color:var(--text-muted);">Payroll Template:</span><div style="font-weight:700;">${template?.template_name || 'Not Assigned'}</div></div><div><span style="color:var(--text-muted);">Bank:</span><div style="font-weight:700;">${employee.bank_name || '-'} (${employee.bank_account_number || '-'})</div></div><div><span style="color:var(--text-muted);">Income:</span><div style="font-weight:700;color:var(--success);">${money.format(income)}</div></div><div><span style="color:var(--text-muted);">Deduction:</span><div style="font-weight:700;color:var(--danger);">${money.format(deduction)}</div></div><div style="grid-column:1/-1;"><span style="color:var(--text-muted);">Net Salary:</span><div style="font-weight:700;font-size:1.1rem;color:var(--primary);">${money.format(net)}</div></div></div></div><div style="margin-top:12px;"><label style="font-weight:700;margin-bottom:8px;display:block;">Payroll Components:</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.8rem;"><select id="empCompId" style="grid-column:1/-1;padding:8px;"><option value="">-- Add Component --</option>${(allComps||[]).filter(c=>!(comps||[]).find(x=>x.component_id===c.id)).map(c=>`<option value="${c.id}">${esc(c.component_name)}</option>`).join('')}</select><input type="number" id="empCompVal" placeholder="Value" style="padding:8px;"><button class="btn-primary btn-xs" onclick="window.addEmployeePayrollComponent('${employee.id}')" style="grid-column:1/-1;">Add Component</button></div><div style="margin-top:10px;">${(comps||[]).map(c=>`<div style="display:flex;justify-content:space-between;padding:6px;border-bottom:1px solid var(--border);align-items:center;"><div><strong>${esc(c.payroll_components?.component_name||'-')}</strong><div style="font-size:.7rem;color:var(--text-muted);">Value: ${c.component_value}</div></div><div style="display:flex;gap:4px;"><button class="btn-secondary btn-xs" onclick="window.editEmployeePayrollComponent('${c.id}',${c.component_value})"><i class="fa fa-edit"></i></button><button class="btn-danger btn-xs" onclick="window.deleteEmployeePayrollComponent('${c.id}','${employee.id}')"><i class="fa fa-trash"></i></button></div></div>`).join('')}</div></div></div>` }
 window.assignEmployeePayrollTemplate = async employeeId => { await applyTemplateToEmployees(val('empTemplateId'), [employeeId]); showToast('Template assigned','success'); window.openDetailKaryawan(employeeId, 'payroll') }
-window.addEmployeePayrollComponent = async employeeId => { await supabase.from('employee_payroll_components').insert({ employee_id:employeeId, component_id:val('empCompId'), component_value:num('empCompVal'), source:'Override', is_override:true }); window.openDetailKaryawan(employeeId, 'payroll') }
+window.addEmployeePayrollComponent = async employeeId => {
+  const { error } = await supabase.from('employee_payroll_components').insert({ employee_id:employeeId, component_id:val('empCompId'), component_value:num('empCompVal'), source:'Override', is_override:true })
+  if (error) { showToast('Gagal menambahkan komponen payroll: ' + error.message, 'error'); return }
+  window.openDetailKaryawan(employeeId, 'payroll')
+}
 window.editEmployeePayrollComponent = async (id, old) => { const v = await promptAction('Override value:', String(old)); if (v === null) return; await supabase.from('employee_payroll_components').update({ component_value: Number(v), is_override: true }).eq('id', id); const empId = window._currentDetailEmployeeId; window.openDetailKaryawan(empId, 'payroll') }
 window.restoreEmployeePayrollComponent = async id => { const { data:r } = await supabase.from('employee_payroll_components').select('template_component_id,employee_id').eq('id',id).single(); if (r) { const { data:tc } = await supabase.from('payroll_template_components').select('component_value').eq('id', r.template_component_id).maybeSingle(); await supabase.from('employee_payroll_components').update({ component_value: tc?.component_value||0, is_override: false }).eq('id',id) }; window.openDetailKaryawan(r.employee_id, 'payroll') }
 window.deleteEmployeePayrollComponent = async (id, employeeId) => { await supabase.from('employee_payroll_components').delete().eq('id', id); window.openDetailKaryawan(employeeId, 'payroll') }
