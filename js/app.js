@@ -1131,9 +1131,6 @@ window.savePendingKaryawan = async function() {
   if (!selectedOfficeId) { showToast('Office wajib dipilih.', 'warning'); return }
   if (!selectedDepartmentId) { showToast('Department wajib dipilih.', 'warning'); return }
     const payrollPayload = readPayrollEmployeePayload('p')
-  console.log('DEBUG payrollPayload (tambah):', payrollPayload)
-  showToast('DEBUG: ' + JSON.stringify(payrollPayload), 'warning')
-
   if (!(await validatePayrollEmployeePayload(payrollPayload, selectedOfficeId))) return
   const departments = await fetchDepartmentOptionsForOffice(selectedOfficeId)
   const selectedDepartment = departments.find(d => String(d.id) === String(selectedDepartmentId))
@@ -1707,9 +1704,7 @@ window.saveEditKaryawan = async function(id, canEditAll, isMe) {
       const role = normalizeRole(window.currentUser?.role)
       const selectedOfficeId = role === 'super_admin' ? document.getElementById('editOffice')?.value || null : targetProfile?.client_id || null
       const selectedDepartmentId = canEditDepartmentForEmployee(window.currentUser) ? document.getElementById('editDepartment')?.value || null : targetProfile?.department_id || null
-            const payrollPayload = readPayrollEmployeePayload('edit')
-      console.log('DEBUG payrollPayload (edit):', payrollPayload)
-      showToast('DEBUG: ' + JSON.stringify(payrollPayload), 'warning')
+      const payrollPayload = readPayrollEmployeePayload('edit')
 
       const updatePayload = {
         nama_lengkap:  document.getElementById('editNama')?.value.trim()    || '',
