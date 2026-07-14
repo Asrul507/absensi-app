@@ -58,9 +58,13 @@ export function validateBankAccountNumber(accountNumber) {
 export async function renderPayrollEmployeeFields(prefix, employee = {}, officeId = clientId()) {
   if (!canAccessPayroll()) return ''
   const templates = await loadPayrollTemplatesForOffice(officeId)
+  const payrollTypeValue = employee.payroll_type || ''
   return `<div class="field full" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:12px;margin-top:6px;"><label style="font-weight:900;color:var(--primary);"><i class="fa fa-calculator"></i> Payroll Employee Setup</label></div>
       <div class="field"><label>Payroll Template <span class="req">*</span></label><select id="${prefix}PayrollTemplate"><option value="">-- Pilih Payroll Template --</option>${templates.map(t => `<option value="${t.id}" ${String(t.id) === String(employee.payroll_template_id || '') ? 'selected' : ''}>${esc(t.template_name)}</option>`).join('')}</select></div>
-    <div class="field"><label>Bank</label><input id="${prefix}BankName" list="bankOptions" value="${esc(employee.bank_name || '')}" placeholder="BCA / Mandiri / BRI"><datalist id="bankOptions"><option value="BCA"><option value="Mandiri"><option value="BRI"><option value="CIMB Niaga"><option value="BTN"><option value="Danamon"></datalist></div>
+      <div class="field"><label>Tipe Penggajian</label><select id="${prefix}PayrollType"><option value="">-- Pilih Tipe --</option><option value="Harian"${payrollTypeValue === 'Harian' ? ' selected' : ''}>Harian</option><option value="Bulanan Tetap"${payrollTypeValue === 'Bulanan Tetap' ? ' selected' : ''}>Bulanan Tetap</option></select></div>
+      <div class="field"><label>Gaji Harian (Rp)</label><input type="number" id="${prefix}GajiPerHari" min="0" value="${esc(String(employee.gaji_per_hari || 0))}" placeholder="0"></div>
+      <div class="field"><label>Gaji Bulanan (Rp)</label><input type="number" id="${prefix}GajiPokokBulanan" min="0" value="${esc(String(employee.gaji_pokok_bulanan || 0))}" placeholder="0"></div>
+    <div class="field"><label>Bank</label><input id="${prefix}BankName" list="${prefix}BankOptions" value="${esc(employee.bank_name || '')}" placeholder="BCA / Mandiri / BRI"><datalist id="${prefix}BankOptions"><option value="BCA"><option value="Mandiri"><option value="BRI"><option value="CIMB Niaga"><option value="BTN"><option value="Danamon"></datalist></div>
     <div class="field"><label>Account Number</label><input id="${prefix}BankAccountNumber" inputmode="numeric" maxlength="34" value="${esc(employee.bank_account_number || '')}" placeholder="Hanya angka, max 34 digit"></div>
     <div class="field"><label>Account Holder Name</label><input id="${prefix}BankAccountHolder" value="${esc(employee.bank_account_holder || employee.nama_lengkap || '')}" placeholder="Nama pemilik rekening"></div>`
 }
@@ -69,6 +73,9 @@ export function readPayrollEmployeePayload(prefix) {
   if (!canAccessPayroll() || !document.getElementById(`${prefix}PayrollTemplate`)) return {}
   return {
     payroll_template_id: val(`${prefix}PayrollTemplate`) || null,
+    payroll_type: val(`${prefix}PayrollType`) || null,
+    gaji_per_hari: Number(document.getElementById(`${prefix}GajiPerHari`)?.value || 0),
+    gaji_pokok_bulanan: Number(document.getElementById(`${prefix}GajiPokokBulanan`)?.value || 0),
     bank_name: val(`${prefix}BankName`) || null,
     bank_account_number: val(`${prefix}BankAccountNumber`) || null,
     bank_account_holder: val(`${prefix}BankAccountHolder`) || null,
