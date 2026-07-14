@@ -231,9 +231,10 @@ with check (
   )
 );
 
--- 9. Perbaiki policy approval dari migration 010 yang tidak memeriksa paket Standard/Pro.
---    Policy lama membolehkan admin_all/admin_hr tanpa batasan paket; sekarang dibatasi hanya
---    untuk paket Standard/Pro (konsisten dengan policy lainnya), plus super_admin selalu bisa.
+-- 9. Perbaiki policy approval dari migration 010 yang tidak memeriksa paket Standard/Pro
+--    dan tidak memvalidasi client_id. Policy lama membolehkan admin_all/admin_hr meng-approve
+--    payroll milik client mana saja; sekarang dibatasi hanya client sendiri, paket Standard/Pro,
+--    konsisten dengan policy lainnya. super_admin selalu bisa.
 drop policy if exists "payroll_run_details_approval" on public.payroll_run_details;
 create policy "payroll_run_details_approval"
 on public.payroll_run_details for update to authenticated
@@ -242,9 +243,11 @@ using (
   or exists (
     select 1 from public.profiles p
     join public.clients c on c.id = p.client_id
+    join public.payroll_runs pr on pr.id = public.payroll_run_details.payroll_id
     where p.id = auth.uid()
       and p.role in ('admin_all', 'admin_hr')
       and lower(coalesce(c.package_type,'basic')) in ('standard','pro')
+      and pr.client_id = p.client_id
   )
 )
 with check (
@@ -252,8 +255,10 @@ with check (
   or exists (
     select 1 from public.profiles p
     join public.clients c on c.id = p.client_id
+    join public.payroll_runs pr on pr.id = public.payroll_run_details.payroll_id
     where p.id = auth.uid()
       and p.role in ('admin_all', 'admin_hr')
       and lower(coalesce(c.package_type,'basic')) in ('standard','pro')
+      and pr.client_id = p.client_id
   )
 );
