@@ -1,4 +1,4 @@
--- Sinkronisasi profiles.payroll_template_id ke employee_payroll_profiles + employee_payroll_components
+-- Synchronize profiles.payroll_template_id to employee payroll mapping/component tables.
 -- Idempotent/safe: pakai create or replace + drop trigger if exists.
 
 create or replace function public.sync_employee_payroll_from_profile_template()
