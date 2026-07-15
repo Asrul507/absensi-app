@@ -196,6 +196,7 @@ if (btnHitungGaji) {
 }
 
 // RENDER DATA KE TABEL UI (Menggunakan Ikon Font Awesome)
+// RENDER DATA KE TABEL UI (Perbaikan Validasi Status Tokcer)
 function renderTableList(data) {
     const tbody = document.getElementById('payroll-run-table');
     if (!tbody) return;
@@ -207,8 +208,13 @@ function renderTableList(data) {
     }
 
     data.forEach(p => {
-        const isApproved = p.status === 'Approved';
-        const badgeClass = isApproved ? 'bg-success' : 'bg-warning text-dark';
+        // Ambil status, bersihkan spasi, dan jadikan huruf kecil semua agar tidak salah validasi
+        const currentStatus = (p.status || '').trim().toLowerCase();
+        
+        // Cek apakah statusnya mengandung kata 'approved' atau 'disetujui'
+        const isApproved = currentStatus === 'approved' || currentStatus === 'disetujui';
+        
+        const badgeClass = isApproved ? 'bg-success text-white' : 'bg-warning text-dark';
         const labelText = isApproved ? 'Approved' : 'Belum Diapprove';
 
         tbody.innerHTML += `
@@ -222,16 +228,15 @@ function renderTableList(data) {
                     <button class="btn btn-xs btn-outline-dark btn-sm py-0 px-2 me-1" onclick="lihatDetailSlip('${p.id}', '${p.profiles?.nama_lengkap || 'Karyawan'}')">
                         <i class="fas fa-eye me-1"></i>Detail
                     </button>
-                    ${!isApproved && ['super_admin', 'admin_all', 'hrd'].includes(currentUser.role) ? 
+                    ${!isApproved ? 
                     `<button class="btn btn-success btn-sm py-0 px-2" onclick="approveSingle('${p.id}')">
                         <i class="fas fa-check me-1"></i>Approve
                     </button>` : 
-                    `<span class="text-muted small"></span>`}
+                    `<span class="badge bg-light text-success border border-success small py-1"><i class="fas fa-lock me-1"></i>Selesai</span>`}
                 </td>
             </tr>`;
     });
 }
-
 // APPROVE INDIVIDU
 window.approveSingle = async function(slipId) {
     const { error } = await supabase
