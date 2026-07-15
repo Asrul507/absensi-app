@@ -20,13 +20,13 @@ updateCurrentUser();
 document.addEventListener("DOMContentLoaded", async () => {
     updateCurrentUser();
 
-    // Tampilkan Role di Indikator Atas
+    // Tampilkan Role di Indikator Atas jika sudah ada
     const roleIndicator = document.getElementById('role-indicator');
     if (roleIndicator && currentUser.role) {
         roleIndicator.innerText = `Role: ${currentUser.role.toUpperCase()}`;
     }
 
-    // PENGAMAN UKURAN TOLERAN: Hanya blokir jika role sudah pasti 'staff' atau 'admin_departement'
+    // PENGAMAN UTAMA: Hanya kunci halaman jika rolenya SUDAH PASTI staff biasa
     if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
         document.body.innerHTML = "<h3 class='text-center mt-5 text-danger'>Akses Terbatas. Halaman ini hanya untuk Tim Manajemen.</h3>";
         return;
@@ -35,17 +35,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Memaksa load dropdown periode penggajian
     await loadPeriodeDropdown();
 
-    // Atur visibilitas tombol berdasarkan wewenang khusus role
+    // SINKRONISASI VISIBILITAS TOMBOL (Default: Tampilkan dulu untuk Admin/HRD)
     const btnHitung = document.getElementById('btn-proses-hitung');
     const btnApprove = document.getElementById('btn-approve-massal');
 
     if (btnHitung) {
-        if (!currentUser.role || ['super_admin', 'admin_all', 'admin_hr', 'hrd'].includes(currentUser.role)) {
+        // Jika rolenya staff, sembunyikan. Selain itu (termasuk saat loading), tetap tampilkan.
+        if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
+            btnHitung.style.display = 'none';
+        } else {
             btnHitung.style.display = 'inline-block';
         }
     }
+    
     if (btnApprove) {
-        if (!currentUser.role || ['super_admin', 'admin_all', 'hrd'].includes(currentUser.role)) {
+        if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
+            btnApprove.style.display = 'none';
+        } else {
             btnApprove.style.display = 'inline-block';
         }
     }
