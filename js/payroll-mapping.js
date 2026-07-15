@@ -61,11 +61,17 @@ async function loadOpsiKaryawan() {
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    const { data } = await supabase
+    // UBAH KE client_id agar sesuai dengan tabel data karyawan GenPro kamu
+    const { data, error } = await supabase
         .from('users')
         .select('id, nama')
-        .eq('office_id', targetOfficeId)
+        .eq('client_id', targetOfficeId) // <-- Diubah dari office_id menjadi client_id
         .order('nama');
+
+    if (error) {
+        console.error("Error load karyawan:", error.message);
+        return;
+    }
 
     const selectKaryawan = document.getElementById('pilih-karyawan');
     if (!selectKaryawan) return;
@@ -114,8 +120,8 @@ async function loadDataMapping() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Filter data di sisi client berdasarkan office_id user agar akurat dengan multi-tenant
-    const filteredData = data?.filter(m => m.users && m.users.office_id === targetOfficeId && m.payroll_templates) || [];
+    // Ganti baris filter di dalam fungsi loadDataMapping() menjadi seperti ini:
+const filteredData = data?.filter(m => m.users && (m.users.office_id === targetOfficeId || m.users.client_id === targetOfficeId) && m.payroll_templates) || [];
 
     if (filteredData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada pemetaan karyawan</td></tr>';
