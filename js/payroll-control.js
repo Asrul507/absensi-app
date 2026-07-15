@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (periodeId) {
                 if (btnHitung) btnHitung.style.display = 'block';
                 if (btnApprove) btnApprove.style.display = 'block';
-                // Load data payroll yang sudah ter-generate (jika ada)
+                // Load data payroll yang sudah ter-generate
                 loadTabelPayroll(periodeId);
             } else {
                 if (btnHitung) btnHitung.style.display = 'none';
@@ -73,7 +73,6 @@ async function loadOpsiPeriode() {
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    // Menarik data periode payroll
     const { data, error } = await supabase
         .from('payroll_periods')
         .select('*')
@@ -84,9 +83,7 @@ async function loadOpsiPeriode() {
         return;
     }
 
-    // Filter data periode berdasarkan office_id atau client_id tenant
     const filteredPeriods = data?.filter(p => p.office_id === targetOfficeId || p.client_id === targetOfficeId) || [];
-
     const selectPeriode = document.getElementById('run-pilih-periode');
     if (!selectPeriode) return;
 
@@ -102,16 +99,53 @@ async function loadOpsiPeriode() {
     });
 }
 
-// --- 2. MEMUAT HASIL DATA TABEL PAYROLL ---
+// --- 2. MEMUAT HASIL DATA TABEL PAYROLL (REAL DATABASE) ---
 async function loadTabelPayroll(periodeId) {
     const tbody = document.getElementById('payroll-run-table');
     if (!tbody) return;
 
     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Memuat data payroll...</td></tr>';
 
-    // Di sini nanti proses select ke tabel hasil payroll kamu (misal: payroll_runs / slips)
-    // Sementara kita tampilkan info siap hitung
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-info">Periode dipilih. Silakan klik tombol "Ambil Template & Hitung Gaji" untuk memproses.</td></tr>`;
+    // Ambil data dari payroll_slips join dengan profiles untuk ambil nama lengkap
+    const { data, error } = await supabase
+        .from('payroll_slips')
+        .select(`
+            id,
+            user_id,
+            total_pemasukan,
+            total_potongan,
+            gaji_bersih,
+            status,
+            profiles ( nama_lengkap )
+        `)
+        .eq('period_id', periodeId);
+
+    if (error) {
+        console.error("🚨 ERROR LOAD TABEL PAYROLL:", error.message);
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Gagal memuat data slip gaji.</td></tr>';
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-info">Periode dipilih. Silakan klik tombol "Ambil Template & Hitung Gaji" untuk memproses.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = '';
+    data.forEach(s => {
+        const badgeColor = s.status === 'Approved' ? 'bg-success' : 'bg-warning';
+        tbody.innerHTML += `
+            <tr>
+                <td><strong>${s.profiles?.nama_lengkap || 'Karyawan Tanpa Nama'}</strong></td>
+                <td class="text-success">Rp ${(s.total_pemasukan || 0).toLocaleString('id-ID')}</td>
+                <td class="text-danger">Rp ${(s.total_potongan || 0).toLocaleString('id-ID')}</td>
+                <td><strong>Rp ${(s.gaji_bersih || 0).toLocaleString('id-ID')}</strong></td>
+                <td><span class="badge ${badgeColor}">${s.status || 'Draft'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-dark py-0 px-2" onclick="lihatDetailSlip('${s.id}')">👁️ Detail</button>
+                </td>
+            </tr>`;
+    });
 }
 
 function resetTabelPayroll() {
@@ -121,8 +155,81 @@ function resetTabelPayroll() {
     }
 }
 
-// --- 3. AKSI GENERATE & KALKULASI GAJI ---
+// --- 3. AKSI GENERATE & KALKULASI GAJI NYATA ---
 async function prosesGenerateGaji(periodeId) {
-    alert("Memulai sinkronisasi template dan kalkulasi gaji komponen...");
-    // Logika penggabungan absensi + template data payroll diletakkan di bawah sini
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (!targetOfficeId) return alert("Session kantor tidak valid.");
+
+    if (!confirm("Apakah Anda yakin ingin memproses kalkulasi gaji untuk semua karyawan pada periode ini?")) return;
+
+    // A. Ambil semua data pemetaan karyawan
+    const { data: mappings, error: errMap } = await supabase
+        .from('payroll_mappings')
+        .select(`
+            user_id,
+            template_id,
+            profiles!inner(client_id)
+        `);
+
+    if (errMap) return alert("Gagal mengambil data pemetaan: " + errMap.message);
+
+    // Filter agar hanya memproses karyawan milik client/kantor ini
+    const filteredMappings = mappings?.filter(m => m.profiles && m.profiles.client_id === targetOfficeId) || [];
+
+    if (filteredMappings.length === 0) {
+        return alert("Belum ada karyawan yang dihubungkan ke template gaji di menu Pemetaan.");
+    }
+
+    let suksesCount = 0;
+
+    // B. Looping kalkulasi per karyawan
+    for (const map of filteredMappings) {
+        // Ambil rincian komponen dari template yang terhubung
+        const { data: details } = await supabase
+            .from('payroll_template_details')
+            .select(`
+                nominal,
+                payroll_components ( jenis )
+            `)
+            .eq('template_id', map.template_id);
+
+        let totalPemasukan = 0;
+        let totalPotongan = 0;
+
+        details?.forEach(d => {
+            const nominal = parseFloat(d.nominal) || 0;
+            if (d.payroll_components?.jenis === 'pemasukan') {
+                totalPemasukan += nominal;
+            } else if (d.payroll_components?.jenis === 'potongan') {
+                totalPotongan += nominal;
+            }
+        });
+
+        const gajiBersih = totalPemasukan - totalPotongan;
+
+        // Simpan atau update ke tabel payroll_slips
+        const { error: errInsert } = await supabase
+            .from('payroll_slips')
+            .upsert([{
+                period_id: periodeId,
+                user_id: map.user_id,
+                total_pemasukan: totalPemasukan,
+                total_potongan: totalPotongan,
+                gaji_bersih: gajiBersih,
+                status: 'Draft'
+            }], { onConflict: 'period_id,user_id' });
+
+        if (!errInsert) suksesCount++;
+    }
+
+    alert(`Proses selesai! Berhasil menghitung ${suksesCount} slip gaji.`);
+    
+    // C. Muat ulang tampilan tabel
+    await loadTabelPayroll(periodeId);
 }
+
+// Fungsi pembantu ketika tombol detail diklik
+window.lihatDetailSlip = function(slipId) {
+    alert("Detail slip ID: " + slipId);
+};
