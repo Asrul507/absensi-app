@@ -23,7 +23,7 @@ async function ambilDataKehadiranKaryawan(tanggalMulai, tanggalSelesai) {
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     if (!targetOfficeId) {
         console.error("🚨 ID Kantor tidak ditemukan pada session aktif.");
-        return { dataAbsensi: [], dataJadwal: [] };
+        return { absensi: [], jadwal: [] };
     }
 
     console.log(`Mengambil data untuk Office ID: ${targetOfficeId} dari ${tanggalMulai} s/d ${tanggalSelesai}`);
@@ -46,7 +46,7 @@ async function ambilDataKehadiranKaryawan(tanggalMulai, tanggalSelesai) {
         `)
         .gte('tanggal', tanggalMulai)
         .lte('tanggal', tanggalSelesai)
-        .eq('office_id', targetOfficeId); // KOREKSI: Menggunakan office_id, bukan client_id
+        .eq('office_id', targetOfficeId); // FIXED: office_id, bukan client_id
 
     if (errAbsensi) {
         console.error("🚨 ERROR AMBIL TABEL ABSENSI:", errAbsensi.message);
@@ -63,10 +63,10 @@ async function ambilDataKehadiranKaryawan(tanggalMulai, tanggalSelesai) {
             office_id,
             department_id,
             departemen
-        `)
+        `) // FIXED: Menghapus client_id dari select string
         .gte('tanggal', tanggalMulai)
         .lte('tanggal', tanggalSelesai)
-        .eq('office_id', targetOfficeId); // KOREKSI: Menggunakan office_id, bukan client_id
+        .eq('office_id', targetOfficeId); // FIXED: office_id, bukan client_id
 
     if (errJadwal) {
         console.error("🚨 ERROR AMBIL TABEL JADWAL:", errJadwal.message);
@@ -78,5 +78,5 @@ async function ambilDataKehadiranKaryawan(tanggalMulai, tanggalSelesai) {
     };
 }
 
-// Ekspor fungsi agar bisa dipanggil dari file payroll-run.js atau UI utama
+// Ekspor fungsi ke objek global window
 window.ambilDataKehadiranKaryawan = ambilDataKehadiranKaryawan;
