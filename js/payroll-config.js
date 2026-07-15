@@ -51,8 +51,7 @@ document.getElementById('form-komponen').addEventListener('submit', async (e) =>
     if (error) return alert("Gagal menyimpan komponen: " + error.message);
     document.getElementById('form-komponen').reset();
     await loadDataKomponen();
-}););
-
+}); // DI SINI SUDAH RAPI (Tidak ada kelebihan karakter ");" lagi)
 async function loadDataKomponen() {
     const { data } = await supabase.from('payroll_components').select('*').eq('office_id', currentUser.office_id);
     const tbody = document.getElementById('list-komponen-table');
