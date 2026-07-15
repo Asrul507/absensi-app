@@ -92,7 +92,6 @@ async function loadDataMapping() {
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    // Tarik data mapping dengan relasi ke tabel profiles (menggunakan id/user_id yang cocok)
     const { data, error } = await supabase
         .from('payroll_mappings')
         .select(`
@@ -106,7 +105,6 @@ async function loadDataMapping() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Filter data di sisi client agar memastikan data kantornya sama
     const filteredData = data?.filter(m => 
         m.profiles && 
         (m.profiles.office_id === targetOfficeId || m.profiles.client_id === targetOfficeId) && 
@@ -147,44 +145,6 @@ async function loadOpsiTemplate() {
     selectTemplate.innerHTML = '<option value="">-- Pilih Template Gaji --</option>';
     data?.forEach(t => {
         selectTemplate.innerHTML += `<option value="${t.id}">${t.nama_template}</option>`;
-    });
-}
-
-async function loadDataMapping() {
-    updateCurrentUser();
-    const targetOfficeId = currentUser.office_id || currentUser.client_id;
-    if (!targetOfficeId || targetOfficeId === 'undefined') return;
-
-    const { data } = await supabase
-        .from('payroll_mappings')
-        .select(`
-            user_id,
-            template_id,
-            users ( nama, office_id ),
-            payroll_templates ( nama_template )
-        `);
-
-    const tbody = document.getElementById('list-mapping-table');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    // Ganti baris filter di dalam fungsi loadDataMapping() menjadi seperti ini:
-const filteredData = data?.filter(m => m.users && (m.users.office_id === targetOfficeId || m.users.client_id === targetOfficeId) && m.payroll_templates) || [];
-
-    if (filteredData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada pemetaan karyawan</td></tr>';
-        return;
-    }
-
-    filteredData.forEach(m => {
-        tbody.innerHTML += `
-            <tr>
-                <td>${m.users?.name || m.users?.nama_lengkap || 'Tidak Diketahui'}</td>
-                <td>${m.payroll_templates?.nama_template || 'Tanpa Template'}</td>
-                <td>
-                    <button class="btn btn-sm btn-danger py-0 px-2" onclick="hapusMapping('${m.user_id}')">Hapus</button>
-                </td>
-            </tr>`;
     });
 }
 
