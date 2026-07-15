@@ -1,6 +1,3 @@
-// ========================================================
-// AMBIL KONEKSI DATABASE & USER DARI HALAMAN UTAMA GENPRO
-// ========================================================
 if (typeof window.supabase === 'undefined' && window.parent && window.parent.supabase) {
     window.supabase = window.parent.supabase;
 }
@@ -20,27 +17,22 @@ updateCurrentUser();
 document.addEventListener("DOMContentLoaded", async () => {
     updateCurrentUser();
 
-    // Tampilkan Role di Indikator Atas jika sudah ada
     const roleIndicator = document.getElementById('role-indicator');
     if (roleIndicator && currentUser.role) {
         roleIndicator.innerText = `Role: ${currentUser.role.toUpperCase()}`;
     }
 
-    // PENGAMAN UTAMA: Hanya kunci halaman jika rolenya SUDAH PASTI staff biasa
     if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
         document.body.innerHTML = "<h3 class='text-center mt-5 text-danger'>Akses Terbatas. Halaman ini hanya untuk Tim Manajemen.</h3>";
         return;
     }
 
-    // Memaksa load dropdown periode penggajian
     await loadPeriodeDropdown();
 
-    // SINKRONISASI VISIBILITAS TOMBOL (Default: Tampilkan dulu untuk Admin/HRD)
     const btnHitung = document.getElementById('btn-proses-hitung');
     const btnApprove = document.getElementById('btn-approve-massal');
 
     if (btnHitung) {
-        // Jika rolenya staff, sembunyikan. Selain itu (termasuk saat loading), tetap tampilkan.
         if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
             btnHitung.style.display = 'none';
         } else {
@@ -57,13 +49,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
-// Memuat daftar periode ke dropdown (Bebas dari error kolom client_id)
 async function loadPeriodeDropdown() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    // Bersih dari client_id karena kolom tidak ada di tabel payroll_periods
     const { data, error } = await supabase
         .from('payroll_periods')
         .select('id, nama_periode, office_id') 
@@ -84,7 +74,6 @@ async function loadPeriodeDropdown() {
     });
 }
 
-// Event listener saat memilih periode
 const selectPeriode = document.getElementById('run-pilih-periode');
 if (selectPeriode) {
     selectPeriode.addEventListener('change', async (e) => {
@@ -98,12 +87,11 @@ if (selectPeriode) {
     });
 }
 
-// AMBIL DATA YANG SUDAH PERNAH DI-GENERATE SEBELUMNYA
 async function loadExistingPayrollRun(periodId) {
     const tbody = document.getElementById('payroll-run-table');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Memuat data draf payroll...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Memuat data draf payroll...</td></tr>';
 
     const { data, error } = await supabase
         .from('payroll_slips')
@@ -119,13 +107,10 @@ async function loadExistingPayrollRun(periodId) {
     renderTableList(data || []);
 }
 
-// AKSI GENERATE: HITUNG GAJI KARYAWAN BERDASARKAN TEMPLATE
-// --- 3. AKSI GENERATE & KALKULASI GAJI DENGAN FILTER MULTI-TENANT ---
 const btnHitungGaji = document.getElementById('btn-proses-hitung');
 if (btnHitungGaji) {
     btnHitungGaji.addEventListener('click', async () => {
         updateCurrentUser();
-        // Mengambil ID tenant kantor dari session user yang login
         const targetOfficeId = currentUser.office_id || currentUser.client_id;
         const periodId = document.getElementById('run-pilih-periode')?.value;
         if (!periodId) return alert("Pilih periode yang ingin diproses!");
@@ -135,7 +120,6 @@ if (btnHitungGaji) {
         tbody.innerHTML = `<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Sedang memproses & mencocokkan template...</td></tr>`;
 
         try {
-            // 1. Tarik semua data pemetaan, pastikan join profiles menggunakan client_id
             const { data: mappings, error: errMap } = await supabase
                 .from('payroll_mappings')
                 .select(`
@@ -146,7 +130,6 @@ if (btnHitungGaji) {
 
             if (errMap) throw errMap;
 
-            // Filter agar hanya memproses karyawan yang client_id miliknya sama dengan admin
             const filteredMappings = mappings?.filter(m => m.profiles && m.profiles.client_id === targetOfficeId) || [];
 
             if (filteredMappings.length === 0) {
@@ -154,11 +137,9 @@ if (btnHitungGaji) {
                 return;
             }
 
-            // 2. Loop hitung komponen per karyawan
             for (const item of filteredMappings) {
                 if (!item.template_id) continue;
 
-                // PROTEKSI KANTOR: Tarik komponen berdasarkan office_id milik payroll_components
                 const { data: details, error: errDetails } = await supabase
                     .from('payroll_template_details')
                     .select(`
@@ -166,12 +147,9 @@ if (btnHitungGaji) {
                         payroll_components!inner(nama_komponen, jenis, office_id)
                     `)
                     .eq('template_id', item.template_id)
-                    .eq('payroll_components.office_id', targetOfficeId); // Isolasi komponen kantor
+                    .eq('payroll_components.office_id', targetOfficeId);
 
-                if (errDetails) {
-                    console.error("🚨 Gagal memfilter komponen kantor:", errDetails.message);
-                    continue;
-                }
+                if (errDetails) continue;
 
                 let totalPemasukan = 0;
                 let totalPotongan = 0;
@@ -187,7 +165,6 @@ if (btnHitungGaji) {
 
                 const gajiBersih = totalPemasukan - totalPotongan;
 
-                // Simpan hasil kalkulasi ke payroll_slips
                 await supabase
                     .from('payroll_slips')
                     .upsert({
@@ -210,8 +187,7 @@ if (btnHitungGaji) {
         }
     });
 }
-// RENDER DATA KE TABEL UI (Menggunakan Ikon Font Awesome)
-// RENDER DATA KE TABEL UI (Perbaikan Validasi Status Tokcer)
+
 function renderTableList(data) {
     const tbody = document.getElementById('payroll-run-table');
     if (!tbody) return;
@@ -223,10 +199,7 @@ function renderTableList(data) {
     }
 
     data.forEach(p => {
-        // Ambil status, bersihkan spasi, dan jadikan huruf kecil semua agar tidak salah validasi
         const currentStatus = (p.status || '').trim().toLowerCase();
-        
-        // Cek apakah statusnya mengandung kata 'approved' atau 'disetujui'
         const isApproved = currentStatus === 'approved' || currentStatus === 'disetujui';
         
         const badgeClass = isApproved ? 'bg-success text-white' : 'bg-warning text-dark';
@@ -252,7 +225,7 @@ function renderTableList(data) {
             </tr>`;
     });
 }
-// APPROVE INDIVIDU
+
 window.approveSingle = async function(slipId) {
     const { error } = await supabase
         .from('payroll_slips')
@@ -266,7 +239,6 @@ window.approveSingle = async function(slipId) {
     await loadExistingPayrollRun(periodId);
 };
 
-// APPROVE MASSAL SATU PERIODE
 const btnApproveMassal = document.getElementById('btn-approve-massal');
 if (btnApproveMassal) {
     btnApproveMassal.addEventListener('click', async () => {
@@ -288,7 +260,6 @@ if (btnApproveMassal) {
     });
 }
 
-// MELIHAT RIWAYAT DETAIL RINCIAN KOMPONEN GAJI SECARA RAPI
 window.lihatDetailSlip = async function(slipId, namaKaryawan) {
     const { data: slip } = await supabase
         .from('payroll_slips')
