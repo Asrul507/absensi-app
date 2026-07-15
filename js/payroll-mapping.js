@@ -26,12 +26,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    // Load semua opsi dropdown awal
+    // Load data dropdown dan tabel
     await loadOpsiKaryawan();
     await loadOpsiTemplate();
     await loadDataMapping();
 
-    // Event Listener untuk Form Simpan Pemetaan
     const formMapping = document.getElementById('form-mapping');
     if (formMapping) {
         formMapping.addEventListener('submit', async (e) => {
@@ -43,7 +42,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return alert("Silakan pilih karyawan dan template terlebih dahulu!");
             }
 
-            // Gunakan upsert agar jika karyawan sudah punya pemetaan, datanya langsung terupdate
             const { error } = await supabase.from('payroll_mappings').upsert([{
                 user_id: userId,
                 template_id: templateId
@@ -58,14 +56,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
-// --- 1. LOAD OPSI KARYAWAN BERDASARKAN OFFICE ---
 async function loadOpsiKaryawan() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
-    if (!targetOfficeId) return;
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    // Menarik data user/karyawan yang aktif di kantor tersebut
-    const { data, error } = await supabase
+    const { data } = await supabase
         .from('users')
         .select('id, nama')
         .eq('office_id', targetOfficeId)
@@ -75,20 +71,17 @@ async function loadOpsiKaryawan() {
     if (!selectKaryawan) return;
     
     selectKaryawan.innerHTML = '<option value="">-- Pilih Karyawan --</option>';
-    if (data) {
-        data.forEach(emp => {
-            selectKaryawan.innerHTML += `<option value="${emp.id}">${emp.nama}</option>`;
-        });
-    }
+    data?.forEach(emp => {
+        selectKaryawan.innerHTML += `<option value="${emp.id}">${emp.nama}</option>`;
+    });
 }
 
-// --- 2. LOAD OPSI TEMPLATE GAJI BERDASARKAN OFFICE ---
 async function loadOpsiTemplate() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
-    if (!targetOfficeId) return;
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    const { data, error } = await supabase
+    const { data } = await supabase
         .from('payroll_templates')
         .select('id, nama_template')
         .eq('office_id', targetOfficeId)
@@ -97,38 +90,32 @@ async function loadOpsiTemplate() {
     const selectTemplate = document.getElementById('pilih-template');
     if (!selectTemplate) return;
 
-    selectTemplate.innerHTML = '<option value="">-- Pilih Template --</option>';
-    if (data) {
-        data.forEach(t => {
-            selectTemplate.innerHTML += `<option value="${t.id}">${t.nama_template}</option>`;
-        });
-    }
+    selectTemplate.innerHTML = '<option value="">-- Pilih Template Gaji --</option>';
+    data?.forEach(t => {
+        selectTemplate.innerHTML += `<option value="${t.id}">${t.nama_template}</option>`;
+    });
 }
 
-// --- 3. LOAD DATA TABEL PEMETAAN YANG SUDAH ADA ---
 async function loadDataMapping() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
-    if (!targetOfficeId) return;
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    // Tarik data mapping beserta relasi nama karyawan dan nama templatenya
-    const { data, error } = await supabase
+    const { data } = await supabase
         .from('payroll_mappings')
         .select(`
             user_id,
             template_id,
-            users ( nama ),
+            users ( nama, office_id ),
             payroll_templates ( nama_template )
-        `)
-        .textSearch('users.office_id', targetOfficeId); // Memastikan relasi user sesuai kantor
+        `);
 
     const tbody = document.getElementById('list-mapping-table');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Alternatif jika filter join di atas terlalu kompleks untuk RLS kantor:
-    // Kita filter manual datanya agar aman
-    const filteredData = data?.filter(m => m.users && m.payroll_templates) || [];
+    // Filter data di sisi client berdasarkan office_id user agar akurat dengan multi-tenant
+    const filteredData = data?.filter(m => m.users && m.users.office_id === targetOfficeId && m.payroll_templates) || [];
 
     if (filteredData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada pemetaan karyawan</td></tr>';
@@ -141,13 +128,12 @@ async function loadDataMapping() {
                 <td>${m.users?.nama || 'Tidak Diketahui'}</td>
                 <td>${m.payroll_templates?.nama_template || 'Tanpa Template'}</td>
                 <td>
-                    <button class="btn btn-sm btn-danger" onclick="hapusMapping('${m.user_id}')">Hapus</button>
+                    <button class="btn btn-sm btn-danger py-0 px-2" onclick="hapusMapping('${m.user_id}')">Hapus</button>
                 </td>
             </tr>`;
     });
 }
 
-// Expose fungsi hapus ke global window agar bisa diklik dari iframe
 window.hapusMapping = async function(userId) {
     if (!confirm("Apakah Anda yakin ingin menghapus pemetaan gaji karyawan ini?")) return;
 
