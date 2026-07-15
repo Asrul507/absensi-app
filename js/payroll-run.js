@@ -120,10 +120,12 @@ async function loadExistingPayrollRun(periodId) {
 }
 
 // AKSI GENERATE: HITUNG GAJI KARYAWAN BERDASARKAN TEMPLATE
+// --- 3. AKSI GENERATE & KALKULASI GAJI DENGAN FILTER MULTI-TENANT ---
 const btnHitungGaji = document.getElementById('btn-proses-hitung');
 if (btnHitungGaji) {
     btnHitungGaji.addEventListener('click', async () => {
         updateCurrentUser();
+        // Mengambil ID tenant kantor dari session user yang login
         const targetOfficeId = currentUser.office_id || currentUser.client_id;
         const periodId = document.getElementById('run-pilih-periode')?.value;
         if (!periodId) return alert("Pilih periode yang ingin diproses!");
@@ -133,6 +135,7 @@ if (btnHitungGaji) {
         tbody.innerHTML = `<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Sedang memproses & mencocokkan template...</td></tr>`;
 
         try {
+            // 1. Tarik semua data pemetaan, pastikan join profiles menggunakan client_id
             const { data: mappings, error: errMap } = await supabase
                 .from('payroll_mappings')
                 .select(`
@@ -143,6 +146,7 @@ if (btnHitungGaji) {
 
             if (errMap) throw errMap;
 
+            // Filter agar hanya memproses karyawan yang client_id miliknya sama dengan admin
             const filteredMappings = mappings?.filter(m => m.profiles && m.profiles.client_id === targetOfficeId) || [];
 
             if (filteredMappings.length === 0) {
@@ -150,13 +154,24 @@ if (btnHitungGaji) {
                 return;
             }
 
+            // 2. Loop hitung komponen per karyawan
             for (const item of filteredMappings) {
                 if (!item.template_id) continue;
 
-                const { data: details } = await supabase
+                // PROTEKSI KANTOR: Tarik komponen berdasarkan office_id milik payroll_components
+                const { data: details, error: errDetails } = await supabase
                     .from('payroll_template_details')
-                    .select(`nominal, payroll_components(nama_komponen, jenis)`)
-                    .eq('template_id', item.template_id);
+                    .select(`
+                        nominal, 
+                        payroll_components!inner(nama_komponen, jenis, office_id)
+                    `)
+                    .eq('template_id', item.template_id)
+                    .eq('payroll_components.office_id', targetOfficeId); // Isolasi komponen kantor
+
+                if (errDetails) {
+                    console.error("🚨 Gagal memfilter komponen kantor:", errDetails.message);
+                    continue;
+                }
 
                 let totalPemasukan = 0;
                 let totalPotongan = 0;
@@ -172,6 +187,7 @@ if (btnHitungGaji) {
 
                 const gajiBersih = totalPemasukan - totalPotongan;
 
+                // Simpan hasil kalkulasi ke payroll_slips
                 await supabase
                     .from('payroll_slips')
                     .upsert({
@@ -194,7 +210,6 @@ if (btnHitungGaji) {
         }
     });
 }
-
 // RENDER DATA KE TABEL UI (Menggunakan Ikon Font Awesome)
 // RENDER DATA KE TABEL UI (Perbaikan Validasi Status Tokcer)
 function renderTableList(data) {
