@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pemetaan Gaji Karyawan - Absensi App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container my-5">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Hubungkan Karyawan ke Template Gaji</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small">Pilih karyawan, lalu tentukan template gaji yang sesuai untuk mereka agar otomatis terhitung saat Generate Payroll.</p>
+            
+            <form id="form-mapping" class="row g-3 border-bottom pb-4 mb-4">
+                <!-- Dropdown Karyawan -->
+                <div class="col-md-5">
+                    <label class="form-label small font-monospace">1. Pilih Karyawan</label>
+                    <select id="map-karyawan" class="form-select form-select-sm" required>
+                        <option value="">-- Pilih Karyawan --</option>
+                    </select>
+                </div>
+                <!-- Dropdown Template Gaji -->
+                <div class="col-md-5">
+                    <label class="form-label small font-monospace">2. Tentukan Template Gaji</label>
+                    <select id="map-template" class="form-select form-select-sm" required>
+                        <option value="">-- Pilih Template Gaji --</option>
+                    </select>
+                </div>
+                <!-- Tombol Aksi -->
+                <div class="col-md-2 align-self-end">
+                    <button type="submit" class="btn btn-success btn-sm w-100">Simpan Hubungan</button>
+                </div>
+            </form>
+
+            <h6>Daftar Status Gaji Karyawan Saat Ini</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nama Karyawan</th>
+                            <th>Departemen</th>
+                            <th>Template Gaji yang Digunakan</th>
+                            <th>Terakhir Diubah</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-mapping-status">
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">Memuat data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/supabase.js"></script>
+<script src="js/payroll-mapping.js"></script>
+</body>
+</html>
