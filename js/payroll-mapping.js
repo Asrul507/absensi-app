@@ -56,17 +56,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
-// --- 1. LOAD OPSI KARYAWAN DARI TABEL PROFILES ---
+// --- 1. LOAD OPSI KARYAWAN DARI TABEL PROFILES (Hanya Menggunakan client_id) ---
 async function loadOpsiKaryawan() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     
     if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    // Ambil data langsung dari tabel profiles berdasarkan client_id / office_id
+    // Bersih dari office_id untuk mencegah error database
     const { data, error } = await supabase
         .from('profiles')
-        .select('id, nama_lengkap, client_id, office_id')
+        .select('id, nama_lengkap, client_id')
         .order('nama_lengkap');
 
     if (error) {
@@ -74,8 +74,8 @@ async function loadOpsiKaryawan() {
         return;
     }
 
-    // Filter berdasarkan ID Kantor/Client yang aktif
-    const filteredUsers = data?.filter(emp => emp.client_id === targetOfficeId || emp.office_id === targetOfficeId) || [];
+    // Filter berdasarkan client_id kantor yang aktif
+    const filteredUsers = data?.filter(emp => emp.client_id === targetOfficeId) || [];
 
     const selectKaryawan = document.getElementById('pilih-karyawan');
     if (!selectKaryawan) return;
@@ -92,22 +92,29 @@ async function loadDataMapping() {
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
+    // Menghapus office_id dari select relasi profiles
     const { data, error } = await supabase
         .from('payroll_mappings')
         .select(`
             user_id,
             template_id,
-            profiles!inner ( nama_lengkap, client_id, office_id ),
+            profiles!inner ( nama_lengkap, client_id ),
             payroll_templates ( nama_template )
         `);
+
+    if (error) {
+        console.error("🚨 ERROR DARI SUPABASE SAAT LOAD DATA MAPPING:", error.message);
+        return;
+    }
 
     const tbody = document.getElementById('list-mapping-table');
     if (!tbody) return;
     tbody.innerHTML = '';
 
+    // Filter data di sisi client hanya berdasarkan client_id yang cocok
     const filteredData = data?.filter(m => 
         m.profiles && 
-        (m.profiles.office_id === targetOfficeId || m.profiles.client_id === targetOfficeId) && 
+        m.profiles.client_id === targetOfficeId && 
         m.payroll_templates
     ) || [];
 
@@ -128,6 +135,7 @@ async function loadDataMapping() {
     });
 }
 
+// --- 3. LOAD OPSI TEMPLATE GAJI ---
 async function loadOpsiTemplate() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
@@ -148,6 +156,7 @@ async function loadOpsiTemplate() {
     });
 }
 
+// --- 4. HAPUS DATA PEMETAAN ---
 window.hapusMapping = async function(userId) {
     if (!confirm("Apakah Anda yakin ingin menghapus pemetaan gaji karyawan ini?")) return;
 
