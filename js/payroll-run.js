@@ -32,14 +32,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    // KITA PAKSA TETAP ME-LOAD DROPDOWN PERIODE
+    // Memaksa load dropdown periode penggajian
     await loadPeriodeDropdown();
 
     // Atur visibilitas tombol berdasarkan wewenang khusus role
     const btnHitung = document.getElementById('btn-proses-hitung');
     const btnApprove = document.getElementById('btn-approve-massal');
 
-    // Jika role belum ter-load sempurna, tampilkan saja dulu tombolnya
     if (btnHitung) {
         if (!currentUser.role || ['super_admin', 'admin_all', 'admin_hr', 'hrd'].includes(currentUser.role)) {
             btnHitung.style.display = 'inline-block';
@@ -52,15 +51,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
-// Memuat daftar periode ke dropdown
+// Memuat daftar periode ke dropdown (Bebas dari error kolom client_id)
 async function loadPeriodeDropdown() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
+    // Bersih dari client_id karena kolom tidak ada di tabel payroll_periods
     const { data, error } = await supabase
         .from('payroll_periods')
-        .select('id, nama_periode, office_id, client_id')
+        .select('id, nama_periode, office_id') 
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -68,7 +68,7 @@ async function loadPeriodeDropdown() {
         return;
     }
 
-    const filteredPeriods = data?.filter(p => p.office_id === targetOfficeId || p.client_id === targetOfficeId) || [];
+    const filteredPeriods = data?.filter(p => p.office_id === targetOfficeId) || [];
     const select = document.getElementById('run-pilih-periode');
     if (!select) return;
 
@@ -124,7 +124,7 @@ if (btnHitungGaji) {
 
         const tbody = document.getElementById('payroll-run-table');
         if (!tbody) return;
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center">Sedang memproses & mencocokkan template...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Sedang memproses & mencocokkan template...</td></tr>`;
 
         try {
             const { data: mappings, error: errMap } = await supabase
@@ -189,7 +189,7 @@ if (btnHitungGaji) {
     });
 }
 
-// RENDER DATA KE TABEL UI (Menampilkan Status Terkini secara Visual)
+// RENDER DATA KE TABEL UI (Menggunakan Ikon Font Awesome)
 function renderTableList(data) {
     const tbody = document.getElementById('payroll-run-table');
     if (!tbody) return;
@@ -202,7 +202,6 @@ function renderTableList(data) {
 
     data.forEach(p => {
         const isApproved = p.status === 'Approved';
-        // Warna badge: Hijau untuk Approved, Kuning untuk draf awal
         const badgeClass = isApproved ? 'bg-success' : 'bg-warning text-dark';
         const labelText = isApproved ? 'Approved' : 'Belum Diapprove';
 
@@ -214,9 +213,13 @@ function renderTableList(data) {
                 <td class="fw-bold">Rp ${parseFloat(p.gaji_bersih || 0).toLocaleString('id-ID')}</td>
                 <td><span class="badge ${badgeClass}">${labelText}</span></td>
                 <td>
-                    <button class="btn btn-xs btn-outline-dark btn-sm py-0 px-2 me-1" onclick="lihatDetailSlip('${p.id}', '${p.profiles?.nama_lengkap || 'Karyawan'}')">👁️ Detail</button>
+                    <button class="btn btn-xs btn-outline-dark btn-sm py-0 px-2 me-1" onclick="lihatDetailSlip('${p.id}', '${p.profiles?.nama_lengkap || 'Karyawan'}')">
+                        <i class="fas fa-eye me-1"></i>Detail
+                    </button>
                     ${!isApproved && ['super_admin', 'admin_all', 'hrd'].includes(currentUser.role) ? 
-                    `<button class="btn btn-success btn-sm py-0 px-2" onclick="approveSingle('${p.id}')">Approve</button>` : 
+                    `<button class="btn btn-success btn-sm py-0 px-2" onclick="approveSingle('${p.id}')">
+                        <i class="fas fa-check me-1"></i>Approve
+                    </button>` : 
                     `<span class="text-muted small"></span>`}
                 </td>
             </tr>`;
@@ -234,10 +237,10 @@ window.approveSingle = async function(slipId) {
     
     alert("Berhasil menyetujui slip gaji!");
     const periodId = document.getElementById('run-pilih-periode').value;
-    await loadExistingPayrollRun(periodId); // Refresh otomatis layar bawah
+    await loadExistingPayrollRun(periodId);
 };
 
-// APPROVE MASSAL SATU PERIODE (Draf langsung terbit & Layar otomatis ter-update)
+// APPROVE MASSAL SATU PERIODE
 const btnApproveMassal = document.getElementById('btn-approve-massal');
 if (btnApproveMassal) {
     btnApproveMassal.addEventListener('click', async () => {
@@ -255,13 +258,12 @@ if (btnApproveMassal) {
         if (error) return alert("Gagal melakukan approve massal: " + error.message);
 
         alert("Seluruh draf berhasil disetujui! Slip gaji kini dapat diakses oleh masing-masing staff.");
-        await loadExistingPayrollRun(periodId); // <<-- FIX: Memaksa tabel me-load ulang status hijau
+        await loadExistingPayrollRun(periodId);
     });
 }
 
 // MELIHAT RIWAYAT DETAIL RINCIAN KOMPONEN GAJI SECARA RAPI
 window.lihatDetailSlip = async function(slipId, namaKaryawan) {
-    // Tarik data slip bersangkutan
     const { data: slip } = await supabase
         .from('payroll_slips')
         .select('*')
@@ -270,7 +272,6 @@ window.lihatDetailSlip = async function(slipId, namaKaryawan) {
 
     if (!slip) return alert("Data slip tidak ditemukan.");
 
-    // Tampilkan rincian terformat dalam bentuk alert yang ramah dibaca
     alert(
         `📄 RINCIAN SLIP GAJI KARYAWAN\n` +
         `----------------------------------------\n` +
