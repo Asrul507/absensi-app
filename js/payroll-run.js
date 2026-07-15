@@ -1,11 +1,12 @@
 // js/payroll-run.js
 
-// Simulasi user login
-let userSession = {
-    id: "USER_LOGGED_IN_UUID",
-    role: "admin_hr", // super_admin, admin_all, admin_hr
-    office_id: "OFFICE_UUID"
-};
+// BENAR: Mengambil session langsung dari aplikasi utama GenPro
+let currentUser = window.currentUser;
+
+// Jika session global belum siap sewaktu di-load di dalam iframe
+if (!currentUser && window.parent && window.parent.currentUser) {
+    currentUser = window.parent.currentUser;
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
     // Validasi Akses Pengguna
