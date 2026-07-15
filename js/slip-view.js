@@ -1,11 +1,13 @@
 // js/slip-view.js
 
 // Simulasi user login (nanti disesuaikan dengan auth session Supabase kamu)
-let userSession = {
-    id: "USER_LOGGED_IN_UUID",
-    role: "staff", // super_admin, admin_all, admin_hr, admin_departement, staff
-    office_id: "OFFICE_UUID"
-};
+// BENAR: Mengambil session langsung dari aplikasi utama GenPro
+let currentUser = window.currentUser;
+
+// Jika session global belum siap sewaktu di-load di dalam iframe
+if (!currentUser && window.parent && window.parent.currentUser) {
+    currentUser = window.parent.currentUser;
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
     await initHalamanSlip();
