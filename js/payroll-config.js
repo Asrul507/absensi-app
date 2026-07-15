@@ -25,14 +25,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 // --- BAGIAN 1: KOMPONEN GAJI ---
+// --- BAGIAN 1: KOMPONEN GAJI ---
 document.getElementById('form-komponen').addEventListener('submit', async (e) => {
     e.preventDefault();
     const kode = document.getElementById('kode-komponen').value.toUpperCase();
     const nama = document.getElementById('nama-komponen').value;
     const jenis = document.getElementById('jenis-komponen').value;
 
+    // AMANKAN office_id: jika office_id kosong, coba cari dari client_id alternatif
+    const targetOfficeId = currentUser.office_id || currentUser.client_id || window.parent?.currentUser?.office_id || window.parent?.currentUser?.client_id;
+
+    console.log("Data yang akan disimpan:", { office_id: targetOfficeId, kode, nama, jenis });
+
+    if (!targetOfficeId) {
+        return alert("Gagal menyimpan: ID Office/Kantor Anda tidak terdeteksi di session login.");
+    }
+
     const { error } = await supabase.from('payroll_components').insert([{
-        office_id: currentUser.office_id,
+        office_id: targetOfficeId,
         kode_komponen: kode,
         nama_komponen: nama,
         jenis: jenis
@@ -41,7 +51,7 @@ document.getElementById('form-komponen').addEventListener('submit', async (e) =>
     if (error) return alert("Gagal menyimpan komponen: " + error.message);
     document.getElementById('form-komponen').reset();
     await loadDataKomponen();
-});
+}););
 
 async function loadDataKomponen() {
     const { data } = await supabase.from('payroll_components').select('*').eq('office_id', currentUser.office_id);
