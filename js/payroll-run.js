@@ -20,29 +20,36 @@ updateCurrentUser();
 document.addEventListener("DOMContentLoaded", async () => {
     updateCurrentUser();
 
-    // Validasi Akses Pengguna
+    // Tampilkan Role di Indikator Atas
+    const roleIndicator = document.getElementById('role-indicator');
+    if (roleIndicator && currentUser.role) {
+        roleIndicator.innerText = `Role: ${currentUser.role.toUpperCase()}`;
+    }
+
+    // PENGAMAN UKURAN TOLERAN: Hanya blokir jika role sudah pasti 'staff' atau 'admin_departement'
     if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
         document.body.innerHTML = "<h3 class='text-center mt-5 text-danger'>Akses Terbatas. Halaman ini hanya untuk Tim Manajemen.</h3>";
         return;
     }
 
-    const roleIndicator = document.getElementById('role-indicator');
-    if (roleIndicator && currentUser.role) {
-        roleIndicator.innerText = `Role: ${currentUser.role.toUpperCase()}`;
-    }
-    
+    // KITA PAKSA TETAP ME-LOAD DROPDOWN PERIODE
+    await loadPeriodeDropdown();
+
     // Atur visibilitas tombol berdasarkan wewenang khusus role
     const btnHitung = document.getElementById('btn-proses-hitung');
     const btnApprove = document.getElementById('btn-approve-massal');
 
-    if (btnHitung && ['super_admin', 'admin_all', 'admin_hr', 'hrd'].includes(currentUser.role)) {
-        btnHitung.style.display = 'inline-block';
+    // Jika role belum ter-load sempurna, tampilkan saja dulu tombolnya
+    if (btnHitung) {
+        if (!currentUser.role || ['super_admin', 'admin_all', 'admin_hr', 'hrd'].includes(currentUser.role)) {
+            btnHitung.style.display = 'inline-block';
+        }
     }
-    if (btnApprove && ['super_admin', 'admin_all', 'hrd'].includes(currentUser.role)) {
-        btnApprove.style.display = 'inline-block';
+    if (btnApprove) {
+        if (!currentUser.role || ['super_admin', 'admin_all', 'hrd'].includes(currentUser.role)) {
+            btnApprove.style.display = 'inline-block';
+        }
     }
-
-    await loadPeriodeDropdown();
 });
 
 // Memuat daftar periode ke dropdown
