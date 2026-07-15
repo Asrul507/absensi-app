@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Payroll - Absensi App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container my-5">
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">4. Run & Generate Payroll</h5>
+            <span id="role-indicator" class="badge bg-secondary">Role: Loading...</span>
+        </div>
+        <div class="card-body">
+            <!-- Filter & Aksi -->
+            <div class="row g-3 align-items-center mb-4 border-bottom pb-4">
+                <div class="col-md-4">
+                    <label class="form-label small font-monospace">Pilih Periode Aktif/Lalu</label>
+                    <select id="run-pilih-periode" class="form-select form-select-sm">
+                        <option value="">-- Pilih Periode --</option>
+                    </select>
+                </div>
+                <div class="col-md-4 align-self-end">
+                    <button id="btn-proses-hitung" class="btn btn-primary btn-sm w-100" style="display: none;">
+                        ⚙️ Ambil Template & Hitung Gaji
+                    </button>
+                </div>
+                <div class="col-md-4 align-self-end text-end">
+                    <button id="btn-approve-massal" class="btn btn-success btn-sm w-100" style="display: none;">
+                        ✅ Approve Semua & Terbitkan Slip
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabel Hasil Pemrosesan -->
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle small">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th>Karyawan</th>
+                            <th>Total Pemasukan</th>
+                            <th>Total Potongan</th>
+                            <th>Gaji Bersih (THP)</th>
+                            <th>Status Kelayakan</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="payroll-run-table">
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">Silakan tentukan periode di atas.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/supabase.js"></script>
+<script src="js/payroll-run.js"></script>
+</body>
+</html>
