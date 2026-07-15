@@ -56,41 +56,77 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
+// --- 1. LOAD OPSI KARYAWAN DARI TABEL PROFILES ---
 async function loadOpsiKaryawan() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     
-    console.log("Mencoba memuat karyawan dengan ID Kantor:", targetOfficeId);
-    console.log("Session user saat ini:", currentUser);
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    if (!targetOfficeId || targetOfficeId === 'undefined') {
-        console.error("Gagal load karyawan: ID Kantor tidak ditemukan di session user.");
-        return;
-    }
-
-    // Ambil data user
+    // Ambil data langsung dari tabel profiles berdasarkan client_id / office_id
     const { data, error } = await supabase
-        .from('users')
-        .select('*') // Kita ambil semua kolom dulu untuk melihat strukturnya di konsol
-        .order('name');
+        .from('profiles')
+        .select('id, nama_lengkap, client_id, office_id')
+        .order('nama_lengkap');
 
     if (error) {
-        console.error("🚨 ERROR DARI SUPABASE SAAT LOAD KARYAWAN:", error.message, error.details);
+        console.error("🚨 ERROR DARI SUPABASE SAAT LOAD KARYAWAN:", error.message);
         return;
     }
 
-    console.log("Data user asli dari database:", data);
-
-    // Filter manual di sisi client agar tidak salah kolom query database
+    // Filter berdasarkan ID Kantor/Client yang aktif
     const filteredUsers = data?.filter(emp => emp.client_id === targetOfficeId || emp.office_id === targetOfficeId) || [];
-    console.log("Data karyawan setelah difilter kantor:", filteredUsers);
 
     const selectKaryawan = document.getElementById('pilih-karyawan');
     if (!selectKaryawan) return;
     
     selectKaryawan.innerHTML = '<option value="">-- Pilih Karyawan --</option>';
     filteredUsers.forEach(emp => {
-        selectKaryawan.innerHTML += `<option value="${emp.id}">${emp.nama}</option>`;
+        selectKaryawan.innerHTML += `<option value="${emp.id}">${emp.nama_lengkap}</option>`;
+    });
+}
+
+// --- 2. LOAD DATA TABEL PEMETAAN DENGAN RELASI PROFILES ---
+async function loadDataMapping() {
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
+
+    // Tarik data mapping dengan relasi ke tabel profiles (menggunakan id/user_id yang cocok)
+    const { data, error } = await supabase
+        .from('payroll_mappings')
+        .select(`
+            user_id,
+            template_id,
+            profiles!inner ( nama_lengkap, client_id, office_id ),
+            payroll_templates ( nama_template )
+        `);
+
+    const tbody = document.getElementById('list-mapping-table');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    // Filter data di sisi client agar memastikan data kantornya sama
+    const filteredData = data?.filter(m => 
+        m.profiles && 
+        (m.profiles.office_id === targetOfficeId || m.profiles.client_id === targetOfficeId) && 
+        m.payroll_templates
+    ) || [];
+
+    if (filteredData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada pemetaan karyawan</td></tr>';
+        return;
+    }
+
+    filteredData.forEach(m => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${m.profiles?.nama_lengkap || 'Tidak Diketahui'}</td>
+                <td>${m.payroll_templates?.nama_template || 'Tanpa Template'}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger py-0 px-2" onclick="hapusMapping('${m.user_id}')">Hapus</button>
+                </td>
+            </tr>`;
     });
 }
 
