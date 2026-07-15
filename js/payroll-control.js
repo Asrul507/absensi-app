@@ -1,113 +1,90 @@
-// js/payroll-control.js
-
-// Asumsi: currentUser memiliki properti 'role', 'office_id', dan 'id'
-let currentUser = {
-    id: "",
-    role: "", // super_admin, admin_all, admin_hr, admin_departement, staff
-    office_id: ""
-};
-
-// 1. Inisialisasi Halaman & Validasi Hak Akses Menu
-async function initPayrollMenu() {
-    currentUser = await fetchUserSessionData(); // Ambil sesi aktif dari Supabase Auth/Profiles
-    
-    const role = currentUser.role;
-
-    // Render filter kantor untuk Super Admin
-    if (role === 'super_admin') {
-        renderOfficeFilterSelector(); // Menampilkan pilihan kantor/domain
-    } else {
-        hideOfficeFilterSelector(); // Kunci filter ke office_id milik admin tersebut
-    }
-
-    // Atur visibilitas tombol aksi berdasarkan Rincian Fitur
-    setupAksiButtons(role);
-    
-    // Muat data default
-    loadPayrollPeriods();
+// ========================================================
+// AMBIL KONEKSI DATABASE & USER DARI HALAMAN UTAMA GENPRO
+// ========================================================
+if (typeof window.supabase === 'undefined' && window.parent && window.parent.supabase) {
+    window.supabase = window.parent.supabase;
 }
 
-function setupAksiButtons(role) {
-    const btnGenerate = document.getElementById('btn-generate-payroll');
-    const btnApprove = document.getElementById('btn-approve-all');
-    const sectionConfig = document.getElementById('section-konfigurasi-gaji');
+var supabase = window.supabase;
+var currentUser = {};
 
-    if (role === 'super_admin' || role === 'admin_all') {
-        if(btnGenerate) btnGenerate.disabled = false;
-        if(btnApprove) btnApprove.disabled = false;
-        if(sectionConfig) sectionConfig.style.display = 'block';
-    } 
-    else if (role === 'admin_hr') {
-        // admin_hr: Melakukan edit, tambah data, dan pengajuan payroll
-        if(btnGenerate) btnGenerate.disabled = false;
-        if(btnApprove) btnApprove.disabled = true; // Tidak bisa approve final
-        if(sectionConfig) sectionConfig.style.display = 'block';
-    } 
-    else {
-        // admin_departement & staff: Hanya bisa lihat history dan slip gaji masing-masing
-        if(btnGenerate) btnGenerate.style.display = 'none';
-        if(btnApprove) btnApprove.style.display = 'none';
-        if(sectionConfig) sectionConfig.style.display = 'none';
-        
-        // Paksa filter data hanya mengarah ke ID mereka sendiri
-        restrictViewToSelf();
+function updateCurrentUser() {
+    currentUser = window.currentUser || window.parent?.currentUser || {};
+    if (!currentUser.office_id && currentUser.user) {
+        currentUser = currentUser.user;
     }
 }
 
-// 2. Mengambil Data Payroll Berdasarkan Filter Kantor & Periode
-async function loadPayrollData(selectedPeriodId, targetOfficeId = null) {
-    let query = supabase
-        .from('payroll_runs')
-        .select(`
-            id, total_pemasukan, total_potongan, gaji_bersih, status,
-            profiles ( nama_lengkap, departemen )
-        `);
+updateCurrentUser();
 
-    // Atur Filter berdasarkan Kantor/Domain
-    if (currentUser.role === 'super_admin') {
-        if (targetOfficeId) {
-            query = query.eq('office_id', targetOfficeId);
-        }
-    } else {
-        // admin_all, admin_hr, admin_departement, staff hanya melihat kantor mereka sendiri
-        query = query.eq('office_id', currentUser.office_id);
-    }
+document.addEventListener("DOMContentLoaded", async () => {
+    updateCurrentUser();
 
-    // Atur Filter berdasarkan hak akses perorangan (Staff & Admin Departement)
-    if (currentUser.role === 'staff' || currentUser.role === 'admin_departement') {
-        query = query.eq('user_id', currentUser.id);
-    }
-
-    query = query.eq('period_id', selectedPeriodId);
-
-    const { data, error } = await query;
-    if (error) return console.error("Gagal memuat data rekap:", error);
-
-    renderPayrollTable(data);
-}
-
-// 3. Fungsi Aksi Approve Khusus untuk admin_all dan super_admin
-async function approvePayrollRun(payrollRunId) {
-    if (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_all') {
-        alert("Akses Ditolak: Hanya admin_all atau super_admin yang dapat menyetujui payroll.");
+    // Keamanan Akses Halaman
+    if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
+        document.body.innerHTML = "<h3 class='text-center mt-5 text-danger'>Akses Ditolak. Halaman ini hanya untuk HR/Admin.</h3>";
         return;
     }
 
+    // Ambil daftar periode yang statusnya 'Open' untuk dipilih saat generate
+    await loadOpsiPeriode();
+
+    // Event Listener untuk tombol Proses/Generate Payroll
+    const formGenerate = document.getElementById('form-generate-payroll');
+    if (formGenerate) {
+        formGenerate.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const periodeId = document.getElementById('pilih-periode-generate')?.value;
+
+            if (!periodeId) {
+                return alert("Silakan pilih periode payroll terlebih dahulu!");
+            }
+
+            // Jalankan fungsi proses kalkulasi payroll di sini
+            await prosesGeneratePayroll(periodeId);
+        });
+    }
+});
+
+// --- 1. LOAD PERIODE GAJI BERDASARKAN OFFICE ID / CLIENT ID ---
+async function loadOpsiPeriode() {
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    
+    if (!targetOfficeId || targetOfficeId === 'undefined') {
+        console.error("Gagal load periode: ID Kantor tidak terdeteksi.");
+        return;
+    }
+
+    // Mengambil periode dari tabel payroll_periods
     const { data, error } = await supabase
-        .from('payroll_runs')
-        .update({ 
-            status: 'Approved',
-            approved_by: currentUser.id,
-            approved_at: new Date().toISOString()
-        })
-        .eq('id', payrollRunId)
-        .select();
+        .from('payroll_periods')
+        .select('*')
+        .eq('office_id', targetOfficeId) // Pastikan ini sesuai dengan nama kolom di payroll_periods Anda
+        .order('created_at', { ascending: false });
 
     if (error) {
-        alert("Gagal menyetujui payroll: " + error.message);
-    } else {
-        alert("Payroll berhasil diapprove. Slip gaji resmi diterbitkan!");
-        // Refresh tabel
-        triggerRefreshTable();
+        console.error("🚨 ERROR DARI SUPABASE SAAT LOAD PERIODE:", error.message);
+        return;
     }
+
+    const selectPeriode = document.getElementById('pilih-periode-generate');
+    if (!selectPeriode) return;
+
+    selectPeriode.innerHTML = '<option value="">-- Pilih Periode Aktif --</option>';
+    
+    if (!data || data.length === 0) {
+        selectPeriode.innerHTML = '<option value="">Belum ada periode dibuat / open</option>';
+        return;
+    }
+
+    data.forEach(p => {
+        selectPeriode.innerHTML += `<option value="${p.id}">${p.nama_periode} (${p.tanggal_mulai} s/d ${p.tanggal_selesai}) - [${p.status}]</option>`;
+    });
+}
+
+// --- 2. FUNGSI UTAMA PROSES GENERATE PAYROLL ---
+async function prosesGeneratePayroll(periodeId) {
+    alert("Memulai proses kalkulasi payroll untuk periode terpilih...");
+    // Di sini nanti logika hitung absen + komponen template dimasukkan.
 }
