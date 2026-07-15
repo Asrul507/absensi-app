@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Konfigurasi Payroll - Absensi App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container my-5">
+    
+    <!-- Bagian 1: Master Komponen Gaji -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">1. Master Komponen Gaji</h5>
+        </div>
+        <div class="card-body">
+            <form id="form-komponen" class="row g-3">
+                <div class="col-md-3">
+                    <input type="text" id="kode-komponen" class="form-control" placeholder="Kode (mis: GAPOK)" required>
+                </div>
+                <div class="col-md-4">
+                    <input type="text" id="nama-komponen" class="form-control" placeholder="Nama (mis: Gaji Pokok)" required>
+                </div>
+                <div class="col-md-3">
+                    <select id="jenis-komponen" class="form-select" required>
+                        <option value="pemasukan">Pemasukan (+)</option>
+                        <option value="potongan">Potongan (-)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-success w-100">Simpan</button>
+                </div>
+            </form>
+            
+            <table class="table table-sm mt-3 table-striped">
+                <thead><tr><th>Kode</th><th>Nama Komponen</th><th>Jenis</th></tr></thead>
+                <tbody id="list-komponen-table"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Bagian 2: Template Gaji -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">2. Template Gaji & Nominal</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4 border-end">
+                    <h6>Buat Template Baru</h6>
+                    <form id="form-template">
+                        <input type="text" id="nama-template" class="form-control mb-2" placeholder="Nama Template (mis: Staff IT)" required>
+                        <button type="submit" class="btn btn-primary btn-sm w-100">Buat Template</button>
+                    </form>
+                    <ul class="list-group mt-3" id="list-template-grup">
+                        <!-- JS Inject: Daftar Template -->
+                    </ul>
+                </div>
+                
+                <div class="col-md-8">
+                    <h6>Isi Rincian Template: <span id="template-terpilih-nama" class="text-primary">-</span></h6>
+                    <form id="form-detail-template" class="row g-2 mb-3" style="display: none;">
+                        <input type="hidden" id="aktif-template-id">
+                        <div class="col-md-5">
+                            <select id="pilih-komponen" class="form-select" required></select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="number" id="nominal-komponen" class="form-control" placeholder="Nominal Rp." required>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-success btn-sm w-100">+ Tambah</button>
+                        </div>
+                    </form>
+                    
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light"><tr><th>Komponen</th><th>Jenis</th><th>Nominal</th></tr></thead>
+                        <tbody id="list-detail-template">
+                            <tr><td colspan="3" class="text-center text-muted">Pilih template terlebih dahulu</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bagian 3: Periode Gaji -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">3. Pengaturan Periode Gaji</h5>
+        </div>
+        <div class="card-body">
+            <form id="form-periode" class="row g-3">
+                <div class="col-md-4">
+                    <input type="text" id="nama-periode" class="form-control" placeholder="Nama Periode (mis: Juli 2026)" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">Mulai</label>
+                    <input type="date" id="tgl-mulai" class="form-control" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">Selesai</label>
+                    <input type="date" id="tgl-selesai" class="form-control" required>
+                </div>
+                <div class="col-md-2 align-self-end">
+                    <button type="submit" class="btn btn-primary w-100">Buka Periode</button>
+                </div>
+            </form>
+            
+            <table class="table table-sm mt-3 table-hover">
+                <thead><tr><th>Nama Periode</th><th>Rentang Tanggal</th><th>Status</th></tr></thead>
+                <tbody id="list-periode-table"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="js/supabase.js"></script>
+<script src="js/payroll-config.js"></script>
+</body>
+</html>
