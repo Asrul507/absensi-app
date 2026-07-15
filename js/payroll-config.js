@@ -1,3 +1,16 @@
+// ========================================================
+// AMBIL KONEKSI DATABASE SUPABASE DARI HALAMAN UTAMA GENPRO
+// ========================================================
+if (typeof supabase === 'undefined' && window.parent && window.parent.supabase) {
+    window.supabase = window.parent.supabase;
+}
+if (typeof currentUser === 'undefined' && window.parent && window.parent.currentUser) {
+    window.currentUser = window.parent.currentUser;
+}
+
+// Deklarasi variabel agar bisa dipakai langsung oleh kode di bawahnya
+const supabase = window.supabase;
+const currentUser = window.currentUser || {};
 // js/payroll-config.js
 
 // Simulasi user login
