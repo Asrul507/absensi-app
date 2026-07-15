@@ -72,7 +72,7 @@ async function loadOpsiKaryawan() {
     const { data, error } = await supabase
         .from('users')
         .select('*') // Kita ambil semua kolom dulu untuk melihat strukturnya di konsol
-        .order('nama');
+        .order('name');
 
     if (error) {
         console.error("🚨 ERROR DARI SUPABASE SAAT LOAD KARYAWAN:", error.message, error.details);
