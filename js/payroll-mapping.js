@@ -59,25 +59,37 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function loadOpsiKaryawan() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
-    if (!targetOfficeId || targetOfficeId === 'undefined') return;
+    
+    console.log("Mencoba memuat karyawan dengan ID Kantor:", targetOfficeId);
+    console.log("Session user saat ini:", currentUser);
 
-    // UBAH KE client_id agar sesuai dengan tabel data karyawan GenPro kamu
+    if (!targetOfficeId || targetOfficeId === 'undefined') {
+        console.error("Gagal load karyawan: ID Kantor tidak ditemukan di session user.");
+        return;
+    }
+
+    // Ambil data user
     const { data, error } = await supabase
         .from('users')
-        .select('id, nama')
-        .eq('client_id', targetOfficeId) // <-- Diubah dari office_id menjadi client_id
+        .select('*') // Kita ambil semua kolom dulu untuk melihat strukturnya di konsol
         .order('nama');
 
     if (error) {
-        console.error("Error load karyawan:", error.message);
+        console.error("🚨 ERROR DARI SUPABASE SAAT LOAD KARYAWAN:", error.message, error.details);
         return;
     }
+
+    console.log("Data user asli dari database:", data);
+
+    // Filter manual di sisi client agar tidak salah kolom query database
+    const filteredUsers = data?.filter(emp => emp.client_id === targetOfficeId || emp.office_id === targetOfficeId) || [];
+    console.log("Data karyawan setelah difilter kantor:", filteredUsers);
 
     const selectKaryawan = document.getElementById('pilih-karyawan');
     if (!selectKaryawan) return;
     
     selectKaryawan.innerHTML = '<option value="">-- Pilih Karyawan --</option>';
-    data?.forEach(emp => {
+    filteredUsers.forEach(emp => {
         selectKaryawan.innerHTML += `<option value="${emp.id}">${emp.nama}</option>`;
     });
 }
