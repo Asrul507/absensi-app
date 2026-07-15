@@ -1,26 +1,16 @@
 // ========================================================
 // AMBIL KONEKSI DATABASE SUPABASE DARI HALAMAN UTAMA GENPRO
 // ========================================================
-if (typeof supabase === 'undefined' && window.parent && window.parent.supabase) {
+if (typeof window.supabase === 'undefined' && window.parent && window.parent.supabase) {
     window.supabase = window.parent.supabase;
 }
-if (typeof currentUser === 'undefined' && window.parent && window.parent.currentUser) {
+if (typeof window.currentUser === 'undefined' && window.parent && window.parent.currentUser) {
     window.currentUser = window.parent.currentUser;
 }
 
-// Deklarasi variabel agar bisa dipakai langsung oleh kode di bawahnya
-const supabase = window.supabase;
-const currentUser = window.currentUser || {};
-// js/payroll-config.js
-
-// Simulasi user login
-// BENAR: Mengambil session langsung dari aplikasi utama GenPro
-let currentUser = window.currentUser;
-
-// Jika session global belum siap sewaktu di-load di dalam iframe
-if (!currentUser && window.parent && window.parent.currentUser) {
-    currentUser = window.parent.currentUser;
-}
+// Deklarasi global agar aman digunakan di seluruh baris kode di bawah
+var supabase = window.supabase;
+var currentUser = window.currentUser || window.parent?.currentUser || {};
 
 document.addEventListener("DOMContentLoaded", async () => {
     // Keamanan Akses Halaman
@@ -96,7 +86,8 @@ async function loadDataTemplate() {
     });
 }
 
-async function pilihTemplate(id, nama) {
+// Expose fungsi pilihTemplate ke window agar bisa dipanggil via attribute HTML onclick di dalam iframe
+window.pilihTemplate = async function(id, nama) {
     document.getElementById('template-terpilih-nama').innerText = nama;
     document.getElementById('aktif-template-id').value = id;
     document.getElementById('form-detail-template').style.display = 'flex';
