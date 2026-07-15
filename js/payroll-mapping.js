@@ -143,7 +143,7 @@ const filteredData = data?.filter(m => m.users && (m.users.office_id === targetO
     filteredData.forEach(m => {
         tbody.innerHTML += `
             <tr>
-                <td>${m.users?.nama || 'Tidak Diketahui'}</td>
+                <td>${m.users?.name || m.users?.nama_lengkap || 'Tidak Diketahui'}</td>
                 <td>${m.payroll_templates?.nama_template || 'Tanpa Template'}</td>
                 <td>
                     <button class="btn btn-sm btn-danger py-0 px-2" onclick="hapusMapping('${m.user_id}')">Hapus</button>
