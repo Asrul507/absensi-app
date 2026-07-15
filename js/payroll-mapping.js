@@ -1,109 +1,161 @@
-// js/payroll-mapping.js
-
-// BENAR: Mengambil session langsung dari aplikasi utama GenPro
-let currentUser = window.currentUser;
-
-// Jika session global belum siap sewaktu di-load di dalam iframe
-if (!currentUser && window.parent && window.parent.currentUser) {
-    currentUser = window.parent.currentUser;
+// ========================================================
+// AMBIL KONEKSI DATABASE & USER DARI HALAMAN UTAMA GENPRO
+// ========================================================
+if (typeof window.supabase === 'undefined' && window.parent && window.parent.supabase) {
+    window.supabase = window.parent.supabase;
 }
+
+var supabase = window.supabase;
+var currentUser = {};
+
+function updateCurrentUser() {
+    currentUser = window.currentUser || window.parent?.currentUser || {};
+    if (!currentUser.office_id && currentUser.user) {
+        currentUser = currentUser.user;
+    }
+}
+
+updateCurrentUser();
 
 document.addEventListener("DOMContentLoaded", async () => {
-    // Proteksi Role: Hanya Manajemen yang boleh mengutak-atik kompensasi karyawan
-    if (['staff', 'admin_departement'].includes(userSession.role)) {
-        document.body.innerHTML = "<h3 class='text-center mt-5 text-danger'>Akses Ditolak.</h3>";
+    updateCurrentUser();
+
+    // Keamanan Akses Halaman
+    if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
+        document.body.innerHTML = "<h3 class='text-center mt-5 text-danger'>Akses Ditolak. Halaman ini hanya untuk HR/Admin.</h3>";
         return;
     }
 
-    await loadKaryawanDropdown();
-    await loadTemplateDropdown();
-    await loadMappingTable();
+    // Load semua opsi dropdown awal
+    await loadOpsiKaryawan();
+    await loadOpsiTemplate();
+    await loadDataMapping();
+
+    // Event Listener untuk Form Simpan Pemetaan
+    const formMapping = document.getElementById('form-mapping');
+    if (formMapping) {
+        formMapping.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('pilih-karyawan')?.value;
+            const templateId = document.getElementById('pilih-template')?.value;
+
+            if (!userId || !templateId) {
+                return alert("Silakan pilih karyawan dan template terlebih dahulu!");
+            }
+
+            // Gunakan upsert agar jika karyawan sudah punya pemetaan, datanya langsung terupdate
+            const { error } = await supabase.from('payroll_mappings').upsert([{
+                user_id: userId,
+                template_id: templateId
+            }], { onConflict: 'user_id' });
+
+            if (error) return alert("Gagal menyimpan pemetaan: " + error.message);
+            
+            alert("Pemetaan gaji karyawan berhasil disimpan!");
+            formMapping.reset();
+            await loadDataMapping();
+        });
+    }
 });
 
-// 1. Ambil daftar karyawan di kantor ini untuk pilihan Dropdown
-async function loadKaryawanDropdown() {
-    const { data } = await supabase
-        .from('profiles')
-        .select('user_id, nama_lengkap')
-        .eq('office_id', userSession.office_id);
+// --- 1. LOAD OPSI KARYAWAN BERDASARKAN OFFICE ---
+async function loadOpsiKaryawan() {
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (!targetOfficeId) return;
 
-    const select = document.getElementById('map-karyawan');
-    data?.forEach(k => {
-        select.innerHTML += `<option value="${k.user_id}">${k.nama_lengkap}</option>`;
-    });
+    // Menarik data user/karyawan yang aktif di kantor tersebut
+    const { data, error } = await supabase
+        .from('users')
+        .select('id, nama')
+        .eq('office_id', targetOfficeId)
+        .order('nama');
+
+    const selectKaryawan = document.getElementById('pilih-karyawan');
+    if (!selectKaryawan) return;
+    
+    selectKaryawan.innerHTML = '<option value="">-- Pilih Karyawan --</option>';
+    if (data) {
+        data.forEach(emp => {
+            selectKaryawan.innerHTML += `<option value="${emp.id}">${emp.nama}</option>`;
+        });
+    }
 }
 
-// 2. Ambil daftar master template gaji untuk pilihan Dropdown
-async function loadTemplateDropdown() {
-    const { data } = await supabase
+// --- 2. LOAD OPSI TEMPLATE GAJI BERDASARKAN OFFICE ---
+async function loadOpsiTemplate() {
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (!targetOfficeId) return;
+
+    const { data, error } = await supabase
         .from('payroll_templates')
         .select('id, nama_template')
-        .eq('office_id', userSession.office_id);
+        .eq('office_id', targetOfficeId)
+        .order('nama_template');
 
-    const select = document.getElementById('map-template');
-    data?.forEach(t => {
-        select.innerHTML += `<option value="${t.id}">${t.nama_template}</option>`;
-    });
+    const selectTemplate = document.getElementById('pilih-template');
+    if (!selectTemplate) return;
+
+    selectTemplate.innerHTML = '<option value="">-- Pilih Template --</option>';
+    if (data) {
+        data.forEach(t => {
+            selectTemplate.innerHTML += `<option value="${t.id}">${t.nama_template}</option>`;
+        });
+    }
 }
 
-// 3. Aksi Submit untuk Menyimpan Pemetaan (Hubungan)
-document.getElementById('form-mapping').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const userId = document.getElementById('map-karyawan').value;
-    const templateId = document.getElementById('map-template').value;
+// --- 3. LOAD DATA TABEL PEMETAAN YANG SUDAH ADA ---
+async function loadDataMapping() {
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (!targetOfficeId) return;
 
-    // Simpan atau update ke tabel 'payroll_employee_templates'
-    const { error } = await supabase
-        .from('payroll_employee_templates')
-        .upsert({
-            user_id: userId,
-            template_id: templateId,
-            updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' });
+    // Tarik data mapping beserta relasi nama karyawan dan nama templatenya
+    const { data, error } = await supabase
+        .from('payroll_mappings')
+        .select(`
+            user_id,
+            template_id,
+            users ( nama ),
+            payroll_templates ( nama_template )
+        `)
+        .textSearch('users.office_id', targetOfficeId); // Memastikan relasi user sesuai kantor
 
-    if (error) {
-        alert("Gagal menghubungkan karyawan: " + error.message);
-    } else {
-        alert("Karyawan berhasil dihubungkan ke template gaji!");
-        document.getElementById('form-mapping').reset();
-        await loadMappingTable(); // Refresh tabel status
-    }
-});
-
-// 4. Tampilkan Tabel Status untuk Memantau Karyawan yang Belum Dapat Gaji
-async function loadMappingTable() {
-    const tbody = document.getElementById('table-mapping-status');
+    const tbody = document.getElementById('list-mapping-table');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Lakukan query ke profiles untuk melihat status template gajinya saat ini
-    const { data, error } = await supabase
-        .from('profiles')
-        .select(`
-            user_id, nama_lengkap, departemen,
-            payroll_employee_templates (
-                updated_at,
-                payroll_templates ( nama_template )
-            )
-        `)
-        .eq('office_id', userSession.office_id);
+    // Alternatif jika filter join di atas terlalu kompleks untuk RLS kantor:
+    // Kita filter manual datanya agar aman
+    const filteredData = data?.filter(m => m.users && m.payroll_templates) || [];
 
-    if (error || !data || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Tidak ada data karyawan ditemukan.</td></tr>`;
+    if (filteredData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada pemetaan karyawan</td></tr>';
         return;
     }
 
-    data.forEach(item => {
-        // Cek apakah data template terhubung atau masih kosong
-        const hasTemplate = item.payroll_employee_templates;
-        const namaTemplate = hasTemplate?.payroll_templates?.nama_template || '<span class="text-danger fw-bold">Belum Diatur (Gaji Rp 0)</span>';
-        const tglUpdate = hasTemplate ? new Date(hasTemplate.updated_at).toLocaleDateString('id-ID') : '-';
-
+    filteredData.forEach(m => {
         tbody.innerHTML += `
             <tr>
-                <td><strong>${item.nama_lengkap}</strong></td>
-                <td>${item.departemen || '-'}</td>
-                <td>${namaTemplate}</td>
-                <td class="small text-muted">${tglUpdate}</td>
+                <td>${m.users?.nama || 'Tidak Diketahui'}</td>
+                <td>${m.payroll_templates?.nama_template || 'Tanpa Template'}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="hapusMapping('${m.user_id}')">Hapus</button>
+                </td>
             </tr>`;
     });
 }
+
+// Expose fungsi hapus ke global window agar bisa diklik dari iframe
+window.hapusMapping = async function(userId) {
+    if (!confirm("Apakah Anda yakin ingin menghapus pemetaan gaji karyawan ini?")) return;
+
+    const { error } = await supabase
+        .from('payroll_mappings')
+        .delete()
+        .eq('user_id', userId);
+
+    if (error) return alert("Gagal menghapus: " + error.message);
+    await loadDataMapping();
+};
