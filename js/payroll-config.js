@@ -1,132 +1,201 @@
 // ========================================================
-// AMBIL KONEKSI DATABASE SUPABASE DARI HALAMAN UTAMA GENPRO
+// AMBIL KONEKSI DATABASE & USER DARI HALAMAN UTAMA GENPRO
 // ========================================================
 if (typeof window.supabase === 'undefined' && window.parent && window.parent.supabase) {
     window.supabase = window.parent.supabase;
 }
-if (typeof window.currentUser === 'undefined' && window.parent && window.parent.currentUser) {
-    window.currentUser = window.parent.currentUser;
+
+// Deklarasi global menggunakan var agar fleksibel
+var supabase = window.supabase;
+var currentUser = {};
+
+// Fungsi internal untuk mengambil session secara aman
+function updateCurrentUser() {
+    currentUser = window.currentUser || window.parent?.currentUser || {};
+    // Fallback jika dibungkus dalam objek user
+    if (!currentUser.office_id && currentUser.user) {
+        currentUser = currentUser.user;
+    }
 }
 
-// Deklarasi global agar aman digunakan di seluruh baris kode di bawah
-var supabase = window.supabase;
-var currentUser = window.currentUser || window.parent?.currentUser || {};
+// Panggil di awal pembacaan skrip
+updateCurrentUser();
 
 document.addEventListener("DOMContentLoaded", async () => {
+    // Perbarui session sekali lagi saat DOM siap
+    updateCurrentUser();
+
+    // Ambil ID Kantor yang valid
+    const myOfficeId = currentUser.office_id || currentUser.client_id;
+    console.log("Session Terdeteksi di Payroll Config:", currentUser, "Office ID:", myOfficeId);
+
     // Keamanan Akses Halaman
-    if (['staff', 'admin_departement'].includes(currentUser.role)) {
+    if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
         document.body.innerHTML = "<h3 class='text-center mt-5 text-danger'>Akses Ditolak. Halaman ini hanya untuk HR/Admin.</h3>";
         return;
     }
 
+    // PENTING: Inisialisasi Event Listener hanya jika Elemen HTML-nya eksis di halaman
+    const formKomponen = document.getElementById('form-komponen');
+    if (formKomponen) {
+        formKomponen.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            updateCurrentUser();
+            const targetOfficeId = currentUser.office_id || currentUser.client_id;
+            
+            const kode = document.getElementById('kode-komponen')?.value.toUpperCase();
+            const nama = document.getElementById('nama-komponen')?.value;
+            const jenis = document.getElementById('jenis-komponen')?.value;
+
+            if (!targetOfficeId || targetOfficeId === 'undefined') {
+                return alert("Gagal menyimpan: ID Kantor Anda tidak terdeteksi. Silakan coba log out dan log in kembali.");
+            }
+
+            const { error } = await supabase.from('payroll_components').insert([{
+                office_id: targetOfficeId,
+                kode_komponen: kode,
+                nama_komponen: nama,
+                jenis: jenis
+            }]);
+
+            if (error) return alert("Gagal menyimpan komponen: " + error.message);
+            formKomponen.reset();
+            await loadDataKomponen();
+        });
+    }
+
+    const formTemplate = document.getElementById('form-template');
+    if (formTemplate) {
+        formTemplate.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            updateCurrentUser();
+            const targetOfficeId = currentUser.office_id || currentUser.client_id;
+            const nama = document.getElementById('nama-template')?.value;
+
+            const { error } = await supabase.from('payroll_templates').insert([{
+                office_id: targetOfficeId,
+                nama_template: nama
+            }]);
+
+            if (error) return alert("Gagal membuat template: " + error.message);
+            formTemplate.reset();
+            await loadDataTemplate();
+        });
+    }
+
+    const formDetailTemplate = document.getElementById('form-detail-template');
+    if (formDetailTemplate) {
+        formDetailTemplate.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const tempId = document.getElementById('aktif-template-id')?.value;
+            const compId = document.getElementById('pilih-komponen')?.value;
+            const nominal = document.getElementById('nominal-komponen')?.value;
+
+            const { error } = await supabase.from('payroll_template_details').insert([{
+                template_id: tempId,
+                component_id: compId,
+                nominal: nominal
+            }]);
+
+            if (error) return alert("Gagal menambah rincian: " + error.message);
+            const inputNominal = document.getElementById('nominal-komponen');
+            if (inputNominal) inputNominal.value = '';
+            await loadDetailTemplate(tempId);
+        });
+    }
+
+    const formPeriode = document.getElementById('form-periode');
+    if (formPeriode) {
+        formPeriode.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            updateCurrentUser();
+            const targetOfficeId = currentUser.office_id || currentUser.client_id;
+            
+            const nama = document.getElementById('nama-periode')?.value;
+            const mulai = document.getElementById('tgl-mulai')?.value;
+            const selesai = document.getElementById('tgl-selesai')?.value;
+
+            const { error } = await supabase.from('payroll_periods').insert([{
+                office_id: targetOfficeId,
+                nama_periode: nama,
+                tanggal_mulai: mulai,
+                tanggal_selesai: selesai,
+                status: 'Open'
+            }]);
+
+            if (error) return alert("Gagal membuat periode: " + error.message);
+            formPeriode.reset();
+            await loadDataPeriode();
+        });
+    }
+
+    // Load data awal dari database
     await loadDataKomponen();
     await loadDataTemplate();
     await loadDataPeriode();
 });
 
-// --- BAGIAN 1: KOMPONEN GAJI ---
-// --- BAGIAN 1: KOMPONEN GAJI ---
-document.getElementById('form-komponen').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const kode = document.getElementById('kode-komponen').value.toUpperCase();
-    const nama = document.getElementById('nama-komponen').value;
-    const jenis = document.getElementById('jenis-komponen').value;
-
-    // AMANKAN office_id: jika office_id kosong, coba cari dari client_id alternatif
-    const targetOfficeId = currentUser.office_id || currentUser.client_id || window.parent?.currentUser?.office_id || window.parent?.currentUser?.client_id;
-
-    console.log("Data yang akan disimpan:", { office_id: targetOfficeId, kode, nama, jenis });
-
-    if (!targetOfficeId) {
-        return alert("Gagal menyimpan: ID Office/Kantor Anda tidak terdeteksi di session login.");
-    }
-
-    const { error } = await supabase.from('payroll_components').insert([{
-        office_id: targetOfficeId,
-        kode_komponen: kode,
-        nama_komponen: nama,
-        jenis: jenis
-    }]);
-
-    if (error) return alert("Gagal menyimpan komponen: " + error.message);
-    document.getElementById('form-komponen').reset();
-    await loadDataKomponen();
-}); // DI SINI SUDAH RAPI (Tidak ada kelebihan karakter ");" lagi)
+// --- LOAD DATA FUNCTIONS WITH DEFENSIVE CHECKS ---
 async function loadDataKomponen() {
-    const { data } = await supabase.from('payroll_components').select('*').eq('office_id', currentUser.office_id);
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
+
+    const { data } = await supabase.from('payroll_components').select('*').eq('office_id', targetOfficeId);
     const tbody = document.getElementById('list-komponen-table');
     const select = document.getElementById('pilih-komponen');
     
-    tbody.innerHTML = '';
-    select.innerHTML = '<option value="">-- Pilih Komponen --</option>';
+    if (tbody) tbody.innerHTML = '';
+    if (select) select.innerHTML = '<option value="">-- Pilih Komponen --</option>';
 
     data?.forEach(k => {
-        // Render ke tabel
-        tbody.innerHTML += `<tr><td>${k.kode_komponen}</td><td>${k.nama_komponen}</td>
-            <td><span class="badge ${k.jenis === 'pemasukan' ? 'bg-success' : 'bg-danger'}">${k.jenis}</span></td></tr>`;
-        // Render ke form detail template
-        select.innerHTML += `<option value="${k.id}">${k.nama_komponen} (${k.jenis})</option>`;
+        if (tbody) {
+            tbody.innerHTML += `<tr><td>${k.kode_komponen}</td><td>${k.nama_komponen}</td>
+                <td><span class="badge ${k.jenis === 'pemasukan' ? 'bg-success' : 'bg-danger'}">${k.jenis}</span></td></tr>`;
+        }
+        if (select) {
+            select.innerHTML += `<option value="${k.id}">${k.nama_komponen} (${k.jenis})</option>`;
+        }
     });
 }
-
-// --- BAGIAN 2: TEMPLATE GAJI ---
-document.getElementById('form-template').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const nama = document.getElementById('nama-template').value;
-
-    const { error } = await supabase.from('payroll_templates').insert([{
-        office_id: currentUser.office_id,
-        nama_template: nama
-    }]);
-
-    if (error) return alert("Gagal membuat template: " + error.message);
-    document.getElementById('form-template').reset();
-    await loadDataTemplate();
-});
 
 async function loadDataTemplate() {
-    const { data } = await supabase.from('payroll_templates').select('*').eq('office_id', currentUser.office_id);
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
+
+    const { data } = await supabase.from('payroll_templates').select('*').eq('office_id', targetOfficeId);
     const list = document.getElementById('list-template-grup');
-    list.innerHTML = '';
+    if (list) list.innerHTML = '';
 
     data?.forEach(t => {
-        list.innerHTML += `<li class="list-group-item list-group-item-action" style="cursor:pointer;" 
-            onclick="pilihTemplate('${t.id}', '${t.nama_template}')">${t.nama_template}</li>`;
+        if (list) {
+            list.innerHTML += `<li class="list-group-item list-group-item-action" style="cursor:pointer;" 
+                onclick="pilihTemplate('${t.id}', '${t.nama_template}')">${t.nama_template}</li>`;
+        }
     });
 }
 
-// Expose fungsi pilihTemplate ke window agar bisa dipanggil via attribute HTML onclick di dalam iframe
 window.pilihTemplate = async function(id, nama) {
-    document.getElementById('template-terpilih-nama').innerText = nama;
-    document.getElementById('aktif-template-id').value = id;
-    document.getElementById('form-detail-template').style.display = 'flex';
+    const txtNama = document.getElementById('template-terpilih-nama');
+    const inputId = document.getElementById('aktif-template-id');
+    const formDetail = document.getElementById('form-detail-template');
+    
+    if (txtNama) txtNama.innerText = nama;
+    if (inputId) inputId.value = id;
+    if (formDetail) formDetail.style.display = 'flex';
     await loadDetailTemplate(id);
 }
 
-document.getElementById('form-detail-template').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const tempId = document.getElementById('aktif-template-id').value;
-    const compId = document.getElementById('pilih-komponen').value;
-    const nominal = document.getElementById('nominal-komponen').value;
-
-    const { error } = await supabase.from('payroll_template_details').insert([{
-        template_id: tempId,
-        component_id: compId,
-        nominal: nominal
-    }]);
-
-    if (error) return alert("Gagal menambah rincian: " + error.message);
-    document.getElementById('nominal-komponen').value = '';
-    await loadDetailTemplate(tempId);
-});
-
 async function loadDetailTemplate(templateId) {
+    if (!templateId) return;
     const { data } = await supabase
         .from('payroll_template_details')
         .select(`nominal, payroll_components ( nama_komponen, jenis )`)
         .eq('template_id', templateId);
 
     const tbody = document.getElementById('list-detail-template');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     if (!data || data.length === 0) {
@@ -135,39 +204,26 @@ async function loadDetailTemplate(templateId) {
     }
 
     data.forEach(d => {
-        const jenisClass = d.payroll_components.jenis === 'pemasukan' ? 'text-success' : 'text-danger';
-        tbody.innerHTML += `
-            <tr>
-                <td>${d.payroll_components.nama_komponen}</td>
-                <td class="${jenisClass}">${d.payroll_components.jenis}</td>
-                <td>Rp ${parseFloat(d.nominal).toLocaleString('id-ID')}</td>
-            </tr>`;
+        if (d.payroll_components) {
+            const jenisClass = d.payroll_components.jenis === 'pemasukan' ? 'text-success' : 'text-danger';
+            tbody.innerHTML += `
+                <tr>
+                    <td>${d.payroll_components.nama_komponen}</td>
+                    <td class="${jenisClass}">${d.payroll_components.jenis}</td>
+                    <td>Rp ${parseFloat(d.nominal).toLocaleString('id-ID')}</td>
+                </tr>`;
+        }
     });
 }
 
-// --- BAGIAN 3: PERIODE GAJI ---
-document.getElementById('form-periode').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const nama = document.getElementById('nama-periode').value;
-    const mulai = document.getElementById('tgl-mulai').value;
-    const selesai = document.getElementById('tgl-selesai').value;
-
-    const { error } = await supabase.from('payroll_periods').insert([{
-        office_id: currentUser.office_id,
-        nama_periode: nama,
-        tanggal_mulai: mulai,
-        tanggal_selesai: selesai,
-        status: 'Open'
-    }]);
-
-    if (error) return alert("Gagal membuat periode: " + error.message);
-    document.getElementById('form-periode').reset();
-    await loadDataPeriode();
-});
-
 async function loadDataPeriode() {
-    const { data } = await supabase.from('payroll_periods').select('*').eq('office_id', currentUser.office_id);
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
+
+    const { data } = await supabase.from('payroll_periods').select('*').eq('office_id', targetOfficeId);
     const tbody = document.getElementById('list-periode-table');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     data?.forEach(p => {
