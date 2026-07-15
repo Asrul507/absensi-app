@@ -20,71 +20,109 @@ updateCurrentUser();
 document.addEventListener("DOMContentLoaded", async () => {
     updateCurrentUser();
 
+    // Tampilkan Role di Indikator Atas
+    const roleIndicator = document.getElementById('role-indicator');
+    if (roleIndicator && currentUser.role) {
+        roleIndicator.innerText = `Role: ${currentUser.role.toUpperCase()}`;
+    }
+
     // Keamanan Akses Halaman
     if (currentUser.role && ['staff', 'admin_departement'].includes(currentUser.role)) {
         document.body.innerHTML = "<h3 class='text-center mt-5 text-danger'>Akses Ditolak. Halaman ini hanya untuk HR/Admin.</h3>";
         return;
     }
 
-    // Ambil daftar periode yang statusnya 'Open' untuk dipilih saat generate
+    // Load data opsi periode ke dropdown
     await loadOpsiPeriode();
 
-    // Event Listener untuk tombol Proses/Generate Payroll
-    const formGenerate = document.getElementById('form-generate-payroll');
-    if (formGenerate) {
-        formGenerate.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const periodeId = document.getElementById('pilih-periode-generate')?.value;
+    // Event Listener ketika periode dipilih
+    const selectPeriode = document.getElementById('run-pilih-periode');
+    const btnHitung = document.getElementById('btn-proses-hitung');
+    const btnApprove = document.getElementById('btn-approve-massal');
 
-            if (!periodeId) {
-                return alert("Silakan pilih periode payroll terlebih dahulu!");
+    if (selectPeriode) {
+        selectPeriode.addEventListener('change', () => {
+            const periodeId = selectPeriode.value;
+            if (periodeId) {
+                if (btnHitung) btnHitung.style.display = 'block';
+                if (btnApprove) btnApprove.style.display = 'block';
+                // Load data payroll yang sudah ter-generate (jika ada)
+                loadTabelPayroll(periodeId);
+            } else {
+                if (btnHitung) btnHitung.style.display = 'none';
+                if (btnApprove) btnApprove.style.display = 'none';
+                resetTabelPayroll();
             }
+        });
+    }
 
-            // Jalankan fungsi proses kalkulasi payroll di sini
-            await prosesGeneratePayroll(periodeId);
+    // Event Listener aksi hitung gaji
+    if (btnHitung) {
+        btnHitung.addEventListener('click', async () => {
+            const periodeId = selectPeriode?.value;
+            if (!periodeId) return alert("Pilih periode terlebih dahulu!");
+            
+            await prosesGenerateGaji(periodeId);
         });
     }
 });
 
-// --- 1. LOAD PERIODE GAJI BERDASARKAN OFFICE ID / CLIENT ID ---
+// --- 1. MEMUAT PERIODE AKTIF DARI DATABASE ---
 async function loadOpsiPeriode() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
-    
-    if (!targetOfficeId || targetOfficeId === 'undefined') {
-        console.error("Gagal load periode: ID Kantor tidak terdeteksi.");
-        return;
-    }
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    // Mengambil periode dari tabel payroll_periods
+    // Menarik data periode payroll
     const { data, error } = await supabase
         .from('payroll_periods')
         .select('*')
-        .eq('office_id', targetOfficeId) // Pastikan ini sesuai dengan nama kolom di payroll_periods Anda
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error("🚨 ERROR DARI SUPABASE SAAT LOAD PERIODE:", error.message);
+        console.error("🚨 ERROR LOAD PERIODE:", error.message);
         return;
     }
 
-    const selectPeriode = document.getElementById('pilih-periode-generate');
+    // Filter data periode berdasarkan office_id atau client_id tenant
+    const filteredPeriods = data?.filter(p => p.office_id === targetOfficeId || p.client_id === targetOfficeId) || [];
+
+    const selectPeriode = document.getElementById('run-pilih-periode');
     if (!selectPeriode) return;
 
-    selectPeriode.innerHTML = '<option value="">-- Pilih Periode Aktif --</option>';
+    selectPeriode.innerHTML = '<option value="">-- Pilih Periode --</option>';
     
-    if (!data || data.length === 0) {
-        selectPeriode.innerHTML = '<option value="">Belum ada periode dibuat / open</option>';
+    if (filteredPeriods.length === 0) {
+        selectPeriode.innerHTML = '<option value="">Belum ada periode yang dibuat</option>';
         return;
     }
 
-    data.forEach(p => {
-        selectPeriode.innerHTML += `<option value="${p.id}">${p.nama_periode} (${p.tanggal_mulai} s/d ${p.tanggal_selesai}) - [${p.status}]</option>`;
+    filteredPeriods.forEach(p => {
+        selectPeriode.innerHTML += `<option value="${p.id}">${p.nama_periode} (${p.tanggal_mulai} s/d ${p.tanggal_selesai})</option>`;
     });
 }
 
-// --- 2. FUNGSI UTAMA PROSES GENERATE PAYROLL ---
-async function prosesGeneratePayroll(periodeId) {
-    alert("Memulai proses kalkulasi payroll untuk periode terpilih...");
-    // Di sini nanti logika hitung absen + komponen template dimasukkan.
+// --- 2. MEMUAT HASIL DATA TABEL PAYROLL ---
+async function loadTabelPayroll(periodeId) {
+    const tbody = document.getElementById('payroll-run-table');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Memuat data payroll...</td></tr>';
+
+    // Di sini nanti proses select ke tabel hasil payroll kamu (misal: payroll_runs / slips)
+    // Sementara kita tampilkan info siap hitung
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-info">Periode dipilih. Silakan klik tombol "Ambil Template & Hitung Gaji" untuk memproses.</td></tr>`;
+}
+
+function resetTabelPayroll() {
+    const tbody = document.getElementById('payroll-run-table');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Silakan tentukan periode di atas.</td></tr>';
+    }
+}
+
+// --- 3. AKSI GENERATE & KALKULASI GAJI ---
+async function prosesGenerateGaji(periodeId) {
+    alert("Memulai sinkronisasi template dan kalkulasi gaji komponen...");
+    // Logika penggabungan absensi + template data payroll diletakkan di bawah sini
 }
