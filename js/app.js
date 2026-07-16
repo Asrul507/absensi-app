@@ -227,14 +227,39 @@ function getCurrentOfficeLabel(user) {
 
 window.getCurrentOfficeLabel = getCurrentOfficeLabel
 
+function getAppTitle(user) {
+  const label = getCurrentOfficeLabel(user)
+  if (label) return label
+  if (normalizeRole(user?.role) === 'super_admin') {
+    const ctxLabel = getActiveOfficeContextLabel(user)
+    return ctxLabel || 'GenPro'
+  }
+  return 'GenPro'
+}
+
+window.getAppTitle = getAppTitle
+
 window.updateHeaderOfficeContext = function () {
   const el = document.getElementById('activeOfficeContext')
-  if (!el) return
-  const label = getActiveOfficeContextLabel(window.currentUser)
-  if (!label) { el.style.display = 'none'; el.textContent = ''; return }
-  el.textContent = `Office Aktif: ${label}`
-  el.title = normalizeRole(window.currentUser?.role) === 'super_admin' ? 'Klik untuk ganti Office aktif' : 'Office akun'
-  el.style.display = 'inline-flex'
+  if (el) {
+    const label = getActiveOfficeContextLabel(window.currentUser)
+    if (!label) { el.style.display = 'none'; el.textContent = '' }
+    else {
+      el.textContent = `Office Aktif: ${label}`
+      el.title = normalizeRole(window.currentUser?.role) === 'super_admin' ? 'Klik untuk ganti Office aktif' : 'Office akun'
+      el.style.display = 'inline-flex'
+    }
+  }
+
+  const appTitle = getAppTitle(window.currentUser)
+
+  const topbarTitleEl = document.getElementById('topbarTitle')
+  if (topbarTitleEl) topbarTitleEl.textContent = appTitle
+
+  const sbNameEl = document.querySelector('.sidebar-header .sb-name')
+  if (sbNameEl) sbNameEl.textContent = appTitle
+
+  document.title = appTitle !== 'GenPro' ? `${appTitle} - Absensi` : 'GenPro App'
 }
 
 window.changeActiveOfficeContext = async function () {
@@ -308,11 +333,10 @@ function renderMenu(role) {
     `;
   }
 
-  const officeLabel = getCurrentOfficeLabel(window.currentUser)
+  const appTitle = getAppTitle(window.currentUser)
   sidebar.innerHTML = `
     <div class="sidebar-header">
-      <div class="sb-name">GenPro</div>
-      ${officeLabel ? `<div class="sb-office">${officeLabel}</div>` : ''}
+      <div class="sb-name">${appTitle}</div>
     </div>
     <nav class="sidebar-nav">
       ${menuHtml}
@@ -321,6 +345,9 @@ function renderMenu(role) {
       <button onclick="logout()" class="btn-danger" style="width:100%; padding: 10px; font-size: 0.8rem; font-weight:700; border-radius:8px; cursor:pointer;">
         <i class="fa fa-sign-out-alt"></i> Keluar Aplikasi
       </button>
+      <div style="margin-top:10px; text-align:center; font-size:.65rem; color:rgba(255,255,255,.3); letter-spacing:.3px; line-height:1.5;">
+        &copy; ${new Date().getFullYear()} GenPro<br>Hak Cipta Dilindungi
+      </div>
     </div>
   `;
 }
