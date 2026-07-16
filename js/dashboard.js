@@ -128,10 +128,9 @@ export async function renderDashboard() {
     }
   })
 
-  // Batasi menu utama hanya 4 tombol
+  // Batasi menu utama agar tidak duplikatif
   const menuItems = [
-    { nav: 'absensi',       icon: 'fa-sign-in-alt',  label: 'Masuk',            color: '#f59e0b', color2: '#fbbf24' },
-    { nav: 'absensi',       icon: 'fa-sign-out-alt', label: 'Pulang',           color: '#3b82f6', color2: '#60a5fa' },
+    { nav: 'absensi',       icon: 'fa-clock',        label: 'Absensi',          color: '#3b82f6', color2: '#60a5fa' },
     { nav: 'pengajuan',     icon: 'fa-file-alt',     label: 'Pengajuan',        color: '#8b5cf6', color2: '#a78bfa' },
     { nav: 'perbaikan-absen',icon: 'fa-pencil-alt',    label: 'Perbaikan Absen',  color: '#ef4444', color2: '#f87171' }
   ]
@@ -219,11 +218,10 @@ export async function renderDashboard() {
               <div style="font-size: .6rem; color: #475569; font-weight: 700;">Off / Cuti</div>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;margin-top:8px;">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-top:8px;">
             <div style="background:#fffbeb;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#b45309;">${openApproval}</div><div style="font-size:.6rem;color:#b45309;font-weight:700;">Menunggu Approval</div></div>
             <div style="background:#fee2e2;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#991b1b;">${outRadius}</div><div style="font-size:.6rem;color:#991b1b;font-weight:700;">Out Radius</div></div>
             <div style="background:#fef3c7;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#92400e;">${lupaAbsen}</div><div style="font-size:.6rem;color:#92400e;font-weight:700;">Lupa Absen</div></div>
-            <div style="background:#dbeafe;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#1d4ed8;">${sedangKerja}</div><div style="font-size:.6rem;color:#1d4ed8;font-weight:700;">Shift Aktif</div></div>
           </div>
         </div>
       `
