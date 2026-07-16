@@ -1881,12 +1881,6 @@ fieldset {
   margin-bottom: 16px;
 }
 
-/* ===== AUTO CARD ===== */
-
-div:not(:empty) {
-  border-radius: var(--r-md);
-}
-
 /* ===== FORM AUTO STYLE ===== */
 
 input,
@@ -2057,10 +2051,8 @@ tbody tr:hover {
 .card,
 .box,
 .panel,
-.widget,
-form,
-fieldset {
-  background: white;
+.widget {
+  background: var(--white);
   border-radius: var(--r-lg);
   padding: 18px;
   box-shadow: var(--shadow-card);
@@ -2158,10 +2150,6 @@ img {
     flex-direction: column;
   }
 
-  button {
-    width: 100%;
-  }
-
   table {
     min-width: 600px;
   }
@@ -2196,7 +2184,6 @@ form > * + *,
 
 /* khusus button area */
 
-button,
 .btn,
 .btn-primary,
 .btn-secondary,
@@ -2215,7 +2202,7 @@ button,
 form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
 }
 
 /* ===== INPUT FIX ===== */
@@ -2234,7 +2221,6 @@ textarea {
 
 /* ===== BUTTON FIX ===== */
 
-button,
 .btn,
 .btn-primary,
 .btn-secondary,
@@ -2266,8 +2252,7 @@ button,
 .card,
 .box,
 .panel,
-.widget,
-form {
+.widget {
 
   width: 100%;
 
@@ -2358,7 +2343,6 @@ img {
 
   /* button full width */
 
-  button,
   .btn,
   .btn-primary,
   .btn-secondary,
@@ -2541,8 +2525,7 @@ body {
 .card,
 .box,
 .panel,
-.widget,
-form {
+.widget {
 
   width: 100%;
   max-width: 100%;
@@ -3238,33 +3221,6 @@ html.dark a { color: #60a5fa; }
   transform: translateY(-1px);
 }
 .btn-theme-toggle:hover i { transform: rotate(20deg) scale(1.1); }
-
-
-/* =============================================
-   THEME TOGGLE BUTTON
-   ============================================= */
-.btn-theme-toggle {
-  background: rgba(255,255,255,.14);
-  border: 1px solid rgba(255,255,255,.22);
-  color: var(--white);
-  width: 38px; height: 38px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  transition: background .2s, transform .15s;
-  box-shadow: 0 1px 4px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.18);
-  margin-top: 0 !important;
-  min-height: unset !important;
-  padding: 0 !important;
-  width: 38px !important;
-}
-.btn-theme-toggle:hover {
-  background: rgba(255,255,255,.28);
-  transform: translateY(-1px);
-}
 
 /* =============================================
    DARK MODE — Variables Override
@@ -3974,19 +3930,6 @@ html.dark a { color: #60a5fa; }
 
 :root.dark ::-webkit-scrollbar-thumb:hover {
   background: #475569;
-}
-
-/* =============================================
-   DARK MODE — form auto (global section)
-   ============================================= */
-:root.dark form {
-  background: #1e293b;
-  border-color: #334155;
-}
-
-:root.dark fieldset {
-  background: #1e293b;
-  border-color: #334155;
 }
 
 /* =============================================
