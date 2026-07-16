@@ -1,8 +1,5 @@
-if (typeof window.supabase === 'undefined' && window.parent && window.parent.supabase) {
-    window.supabase = window.parent.supabase;
-}
+import { supabase } from './supabase.js';
 
-var supabase = window.supabase;
 var currentUser = window.currentUser || window.parent?.currentUser || {};
 
 // Variabel Global untuk menampung data payroll aktif untuk kebutuhan ekspor

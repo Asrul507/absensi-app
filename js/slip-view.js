@@ -1,10 +1,6 @@
 // js/slip-view.js
+import { supabase } from './supabase.js';
 
-if (typeof window.supabase === 'undefined' && window.parent && window.parent.supabase) {
-    window.supabase = window.parent.supabase;
-}
-
-var supabase = window.supabase;
 var currentUser = {};
 
 function updateCurrentUser() {
