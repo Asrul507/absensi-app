@@ -37,6 +37,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             e.preventDefault();
             const userId = document.getElementById('pilih-karyawan')?.value;
             const templateId = document.getElementById('pilih-template')?.value;
+            const namaBank = document.getElementById('nama-bank')?.value || '';
+            const nomorRekening = document.getElementById('nomor-rekening')?.value || '';
 
             if (!userId || !templateId) {
                 return alert("Silakan pilih karyawan dan template terlebih dahulu!");
@@ -44,7 +46,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const { error } = await supabase.from('payroll_mappings').upsert([{
                 user_id: userId,
-                template_id: templateId
+                template_id: templateId,
+                nama_bank: namaBank,
+                nomor_rekening: nomorRekening
             }], { onConflict: 'user_id' });
 
             if (error) return alert("Gagal menyimpan pemetaan: " + error.message);
@@ -92,12 +96,13 @@ async function loadDataMapping() {
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    // Menghapus office_id dari select relasi profiles
     const { data, error } = await supabase
         .from('payroll_mappings')
         .select(`
             user_id,
             template_id,
+            nama_bank,
+            nomor_rekening,
             profiles!inner ( nama_lengkap, client_id ),
             payroll_templates ( nama_template )
         `);
@@ -124,10 +129,14 @@ async function loadDataMapping() {
     }
 
     filteredData.forEach(m => {
+        const bankInfo = m.nama_bank && m.nomor_rekening
+            ? `${m.nama_bank} / ${m.nomor_rekening}`
+            : (m.nama_bank || m.nomor_rekening || '<span class="text-muted small">-</span>');
         tbody.innerHTML += `
             <tr>
                 <td>${m.profiles?.nama_lengkap || 'Tidak Diketahui'}</td>
                 <td>${m.payroll_templates?.nama_template || 'Tanpa Template'}</td>
+                <td>${bankInfo}</td>
                 <td>
                     <button class="btn btn-sm btn-danger py-0 px-2" onclick="hapusMapping('${m.user_id}')">Hapus</button>
                 </td>

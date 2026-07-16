@@ -150,8 +150,21 @@ async function loadDataKomponen() {
 
     data?.forEach(k => {
         if (tbody) {
-            tbody.innerHTML += `<tr><td>${k.kode_komponen}</td><td>${k.nama_komponen}</td>
-                <td><span class="badge ${k.jenis === 'pemasukan' ? 'bg-success' : 'bg-danger'}">${k.jenis}</span></td></tr>`;
+            const safeKode = (k.kode_komponen || '').replace(/'/g, '&#39;');
+            const safeName = (k.nama_komponen || '').replace(/'/g, '&#39;');
+            tbody.innerHTML += `<tr>
+                <td>${k.kode_komponen}</td>
+                <td>${k.nama_komponen}</td>
+                <td><span class="badge ${k.jenis === 'pemasukan' ? 'bg-success' : 'bg-danger'}">${k.jenis}</span></td>
+                <td>
+                    <button class="btn btn-warning btn-sm py-0 px-2 me-1" onclick="editKomponen('${k.id}', '${safeKode}', '${safeName}', '${k.jenis}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm py-0 px-2" onclick="hapusKomponen('${k.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>`;
         }
         if (select) {
             select.innerHTML += `<option value="${k.id}">${k.nama_komponen} (${k.jenis})</option>`;
@@ -170,8 +183,13 @@ async function loadDataTemplate() {
 
     data?.forEach(t => {
         if (list) {
-            list.innerHTML += `<li class="list-group-item list-group-item-action" style="cursor:pointer;" 
-                onclick="pilihTemplate('${t.id}', '${t.nama_template}')">${t.nama_template}</li>`;
+            const safeName = (t.nama_template || '').replace(/'/g, '&#39;');
+            list.innerHTML += `<li class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <span style="cursor:pointer;" onclick="pilihTemplate('${t.id}', '${safeName}')">${t.nama_template}</span>
+                <button class="btn btn-danger btn-sm py-0 px-1 ms-2 flex-shrink-0" onclick="hapusTemplate('${t.id}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </li>`;
         }
     });
 }
@@ -191,7 +209,7 @@ async function loadDetailTemplate(templateId) {
     if (!templateId) return;
     const { data } = await supabase
         .from('payroll_template_details')
-        .select(`nominal, payroll_components ( nama_komponen, jenis )`)
+        .select(`id, nominal, payroll_components ( nama_komponen, jenis )`)
         .eq('template_id', templateId);
 
     const tbody = document.getElementById('list-detail-template');
@@ -199,7 +217,7 @@ async function loadDetailTemplate(templateId) {
     tbody.innerHTML = '';
 
     if (!data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada rincian komponen</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Belum ada rincian komponen</td></tr>';
         return;
     }
 
@@ -211,6 +229,11 @@ async function loadDetailTemplate(templateId) {
                     <td>${d.payroll_components.nama_komponen}</td>
                     <td class="${jenisClass}">${d.payroll_components.jenis}</td>
                     <td>Rp ${parseFloat(d.nominal).toLocaleString('id-ID')}</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm py-0 px-1" onclick="hapusDetailKomponen('${d.id}', '${templateId}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
                 </tr>`;
         }
     });
@@ -227,12 +250,90 @@ async function loadDataPeriode() {
     tbody.innerHTML = '';
 
     data?.forEach(p => {
-        const badgeColor = p.status === 'Open' ? 'bg-success' : 'bg-secondary';
+        const isOpen = p.status === 'Open';
+        const badgeColor = isOpen ? 'bg-success' : 'bg-secondary';
+        const aksiBtn = isOpen
+            ? `<button class="btn btn-secondary btn-sm py-0 px-2" onclick="tutupPeriode('${p.id}')">
+                   <i class="fas fa-lock me-1"></i>Tutup
+               </button>`
+            : `<span class="text-muted small">-</span>`;
         tbody.innerHTML += `
             <tr>
                 <td>${p.nama_periode}</td>
                 <td>${p.tanggal_mulai} s/d ${p.tanggal_selesai}</td>
                 <td><span class="badge ${badgeColor}">${p.status}</span></td>
+                <td>${aksiBtn}</td>
             </tr>`;
     });
 }
+
+// --- AKSI: HAPUS & EDIT KOMPONEN ---
+window.hapusKomponen = async function(id) {
+    if (!confirm("Hapus komponen ini? Pastikan tidak sedang digunakan di template.")) return;
+    const { error } = await supabase.from('payroll_components').delete().eq('id', id);
+    if (error) return alert("Gagal menghapus: " + error.message);
+    await loadDataKomponen();
+};
+
+window.editKomponen = function(id, kode, nama, jenis) {
+    const modalEl = document.getElementById('modalEditKomponen');
+    if (!modalEl || typeof bootstrap === 'undefined') {
+        return alert("Fitur edit tidak tersedia. Pastikan halaman dimuat ulang.");
+    }
+    document.getElementById('edit-komponen-id').value = id;
+    document.getElementById('edit-kode-komponen').value = kode;
+    document.getElementById('edit-nama-komponen').value = nama;
+    document.getElementById('edit-jenis-komponen').value = jenis;
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+};
+
+window.simpanEditKomponen = async function() {
+    const id = document.getElementById('edit-komponen-id').value;
+    const kode = document.getElementById('edit-kode-komponen').value.toUpperCase();
+    const nama = document.getElementById('edit-nama-komponen').value;
+    const jenis = document.getElementById('edit-jenis-komponen').value;
+    if (!kode || !nama) return alert("Kode dan Nama komponen tidak boleh kosong.");
+
+    const { error } = await supabase.from('payroll_components').update({
+        kode_komponen: kode,
+        nama_komponen: nama,
+        jenis: jenis
+    }).eq('id', id);
+
+    if (error) return alert("Gagal menyimpan: " + error.message);
+    bootstrap.Modal.getInstance(document.getElementById('modalEditKomponen'))?.hide();
+    await loadDataKomponen();
+};
+
+// --- AKSI: HAPUS TEMPLATE & DETAIL ---
+window.hapusTemplate = async function(id) {
+    if (!confirm("Hapus template ini beserta seluruh rincian komponennya?")) return;
+    await supabase.from('payroll_template_details').delete().eq('template_id', id);
+    const { error } = await supabase.from('payroll_templates').delete().eq('id', id);
+    if (error) return alert("Gagal menghapus template: " + error.message);
+
+    const txtNama = document.getElementById('template-terpilih-nama');
+    if (txtNama) txtNama.innerText = '-';
+    const formDetail = document.getElementById('form-detail-template');
+    if (formDetail) formDetail.style.display = 'none';
+    const tbody = document.getElementById('list-detail-template');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Pilih template terlebih dahulu</td></tr>';
+
+    await loadDataTemplate();
+};
+
+window.hapusDetailKomponen = async function(detailId, templateId) {
+    if (!confirm("Hapus komponen ini dari template?")) return;
+    const { error } = await supabase.from('payroll_template_details').delete().eq('id', detailId);
+    if (error) return alert("Gagal menghapus: " + error.message);
+    await loadDetailTemplate(templateId);
+};
+
+// --- AKSI: TUTUP PERIODE ---
+window.tutupPeriode = async function(id) {
+    if (!confirm("Tutup periode ini? Periode yang ditutup tidak dapat dibuka kembali dan slip tidak bisa di-generate ulang.")) return;
+    const { error } = await supabase.from('payroll_periods').update({ status: 'Closed' }).eq('id', id);
+    if (error) return alert("Gagal menutup periode: " + error.message);
+    await loadDataPeriode();
+};
