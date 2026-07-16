@@ -8,12 +8,41 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
     <link rel="stylesheet" href="style.css"/>
+    <script>if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')</script>
+    <style>
+        /* ===== DARK MODE: Bootstrap overrides ===== */
+        html.dark body { background: #0f1a2e !important; color: #e8f0fe; }
+        html.dark .card { background: #1a2540 !important; border-color: rgba(255,255,255,.07) !important; color: #e8f0fe; }
+        html.dark .card-header { background: #1e293b !important; border-color: rgba(255,255,255,.07) !important; color: #e8f0fe !important; }
+        html.dark .card-body { background: transparent; color: #e8f0fe; }
+        html.dark .form-control, html.dark .form-select {
+            background: #131f35 !important;
+            border-color: rgba(255,255,255,.1) !important;
+            color: #e8f0fe !important;
+        }
+        html.dark .form-control option, html.dark .form-select option { background: #1a2540; color: #e8f0fe; }
+        html.dark .form-label { color: #94a3b8; }
+        html.dark .table { color: #e8f0fe !important; background: transparent; }
+        html.dark .table td, html.dark .table th { border-color: rgba(255,255,255,.07) !important; color: #e8f0fe !important; }
+        html.dark .table-striped>tbody>tr:nth-of-type(odd)>* { background-color: rgba(255,255,255,.04) !important; color: #e8f0fe; }
+        html.dark .table-secondary, html.dark .table-secondary>th, html.dark .table-secondary>td { background-color: #1e293b !important; color: #7a90ac !important; }
+        html.dark .table-secondary th { color: #7a90ac !important; }
+        html.dark .table-hover>tbody>tr:hover>* { background-color: rgba(59,130,246,.1) !important; color: #e8f0fe !important; }
+        html.dark .text-muted { color: #7a90ac !important; }
+        html.dark .border-bottom { border-color: rgba(255,255,255,.07) !important; }
+        html.dark .badge.bg-secondary { background: rgba(255,255,255,.15) !important; color: #94a3b8 !important; }
+        html.dark .btn-outline-success { color: #4ade80 !important; border-color: rgba(74,222,128,.4) !important; }
+        html.dark .btn-outline-success:hover { background: rgba(74,222,128,.15) !important; }
+        html.dark .btn-outline-danger { color: #f87171 !important; border-color: rgba(248,113,113,.4) !important; }
+        html.dark .btn-outline-danger:hover { background: rgba(248,113,113,.12) !important; }
+        html.dark .payroll-summary { background: #1e293b !important; color: #e8f0fe !important; }
+    </style>
 </head>
-<body class="bg-light">
+<body>
 
 <div class="container my-5">
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center" style="background:var(--gray-100);color:var(--text);border-color:var(--border);">
             <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>4. Run & Generate Payroll</h5>
             <span id="role-indicator" class="badge bg-secondary">Role: Loading...</span>
         </div>
@@ -76,7 +105,7 @@
             </div>
 
             <!-- Ringkasan Total THP -->
-            <div id="payroll-total-summary" class="mt-3 p-3 bg-dark text-white rounded" style="display:none;">
+            <div id="payroll-total-summary" class="mt-3 p-3 rounded payroll-summary" style="background:var(--gray-100);color:var(--text);display:none;">
             </div>
         </div>
     </div>

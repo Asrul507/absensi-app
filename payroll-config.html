@@ -8,14 +8,48 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
     <link rel="stylesheet" href="style.css"/>
+    <script>if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')</script>
+    <style>
+        /* ===== DARK MODE: Bootstrap overrides ===== */
+        html.dark body { background: #0f1a2e !important; color: #e8f0fe; }
+        html.dark .card { background: #1a2540 !important; border-color: rgba(255,255,255,.07) !important; color: #e8f0fe; }
+        html.dark .card-header { background: #1e293b !important; border-color: rgba(255,255,255,.07) !important; color: #e8f0fe !important; }
+        html.dark .card-body { background: transparent; color: #e8f0fe; }
+        html.dark .form-control, html.dark .form-select {
+            background: #131f35 !important;
+            border-color: rgba(255,255,255,.1) !important;
+            color: #e8f0fe !important;
+        }
+        html.dark .form-control option, html.dark .form-select option { background: #1a2540; color: #e8f0fe; }
+        html.dark .form-control::placeholder { color: #4a5f7a !important; }
+        html.dark .form-label { color: #94a3b8; }
+        html.dark .table { color: #e8f0fe !important; background: transparent; }
+        html.dark .table td, html.dark .table th { border-color: rgba(255,255,255,.07) !important; color: #e8f0fe !important; }
+        html.dark .table-striped>tbody>tr:nth-of-type(odd)>* { background-color: rgba(255,255,255,.04) !important; color: #e8f0fe; }
+        html.dark .table-bordered td, html.dark .table-bordered th { border-color: rgba(255,255,255,.09) !important; }
+        html.dark .table-light, html.dark .table-light>th, html.dark .table-light>td { background-color: #1e293b !important; color: #7a90ac !important; }
+        html.dark .table-hover>tbody>tr:hover>* { background-color: rgba(59,130,246,.1) !important; color: #e8f0fe !important; }
+        html.dark .text-muted { color: #7a90ac !important; }
+        html.dark .text-primary { color: #60a5fa !important; }
+        html.dark .border-end { border-color: rgba(255,255,255,.07) !important; }
+        html.dark .list-group-item { background: #1a2540 !important; border-color: rgba(255,255,255,.07) !important; color: #e8f0fe !important; }
+        html.dark .list-group-item:hover { background: rgba(59,130,246,.12) !important; }
+        html.dark .list-group-item.active { background: rgba(59,130,246,.25) !important; border-color: rgba(59,130,246,.4) !important; color: #93c5fd !important; }
+        html.dark .modal-content { background: #1a2540 !important; border-color: rgba(255,255,255,.07) !important; color: #e8f0fe; }
+        html.dark .modal-header { background: #1e293b !important; border-color: rgba(255,255,255,.07) !important; color: #e8f0fe !important; }
+        html.dark .modal-footer { border-color: rgba(255,255,255,.07) !important; background: #1a2540 !important; }
+        html.dark .modal-body { background: #1a2540 !important; color: #e8f0fe; }
+        html.dark .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+        html.dark h6 { color: #e8f0fe; }
+    </style>
 </head>
-<body class="bg-light">
+<body>
 
 <div class="container my-5">
     
     <!-- Bagian 1: Master Komponen Gaji -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header" style="background:var(--primary);color:#fff;">
             <h5 class="mb-0">1. Master Komponen Gaji</h5>
         </div>
         <div class="card-body">
@@ -46,7 +80,7 @@
 
     <!-- Bagian 2: Template Gaji -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-dark text-white">
+        <div class="card-header" style="background:var(--gray-100);color:var(--text);border-color:var(--border);">
             <h5 class="mb-0">2. Template Gaji & Nominal</h5>
         </div>
         <div class="card-body">
@@ -90,7 +124,7 @@
 
     <!-- Bagian 3: Periode Gaji -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-info text-white">
+        <div class="card-header" style="background:var(--primary);color:#fff;">
             <h5 class="mb-0">3. Pengaturan Periode Gaji</h5>
         </div>
         <div class="card-body">
