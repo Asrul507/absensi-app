@@ -259,7 +259,7 @@ window.updateHeaderOfficeContext = function () {
   const sbNameEl = document.querySelector('.sidebar-header .sb-name')
   if (sbNameEl) sbNameEl.textContent = appTitle
 
-  document.title = appTitle !== 'GenPro' ? `${appTitle} - Absensi` : 'GenPro App'
+  document.title = `${appTitle} - Absensi`
 }
 
 window.changeActiveOfficeContext = async function () {
