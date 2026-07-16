@@ -128,7 +128,7 @@ export async function renderDashboard() {
     }
   })
 
-  // Batasi menu utama agar tidak duplikatif
+  // Batasi menu utama agar tidak duplikasi
   const menuItems = [
     { nav: 'absensi',       icon: 'fa-clock',        label: 'Absensi',          color: '#3b82f6', color2: '#60a5fa' },
     { nav: 'pengajuan',     icon: 'fa-file-alt',     label: 'Pengajuan',        color: '#8b5cf6', color2: '#a78bfa' },
@@ -218,7 +218,7 @@ export async function renderDashboard() {
               <div style="font-size: .6rem; color: #475569; font-weight: 700;">Off / Cuti</div>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px;text-align:center;margin-top:8px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;text-align:center;margin-top:8px;">
             <div style="background:#fffbeb;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#b45309;">${openApproval}</div><div style="font-size:.6rem;color:#b45309;font-weight:700;">Menunggu Approval</div></div>
             <div style="background:#fee2e2;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#991b1b;">${outRadius}</div><div style="font-size:.6rem;color:#991b1b;font-weight:700;">Out Radius</div></div>
             <div style="background:#fef3c7;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#92400e;">${lupaAbsen}</div><div style="font-size:.6rem;color:#92400e;font-weight:700;">Lupa Absen</div></div>
