@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await loadPeriodeDropdown();
+    await loadDepartemenDropdown();
 
     const btnHitung = document.getElementById('btn-proses-hitung');
     const btnApprove = document.getElementById('btn-approve-massal');
@@ -49,6 +50,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         } else {
             btnApprove.style.display = 'inline-block';
         }
+    }
+
+    // Reload table ketika filter departemen berubah
+    const selectDept = document.getElementById('run-filter-dept');
+    if (selectDept) {
+        selectDept.addEventListener('change', () => {
+            renderTableList(currentPayrollData);
+        });
     }
 });
 
@@ -77,6 +86,26 @@ async function loadPeriodeDropdown() {
     });
 }
 
+async function loadDepartemenDropdown() {
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (!targetOfficeId || targetOfficeId === 'undefined') return;
+
+    const { data } = await supabase
+        .from('departments')
+        .select('id, nama_department')
+        .eq('client_id', targetOfficeId)
+        .in('status', ['active', 'aktif'])
+        .order('nama_department');
+
+    const select = document.getElementById('run-filter-dept');
+    if (!select || !data || data.length === 0) return;
+
+    data.forEach(d => {
+        select.innerHTML += `<option value="${d.nama_department}">${d.nama_department}</option>`;
+    });
+}
+
 const selectPeriode = document.getElementById('run-pilih-periode');
 if (selectPeriode) {
     selectPeriode.addEventListener('change', async (e) => {
@@ -97,10 +126,9 @@ async function loadExistingPayrollRun(periodId) {
 
     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Memuat data draf payroll...</td></tr>';
 
-    // PENGEMBANGAN: Menambahkan nama_bank dan nomor_rekening dalam query select
     const { data, error } = await supabase
         .from('payroll_slips')
-        .select(`id, total_pemasukan, total_potongan, gaji_bersih, status, user_id, nama_bank, nomor_rekening, profiles(nama_lengkap)`)
+        .select(`id, total_pemasukan, total_potongan, gaji_bersih, status, user_id, nama_bank, nomor_rekening, profiles(nama_lengkap, departemen)`)
         .eq('period_id', periodId);
 
     if (error) {
@@ -200,44 +228,87 @@ if (btnHitungGaji) {
 }
 
 function renderTableList(data) {
-    // Menyimpan data aktif ke dalam scope global untuk kebutuhan ekspor file
+    // Simpan data aktif ke dalam scope global untuk kebutuhan ekspor file
     currentPayrollData = data;
+
+    // Terapkan filter departemen jika dipilih
+    const selectedDept = document.getElementById('run-filter-dept')?.value || '';
+    const filteredData = selectedDept
+        ? data.filter(p => p.profiles?.departemen === selectedDept)
+        : data;
 
     const tbody = document.getElementById('payroll-run-table');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    if (data.length === 0) {
+    if (filteredData.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Belum ada data draf penggajian untuk periode ini. Silakan klik Ambil Template & Hitung Gaji.</td></tr>`;
+        updateTotalSummary(0, 0, 0, 0);
         return;
     }
 
-    data.forEach(p => {
+    let sumPemasukan = 0, sumPotongan = 0, sumBersih = 0;
+
+    filteredData.forEach(p => {
         const currentStatus = (p.status || '').trim().toLowerCase();
         const isApproved = currentStatus === 'approved' || currentStatus === 'disetujui';
         
         const badgeClass = isApproved ? 'bg-success text-white' : 'bg-warning text-dark';
         const labelText = isApproved ? 'Approved' : 'Belum Diapprove';
 
+        const pemasukan = parseFloat(p.total_pemasukan || 0);
+        const potongan = parseFloat(p.total_potongan || 0);
+        const bersih = parseFloat(p.gaji_bersih || 0);
+        sumPemasukan += pemasukan;
+        sumPotongan += potongan;
+        sumBersih += bersih;
+
         tbody.innerHTML += `
             <tr>
-                <td><strong>${p.profiles?.nama_lengkap || 'Tanpa Nama'}</strong></td>
-                <td class="text-success">Rp ${parseFloat(p.total_pemasukan || 0).toLocaleString('id-ID')}</td>
-                <td class="text-danger">Rp ${parseFloat(p.total_potongan || 0).toLocaleString('id-ID')}</td>
-                <td class="fw-bold">Rp ${parseFloat(p.gaji_bersih || 0).toLocaleString('id-ID')}</td>
+                <td>
+                    <strong>${p.profiles?.nama_lengkap || 'Tanpa Nama'}</strong>
+                    ${p.profiles?.departemen ? `<br><small class="text-muted">${p.profiles.departemen}</small>` : ''}
+                </td>
+                <td class="text-success">Rp ${pemasukan.toLocaleString('id-ID')}</td>
+                <td class="text-danger">Rp ${potongan.toLocaleString('id-ID')}</td>
+                <td class="fw-bold">Rp ${bersih.toLocaleString('id-ID')}</td>
                 <td><span class="badge ${badgeClass}">${labelText}</span></td>
                 <td>
                     <button class="btn btn-xs btn-outline-dark btn-sm py-0 px-2 me-1" onclick="lihatDetailSlip('${p.id}', '${p.profiles?.nama_lengkap || 'Karyawan'}')">
                         <i class="fas fa-eye me-1"></i>Detail
                     </button>
                     ${!isApproved ? 
-                    `<button class="btn btn-success btn-sm py-0 px-2" onclick="approveSingle('${p.id}')">
+                    `<button class="btn btn-success btn-sm py-0 px-2 me-1" onclick="approveSingle('${p.id}')">
                         <i class="fas fa-check me-1"></i>Approve
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm py-0 px-1" title="Hapus Slip" onclick="hapusSlip('${p.id}')">
+                        <i class="fas fa-trash"></i>
                     </button>` : 
                     `<span class="badge bg-light text-success border border-success small py-1"><i class="fas fa-lock me-1"></i>Selesai</span>`}
                 </td>
             </tr>`;
     });
+
+    updateTotalSummary(sumPemasukan, sumPotongan, sumBersih, filteredData.length);
+}
+
+function updateTotalSummary(pemasukan, potongan, bersih, count) {
+    const summaryEl = document.getElementById('payroll-total-summary');
+    if (!summaryEl) return;
+
+    if (count === 0) {
+        summaryEl.style.display = 'none';
+        return;
+    }
+
+    summaryEl.style.display = 'block';
+    summaryEl.innerHTML = `
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+            <span class="fw-bold small"><i class="fas fa-calculator me-1"></i>TOTAL (${count} karyawan):</span>
+            <span class="badge bg-success fs-6 px-3 py-2">Pemasukan: Rp ${pemasukan.toLocaleString('id-ID')}</span>
+            <span class="badge bg-danger fs-6 px-3 py-2">Potongan: Rp ${potongan.toLocaleString('id-ID')}</span>
+            <span class="badge bg-warning text-dark fs-6 px-3 py-2">THP: Rp ${bersih.toLocaleString('id-ID')}</span>
+        </div>`;
 }
 
 window.approveSingle = async function(slipId) {
@@ -251,6 +322,20 @@ window.approveSingle = async function(slipId) {
     alert("Berhasil menyetujui slip gaji!");
     const periodId = document.getElementById('run-pilih-periode').value;
     await loadExistingPayrollRun(periodId);
+};
+
+window.hapusSlip = async function(slipId) {
+    if (!confirm("Hapus draf slip gaji ini? Data bisa di-generate ulang nanti.")) return;
+
+    const { error } = await supabase
+        .from('payroll_slips')
+        .delete()
+        .eq('id', slipId);
+
+    if (error) return alert("Gagal menghapus slip: " + error.message);
+
+    const periodId = document.getElementById('run-pilih-periode')?.value;
+    if (periodId) await loadExistingPayrollRun(periodId);
 };
 
 const btnApproveMassal = document.getElementById('btn-approve-massal');
@@ -285,7 +370,17 @@ window.lihatDetailSlip = async function(slipId, namaKaryawan) {
     if (error || !slip) return alert("Data slip tidak ditemukan.");
 
     const targetOfficeId = slip.payroll_periods?.office_id || currentUser.office_id || currentUser.client_id || '-';
-    const namaKantor = "GENPRO MANAGEMENT SYSTEM"; 
+
+    // Ambil nama kantor secara dinamis dari tabel clients
+    let namaKantor = 'PERUSAHAAN';
+    const { data: officeData } = await supabase
+        .from('clients')
+        .select('nama_client')
+        .eq('id', targetOfficeId)
+        .maybeSingle();
+    if (officeData?.nama_client) {
+        namaKantor = officeData.nama_client.toUpperCase();
+    }
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a5'); // Ukuran A5 Portrait
@@ -293,7 +388,7 @@ window.lihatDetailSlip = async function(slipId, namaKaryawan) {
     // KOP INFORMASI KANTOR
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
-    doc.text(namaKantor.toUpperCase(), 15, 15);
+    doc.text(namaKantor, 15, 15);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.text(`Office ID Tenant: ${targetOfficeId}`, 15, 19);
@@ -329,7 +424,7 @@ window.lihatDetailSlip = async function(slipId, namaKaryawan) {
     // FOOTER KETERANGAN
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7);
-    doc.text("Dokumen slip ini sah diterbitkan secara elektronik oleh GenPro Management System.", 15, 96);
+    doc.text(`Dokumen slip ini sah diterbitkan secara elektronik oleh ${namaKantor}.`, 15, 96);
 
     // Proses Download Berkas
     const cleanName = namaKaryawan.replace(/\s+/g, '_');
