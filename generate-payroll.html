@@ -5,18 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generate Payroll - Absensi App</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- PUSTAKA IKON FONT AWESOME -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-light">
 
 <div class="container my-5">
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">4. Run & Generate Payroll</h5>
+            <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>4. Run & Generate Payroll</h5>
             <span id="role-indicator" class="badge bg-secondary">Role: Loading...</span>
         </div>
         <div class="card-body">
-            <!-- Filter & Aksi -->
-            <div class="row g-3 align-items-center mb-4 border-bottom pb-4">
+            <!-- Filter & Aksi Utama -->
+            <div class="row g-3 align-items-center mb-3">
                 <div class="col-md-4">
                     <label class="form-label small font-monospace">Pilih Periode Aktif/Lalu</label>
                     <select id="run-pilih-periode" class="form-select form-select-sm">
@@ -25,14 +27,24 @@
                 </div>
                 <div class="col-md-4 align-self-end">
                     <button id="btn-proses-hitung" class="btn btn-primary btn-sm w-100" style="display: none;">
-                        ⚙️ Ambil Template & Hitung Gaji
+                        <i class="fas fa-cogs me-1"></i> Ambil Template & Hitung Gaji
                     </button>
                 </div>
                 <div class="col-md-4 align-self-end text-end">
                     <button id="btn-approve-massal" class="btn btn-success btn-sm w-100" style="display: none;">
-                        ✅ Approve Semua & Terbitkan Slip
+                        <i class="fas fa-check-double me-1"></i> Approve Semua & Terbitkan Slip
                     </button>
                 </div>
+            </div>
+
+            <!-- Tombol Ekspor Laporan (Excel & PDF) -->
+            <div class="d-flex gap-2 justify-content-end mb-4 border-bottom pb-3">
+                <button id="btn-export-excel" class="btn btn-outline-success btn-sm">
+                    <i class="fas fa-file-excel me-1"></i> Unduh Excel
+                </button>
+                <button id="btn-export-pdf" class="btn btn-outline-danger btn-sm">
+                    <i class="fas fa-file-pdf me-1"></i> Unduh PDF Laporan
+                </button>
             </div>
 
             <!-- Tabel Hasil Pemrosesan -->
@@ -60,10 +72,23 @@
 </div>
 
 <!-- ========================================================
-     PEMANGGILAN SCRIPT DENGAN URUTAN YANG BENAR
+     PEMANGGILAN LIBRARIES & SCRIPT DENGAN URUTAN YANG BENAR
      ======================================================== -->
+
+<!-- 1. Pustaka untuk Ekspor Excel (SheetJS) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- 2. Pustaka untuk Ekspor PDF (jsPDF + AutoTable) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+<!-- 3. Koneksi Inti Database Supabase -->
 <script type="module" src="js/supabase.js"></script>
-<script type="module" src="js/payroll-kalkulasi.js"></script> <!-- Dimuat lebih dulu -->
-<script type="module" src="js/payroll-run.js"></script>       <!-- Eksekusi utama -->
+
+<!-- 4. Jembatan Data Absensi & Jadwal Bulanan -->
+<script type="module" src="js/payroll-kalkulasi.js"></script> 
+
+<!-- 5. Mesin Logic Hitung & Cetak Payroll Utama -->
+<script type="module" src="js/payroll-run.js"></script>       
 </body>
 </html>
