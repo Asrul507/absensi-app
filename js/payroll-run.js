@@ -5,6 +5,9 @@ if (typeof window.supabase === 'undefined' && window.parent && window.parent.sup
 var supabase = window.supabase;
 var currentUser = window.currentUser || window.parent?.currentUser || {};
 
+// Variabel Global untuk menampung data payroll aktif untuk kebutuhan ekspor
+let currentPayrollData = [];
+
 function updateCurrentUser() {
     currentUser = window.currentUser || window.parent?.currentUser || {};
     if (!currentUser.office_id && currentUser.user) {
@@ -79,6 +82,7 @@ if (selectPeriode) {
     selectPeriode.addEventListener('change', async (e) => {
         const periodId = e.target.value;
         if (!periodId) {
+            currentPayrollData = [];
             const tbody = document.getElementById('payroll-run-table');
             if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Silakan tentukan periode di atas.</td></tr>';
             return;
@@ -93,9 +97,10 @@ async function loadExistingPayrollRun(periodId) {
 
     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Memuat data draf payroll...</td></tr>';
 
+    // PENGEMBANGAN: Menambahkan nama_bank dan nomor_rekening dalam query select
     const { data, error } = await supabase
         .from('payroll_slips')
-        .select(`id, total_pemasukan, total_potongan, gaji_bersih, status, user_id, profiles(nama_lengkap)`)
+        .select(`id, total_pemasukan, total_potongan, gaji_bersih, status, user_id, nama_bank, nomor_rekening, profiles(nama_lengkap)`)
         .eq('period_id', periodId);
 
     if (error) {
@@ -120,11 +125,14 @@ if (btnHitungGaji) {
         tbody.innerHTML = `<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Sedang memproses & mencocokkan template...</td></tr>`;
 
         try {
+            // PENGEMBANGAN: Ikut menarik nama_bank dan nomor_rekening dari tabel mapping
             const { data: mappings, error: errMap } = await supabase
                 .from('payroll_mappings')
                 .select(`
                     user_id,
                     template_id,
+                    nama_bank,
+                    nomor_rekening,
                     profiles!inner(client_id, nama_lengkap)
                 `);
 
@@ -165,6 +173,7 @@ if (btnHitungGaji) {
 
                 const gajiBersih = totalPemasukan - totalPotongan;
 
+                // PENGEMBANGAN: Mengirim data bank dan rekening saat simpan data slip
                 await supabase
                     .from('payroll_slips')
                     .upsert({
@@ -173,6 +182,8 @@ if (btnHitungGaji) {
                         total_pemasukan: totalPemasukan,
                         total_potongan: totalPotongan,
                         gaji_bersih: gajiBersih,
+                        nama_bank: item.nama_bank || '-',
+                        nomor_rekening: item.nomor_rekening || '-',
                         status: 'Belum Diapprove'
                     }, { onConflict: 'period_id,user_id' });
             }
@@ -189,6 +200,9 @@ if (btnHitungGaji) {
 }
 
 function renderTableList(data) {
+    // Menyimpan data aktif ke dalam scope global untuk kebutuhan ekspor file
+    currentPayrollData = data;
+
     const tbody = document.getElementById('payroll-run-table');
     if (!tbody) return;
     tbody.innerHTML = '';
@@ -260,23 +274,136 @@ if (btnApproveMassal) {
     });
 }
 
+// PENGEMBANGAN: Pembuatan Cetak Slip Gaji PDF Resmi (Ukuran A5 Portrait)
 window.lihatDetailSlip = async function(slipId, namaKaryawan) {
-    const { data: slip } = await supabase
+    const { data: slip, error } = await supabase
         .from('payroll_slips')
-        .select('*')
+        .select(`*, payroll_periods(nama_periode, office_id)`)
         .eq('id', slipId)
         .single();
 
-    if (!slip) return alert("Data slip tidak ditemukan.");
+    if (error || !slip) return alert("Data slip tidak ditemukan.");
 
-    alert(
-        `📄 RINCIAN SLIP GAJI KARYAWAN\n` +
-        `----------------------------------------\n` +
-        `Nama Karyawan: ${namaKaryawan}\n` +
-        `Status Slip: ${slip.status}\n\n` +
-        `💰 Total Pemasukan : Rp ${parseFloat(slip.total_pemasukan || 0).toLocaleString('id-ID')}\n` +
-        `📉 Total Potongan    : Rp ${parseFloat(slip.total_potongan || 0).toLocaleString('id-ID')}\n` +
-        `----------------------------------------\n` +
-        `💵 GAJI BERSIH (THP) : Rp ${parseFloat(slip.gaji_bersih || 0).toLocaleString('id-ID')}`
-    );
+    const targetOfficeId = slip.payroll_periods?.office_id || currentUser.office_id || currentUser.client_id || '-';
+    const namaKantor = "GENPRO MANAGEMENT SYSTEM"; 
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a5'); // Ukuran A5 Portrait
+
+    // KOP INFORMASI KANTOR
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(namaKantor.toUpperCase(), 15, 15);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Office ID Tenant: ${targetOfficeId}`, 15, 19);
+    doc.line(15, 21, 133, 21); 
+
+    // DATA UTAMA SLIP
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("SLIP GAJI KARYAWAN", 15, 29);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Nama Karyawan : ${namaKaryawan}`, 15, 36);
+    doc.text(`Periode Gaji  : ${slip.payroll_periods?.nama_periode || '-'}`, 15, 41);
+    doc.text(`Bank / Rek.   : ${slip.nama_bank || '-'} / ${slip.nomor_rekening || '-'}`, 15, 46);
+    doc.text(`Status Slip   : ${slip.status}`, 15, 51);
+    doc.line(15, 54, 133, 54);
+
+    // KATEGORI BIAYA
+    doc.text("Total Pendapatan Kotor (Bruto)", 15, 63);
+    doc.text(`Rp ${parseFloat(slip.total_pemasukan || 0).toLocaleString('id-ID')}`, 133, 63, { align: 'right' });
+
+    doc.text("Total Potongan", 15, 70);
+    doc.text(`- Rp ${parseFloat(slip.total_potongan || 0).toLocaleString('id-ID')}`, 133, 70, { align: 'right' });
+    doc.line(15, 74, 133, 74);
+
+    // GAJI BERSIH / TOTAL TAKE HOME PAY
+    doc.setFont("helvetica", "bold");
+    doc.text("GAJI BERSIH (THP)", 15, 81);
+    doc.text(`Rp ${parseFloat(slip.gaji_bersih || 0).toLocaleString('id-ID')}`, 133, 81, { align: 'right' });
+    doc.line(15, 84, 133, 84);
+
+    // FOOTER KETERANGAN
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.text("Dokumen slip ini sah diterbitkan secara elektronik oleh GenPro Management System.", 15, 96);
+
+    // Proses Download Berkas
+    const cleanName = namaKaryawan.replace(/\s+/g, '_');
+    doc.save(`Slip_Gaji_${cleanName}.pdf`);
 };
+
+// ========================================================
+// 🟢 PENGEMBANGAN FITUR AKSUR EKSPOR DATA (EXCEL & PDF REKAP)
+// ========================================================
+
+// 1. Ekspor Dokumen Spreadsheet Excel (.xlsx)
+document.getElementById('btn-export-excel')?.addEventListener('click', () => {
+    if (!currentPayrollData || currentPayrollData.length === 0) {
+        return alert("Pilih periode dan pastikan data draf payroll tersedia sebelum melakukan ekspor!");
+    }
+    
+    const mappedExcel = currentPayrollData.map(p => ({
+        "Nama Karyawan": p.profiles?.nama_lengkap || 'Tanpa Nama',
+        "Nama Bank": p.nama_bank || '-',
+        "Nomor Rekening": p.nomor_rekening || '-',
+        "Total Pemasukan (Rp)": p.total_pemasukan || 0,
+        "Total Potongan (Rp)": p.total_potongan || 0,
+        "Gaji Bersih / THP (Rp)": p.gaji_bersih || 0,
+        "Status Validasi": p.status || 'Belum Diapprove'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(mappedExcel);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Laporan");
+    
+    const e = document.getElementById('run-pilih-periode');
+    const txtPeriode = e.options[e.selectedIndex]?.text || 'Payroll';
+    
+    XLSX.writeFile(workbook, `Laporan_Payroll_${txtPeriode.replace(/\s+/g, '_')}.xlsx`);
+});
+
+// 2. Ekspor Dokumen Laporan Tabel Rekapitulasi PDF (A4 Landscape)
+document.getElementById('btn-export-pdf')?.addEventListener('click', () => {
+    if (!currentPayrollData || currentPayrollData.length === 0) {
+        return alert("Pilih periode dan pastikan data draf payroll tersedia sebelum melakukan ekspor!");
+    }
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a4'); // Mode Landscape A4
+    
+    const e = document.getElementById('run-pilih-periode');
+    const txtPeriode = e.options[e.selectedIndex]?.text || '-';
+
+    // Header Laporan Laporan Landscape
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("LAPORAN REKAPITULASI PENGGAJIAN KARYAWAN", 14, 15);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Periode Operasional: ${txtPeriode}`, 14, 21);
+    
+    const bodyTableData = currentPayrollData.map(p => [
+        p.profiles?.nama_lengkap || 'Tanpa Nama',
+        p.nama_bank || '-',
+        p.nomor_rekening || '-',
+        `Rp ${parseFloat(p.total_pemasukan || 0).toLocaleString('id-ID')}`,
+        `Rp ${parseFloat(p.total_potongan || 0).toLocaleString('id-ID')}`,
+        `Rp ${parseFloat(p.gaji_bersih || 0).toLocaleString('id-ID')}`,
+        p.status || 'Belum Diapprove'
+    ]);
+
+    doc.autoTable({
+        startY: 26,
+        theme: 'striped',
+        headStyles: { fillColor: [43, 48, 53] }, // Mengikuti tema bg-dark tabel HTML
+        head: [['Nama Karyawan', 'Bank', 'No. Rekening', 'Total Pemasukan', 'Total Potongan', 'Gaji Bersih (THP)', 'Status']],
+        body: bodyTableData,
+        styles: { fontSize: 9 }
+    });
+
+    doc.save(`Laporan_Rekap_Payroll_${txtPeriode.replace(/\s+/g, '_')}.pdf`);
+});
