@@ -1,6 +1,8 @@
 import { supabase } from './supabase.js';
 
 var currentUser = {};
+let activeTemplateId = '';
+let activeTemplateName = '';
 
 // Fungsi internal untuk mengambil session secara aman
 function updateCurrentUser() {
@@ -57,22 +59,68 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    const komponenTable = document.getElementById('list-komponen-table');
+    if (komponenTable) {
+        komponenTable.addEventListener('click', (event) => {
+            const actionButton = event.target.closest('button[data-action]');
+            if (!actionButton) return;
+
+            const { action, id, kode, nama, jenis } = actionButton.dataset;
+            if (action === 'edit-komponen') {
+                window.editKomponen(id, kode || '', nama || '', jenis || 'pemasukan');
+            } else if (action === 'hapus-komponen') {
+                window.hapusKomponen(id);
+            }
+        });
+    }
+
     const formTemplate = document.getElementById('form-template');
     if (formTemplate) {
         formTemplate.addEventListener('submit', async (e) => {
             e.preventDefault();
             updateCurrentUser();
             const targetOfficeId = currentUser.office_id || currentUser.client_id;
-            const nama = document.getElementById('nama-template')?.value;
+            const nama = document.getElementById('nama-template')?.value?.trim();
 
-            const { error } = await supabase.from('payroll_templates').insert([{
-                office_id: targetOfficeId,
-                nama_template: nama
-            }]);
+            if (!targetOfficeId || targetOfficeId === 'undefined') {
+                return alert("Gagal membuat template: ID Kantor Anda tidak terdeteksi.");
+            }
+            if (!nama) {
+                return alert("Nama template tidak boleh kosong.");
+            }
+
+            const { data, error } = await supabase
+                .from('payroll_templates')
+                .insert([{
+                    office_id: targetOfficeId,
+                    nama_template: nama
+                }])
+                .select('id, nama_template')
+                .single();
 
             if (error) return alert("Gagal membuat template: " + error.message);
             formTemplate.reset();
             await loadDataTemplate();
+            if (data?.id) {
+                window.pilihTemplate(data.id, data.nama_template);
+            }
+        });
+    }
+
+    const templateList = document.getElementById('list-template-grup');
+    if (templateList) {
+        templateList.addEventListener('click', (event) => {
+            const actionButton = event.target.closest('button[data-action]');
+            if (!actionButton) return;
+
+            const { action, id, nama } = actionButton.dataset;
+            if (action === 'pilih-template') {
+                window.pilihTemplate(id, nama || '');
+            } else if (action === 'edit-template') {
+                window.editTemplate(id, nama || '');
+            } else if (action === 'hapus-template') {
+                window.hapusTemplate(id);
+            }
         });
     }
 
@@ -84,16 +132,49 @@ document.addEventListener("DOMContentLoaded", async () => {
             const compId = document.getElementById('pilih-komponen')?.value;
             const nominal = document.getElementById('nominal-komponen')?.value;
 
-            const { error } = await supabase.from('payroll_template_details').insert([{
+            if (!tempId) return alert("Pilih template terlebih dahulu.");
+            if (!compId) return alert("Pilih komponen terlebih dahulu.");
+            if (nominal === '' || nominal === null || nominal === undefined) {
+                return alert("Nominal komponen wajib diisi.");
+            }
+
+            const { data: existingDetail, error: existingError } = await supabase
+                .from('payroll_template_details')
+                .select('id')
+                .eq('template_id', tempId)
+                .eq('component_id', compId)
+                .maybeSingle();
+
+            if (existingError) return alert("Gagal memeriksa rincian template: " + existingError.message);
+
+            const payload = {
                 template_id: tempId,
                 component_id: compId,
-                nominal: nominal
-            }]);
+                nominal: Number(nominal)
+            };
+            const { error } = existingDetail?.id
+                ? await supabase.from('payroll_template_details').update({ nominal: payload.nominal }).eq('id', existingDetail.id)
+                : await supabase.from('payroll_template_details').insert([payload]);
 
             if (error) return alert("Gagal menambah rincian: " + error.message);
+            const selectKomponen = document.getElementById('pilih-komponen');
             const inputNominal = document.getElementById('nominal-komponen');
+            if (selectKomponen) selectKomponen.value = '';
             if (inputNominal) inputNominal.value = '';
             await loadDetailTemplate(tempId);
+        });
+    }
+
+    const detailTable = document.getElementById('list-detail-template');
+    if (detailTable) {
+        detailTable.addEventListener('click', (event) => {
+            const actionButton = event.target.closest('button[data-action]');
+            if (!actionButton) return;
+
+            const { action, detailId, templateId } = actionButton.dataset;
+            if (action === 'hapus-detail') {
+                window.hapusDetailKomponen(detailId, templateId);
+            }
         });
     }
 
@@ -143,24 +224,29 @@ async function loadDataKomponen() {
 
     data?.forEach(k => {
         if (tbody) {
-            const safeKode = (k.kode_komponen || '').replace(/'/g, '&#39;');
-            const safeName = (k.nama_komponen || '').replace(/'/g, '&#39;');
             tbody.innerHTML += `<tr>
-                <td>${k.kode_komponen}</td>
-                <td>${k.nama_komponen}</td>
+                <td>${escapeHtml(k.kode_komponen)}</td>
+                <td>${escapeHtml(k.nama_komponen)}</td>
                 <td><span class="badge ${k.jenis === 'pemasukan' ? 'bg-success' : 'bg-danger'}">${k.jenis}</span></td>
                 <td>
-                    <button class="btn btn-warning btn-sm py-0 px-2 me-1" onclick="editKomponen('${k.id}', '${safeKode}', '${safeName}', '${k.jenis}')">
+                    <button class="btn btn-warning btn-sm py-0 px-2 me-1"
+                        data-action="edit-komponen"
+                        data-id="${escapeAttribute(k.id)}"
+                        data-kode="${escapeAttribute(k.kode_komponen)}"
+                        data-nama="${escapeAttribute(k.nama_komponen)}"
+                        data-jenis="${escapeAttribute(k.jenis)}">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-danger btn-sm py-0 px-2" onclick="hapusKomponen('${k.id}')">
+                    <button class="btn btn-danger btn-sm py-0 px-2"
+                        data-action="hapus-komponen"
+                        data-id="${escapeAttribute(k.id)}">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
             </tr>`;
         }
         if (select) {
-            select.innerHTML += `<option value="${k.id}">${k.nama_komponen} (${k.jenis})</option>`;
+            select.innerHTML += `<option value="${escapeAttribute(k.id)}">${escapeHtml(k.nama_komponen)} (${escapeHtml(k.jenis)})</option>`;
         }
     });
 }
@@ -170,33 +256,122 @@ async function loadDataTemplate() {
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
     if (!targetOfficeId || targetOfficeId === 'undefined') return;
 
-    const { data } = await supabase.from('payroll_templates').select('*').eq('office_id', targetOfficeId);
+    const { data } = await supabase
+        .from('payroll_templates')
+        .select('*')
+        .eq('office_id', targetOfficeId)
+        .order('nama_template');
     const list = document.getElementById('list-template-grup');
     if (list) list.innerHTML = '';
 
+    let activeTemplateStillExists = false;
     data?.forEach(t => {
         if (list) {
-            const safeName = (t.nama_template || '').replace(/'/g, '&#39;');
-            list.innerHTML += `<li class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                <span style="cursor:pointer;" onclick="pilihTemplate('${t.id}', '${safeName}')">${t.nama_template}</span>
-                <button class="btn btn-danger btn-sm py-0 px-1 ms-2 flex-shrink-0" onclick="hapusTemplate('${t.id}')">
-                    <i class="fas fa-trash"></i>
-                </button>
+            const isActive = String(t.id) === String(activeTemplateId);
+            if (isActive) activeTemplateStillExists = true;
+            list.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center ${isActive ? 'active' : ''}">
+                <div class="me-2">
+                    <div class="fw-semibold">${escapeHtml(t.nama_template)}</div>
+                    <div class="small ${isActive ? 'text-white-50' : 'text-muted'}">Pilih template untuk atur komponen.</div>
+                </div>
+                <div class="d-flex gap-1 flex-shrink-0">
+                    <button class="btn btn-sm ${isActive ? 'btn-light text-primary' : 'btn-outline-primary'}"
+                        data-action="pilih-template"
+                        data-id="${escapeAttribute(t.id)}"
+                        data-nama="${escapeAttribute(t.nama_template)}">
+                        ${isActive ? 'Aktif' : 'Pilih'}
+                    </button>
+                    <button class="btn btn-outline-warning btn-sm"
+                        data-action="edit-template"
+                        data-id="${escapeAttribute(t.id)}"
+                        data-nama="${escapeAttribute(t.nama_template)}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm py-0 px-2"
+                        data-action="hapus-template"
+                        data-id="${escapeAttribute(t.id)}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             </li>`;
         }
     });
+
+    if (!data || data.length === 0) {
+        resetTemplateSelection();
+        if (list) {
+            list.innerHTML = '<li class="list-group-item text-muted text-center">Belum ada template payroll</li>';
+        }
+        return;
+    }
+
+    if (!activeTemplateStillExists) {
+        if (activeTemplateId) {
+            resetTemplateSelection();
+        }
+        return;
+    }
+
+    if (activeTemplateId) {
+        const selectedTemplate = data.find((item) => String(item.id) === String(activeTemplateId));
+        if (selectedTemplate) {
+            activeTemplateName = selectedTemplate.nama_template || activeTemplateName;
+            const txtNama = document.getElementById('template-terpilih-nama');
+            if (txtNama) txtNama.innerText = activeTemplateName;
+            await loadDetailTemplate(activeTemplateId);
+        }
+    }
 }
 
 window.pilihTemplate = async function(id, nama) {
+    activeTemplateId = id || '';
+    activeTemplateName = nama || '';
+
     const txtNama = document.getElementById('template-terpilih-nama');
     const inputId = document.getElementById('aktif-template-id');
     const formDetail = document.getElementById('form-detail-template');
     
-    if (txtNama) txtNama.innerText = nama;
-    if (inputId) inputId.value = id;
-    if (formDetail) formDetail.style.display = 'flex';
-    await loadDetailTemplate(id);
+    if (txtNama) txtNama.innerText = activeTemplateName || '-';
+    if (inputId) inputId.value = activeTemplateId;
+    if (formDetail) formDetail.style.display = activeTemplateId ? 'flex' : 'none';
+
+    await loadDataTemplate();
 }
+
+window.editTemplate = function(id, nama) {
+    const modalEl = document.getElementById('modalEditTemplate');
+    if (!modalEl || typeof bootstrap === 'undefined') {
+        return alert("Fitur edit template tidak tersedia. Pastikan halaman dimuat ulang.");
+    }
+
+    document.getElementById('edit-template-id').value = id;
+    document.getElementById('edit-nama-template').value = nama;
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+};
+
+window.simpanEditTemplate = async function() {
+    const id = document.getElementById('edit-template-id')?.value;
+    const nama = document.getElementById('edit-nama-template')?.value?.trim();
+
+    if (!id) return alert("Template tidak ditemukan.");
+    if (!nama) return alert("Nama template tidak boleh kosong.");
+
+    const { error } = await supabase
+        .from('payroll_templates')
+        .update({ nama_template: nama })
+        .eq('id', id);
+
+    if (error) return alert("Gagal menyimpan template: " + error.message);
+
+    bootstrap.Modal.getInstance(document.getElementById('modalEditTemplate'))?.hide();
+    if (String(activeTemplateId) === String(id)) {
+        activeTemplateName = nama;
+        const txtNama = document.getElementById('template-terpilih-nama');
+        if (txtNama) txtNama.innerText = nama;
+    }
+    await loadDataTemplate();
+};
 
 async function loadDetailTemplate(templateId) {
     if (!templateId) return;
@@ -219,11 +394,14 @@ async function loadDetailTemplate(templateId) {
             const jenisClass = d.payroll_components.jenis === 'pemasukan' ? 'text-success' : 'text-danger';
             tbody.innerHTML += `
                 <tr>
-                    <td>${d.payroll_components.nama_komponen}</td>
-                    <td class="${jenisClass}">${d.payroll_components.jenis}</td>
+                    <td>${escapeHtml(d.payroll_components.nama_komponen)}</td>
+                    <td class="${jenisClass}">${escapeHtml(d.payroll_components.jenis)}</td>
                     <td>Rp ${parseFloat(d.nominal).toLocaleString('id-ID')}</td>
                     <td>
-                        <button class="btn btn-danger btn-sm py-0 px-1" onclick="hapusDetailKomponen('${d.id}', '${templateId}')">
+                        <button class="btn btn-danger btn-sm py-0 px-1"
+                            data-action="hapus-detail"
+                            data-detail-id="${escapeAttribute(d.id)}"
+                            data-template-id="${escapeAttribute(templateId)}">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -246,14 +424,14 @@ async function loadDataPeriode() {
         const isOpen = p.status === 'Open';
         const badgeColor = isOpen ? 'bg-success' : 'bg-secondary';
         const aksiBtn = isOpen
-            ? `<button class="btn btn-secondary btn-sm py-0 px-2" onclick="tutupPeriode('${p.id}')">
+            ? `<button class="btn btn-secondary btn-sm py-0 px-2" onclick="tutupPeriode('${escapeAttribute(p.id)}')">
                    <i class="fas fa-lock me-1"></i>Tutup
                </button>`
             : `<span class="text-muted small">-</span>`;
         tbody.innerHTML += `
             <tr>
-                <td>${p.nama_periode}</td>
-                <td>${p.tanggal_mulai} s/d ${p.tanggal_selesai}</td>
+                <td>${escapeHtml(p.nama_periode)}</td>
+                <td>${escapeHtml(p.tanggal_mulai)} s/d ${escapeHtml(p.tanggal_selesai)}</td>
                 <td><span class="badge ${badgeColor}">${p.status}</span></td>
                 <td>${aksiBtn}</td>
             </tr>`;
@@ -306,12 +484,9 @@ window.hapusTemplate = async function(id) {
     const { error } = await supabase.from('payroll_templates').delete().eq('id', id);
     if (error) return alert("Gagal menghapus template: " + error.message);
 
-    const txtNama = document.getElementById('template-terpilih-nama');
-    if (txtNama) txtNama.innerText = '-';
-    const formDetail = document.getElementById('form-detail-template');
-    if (formDetail) formDetail.style.display = 'none';
-    const tbody = document.getElementById('list-detail-template');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Pilih template terlebih dahulu</td></tr>';
+    if (String(activeTemplateId) === String(id)) {
+        resetTemplateSelection();
+    }
 
     await loadDataTemplate();
 };
@@ -330,3 +505,30 @@ window.tutupPeriode = async function(id) {
     if (error) return alert("Gagal menutup periode: " + error.message);
     await loadDataPeriode();
 };
+
+function resetTemplateSelection() {
+    activeTemplateId = '';
+    activeTemplateName = '';
+    const txtNama = document.getElementById('template-terpilih-nama');
+    const inputId = document.getElementById('aktif-template-id');
+    const formDetail = document.getElementById('form-detail-template');
+    const tbody = document.getElementById('list-detail-template');
+
+    if (txtNama) txtNama.innerText = '-';
+    if (inputId) inputId.value = '';
+    if (formDetail) formDetail.style.display = 'none';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Pilih template terlebih dahulu</td></tr>';
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeAttribute(value) {
+    return escapeHtml(value);
+}
