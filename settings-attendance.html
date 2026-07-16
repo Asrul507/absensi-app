@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="style.css"/>
 </head>
-<body style="background: #f8fafc; padding: 20px;">
+<body style="padding: 20px;">
 
 <div style="max-width: 600px; margin: 0 auto;">
 
@@ -132,12 +132,12 @@
 
     // Validasi
     if (gracePeriod < 0 || gracePeriod > 60) {
-      msgEl.style.color = '#dc2626'
+      msgEl.className = 'field-msg error'
       msgEl.textContent = '⚠ Grace period harus 0-60 menit'
       return
     }
     if (maxLate < gracePeriod) {
-      msgEl.style.color = '#dc2626'
+      msgEl.className = 'field-msg error'
       msgEl.textContent = '⚠ Max terlambat harus >= grace period'
       return
     }
@@ -148,7 +148,7 @@
     // TODO: Send ke backend/database
     // Sekarang hanya simulasi
     setTimeout(() => {
-      msgEl.style.color = '#16a34a'
+      msgEl.className = 'field-msg ok'
       msgEl.textContent = '✅ Pengaturan berhasil disimpan'
 
       btn.disabled = false
