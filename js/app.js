@@ -320,7 +320,7 @@ function renderMenu(role) {
     menuHtml += `
       <div class="sidebar-section-title">KARYAWAN & OPERASIONAL</div>
       <a href="#" id="menu-users" onclick="navigate('users'); closeSidebar(); return false;"><i class="fa fa-users"></i> Data Karyawan</a>
-      <a href="#" id="menu-personalia" onclick="navigate('personalia'); closeSidebar(); return false;"><i class="fa fa-id-card-clip"></i> HR Personalia / Kontrak</a>
+      ${['super_admin', 'admin_all', 'admin_hr'].includes(role) ? `<a href="#" id="menu-personalia" onclick="navigate('personalia'); closeSidebar(); return false;"><i class="fa fa-id-card-clip"></i> HR Personalia / Kontrak</a>` : ''}
       <a href="#" id="menu-admin-lokasi" onclick="navigate('admin-lokasi'); closeSidebar(); return false;"><i class="fa fa-map-location-dot"></i> Titik Radius GPS</a>
 
       <div class="sidebar-section-title">LAPORAN REKAPITULASI</div>

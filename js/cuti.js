@@ -16,7 +16,7 @@ export const PROFILE_CUTI_SELECT = 'id, nama_lengkap, email, tanggal_bergabung, 
 
 export function canManageCutiTahunan(userOrRole) {
   const role = typeof userOrRole === 'string' ? userOrRole : userOrRole?.role
-  return ['admin', 'super_admin', 'hr', 'spv', 'supervisor'].includes(role)
+  return ['admin_hr', 'admin_all', 'super_admin'].includes(role)
 }
 
 function toDateStr(value) {
