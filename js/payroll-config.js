@@ -1,12 +1,5 @@
-// ========================================================
-// AMBIL KONEKSI DATABASE & USER DARI HALAMAN UTAMA GENPRO
-// ========================================================
-if (typeof window.supabase === 'undefined' && window.parent && window.parent.supabase) {
-    window.supabase = window.parent.supabase;
-}
+import { supabase } from './supabase.js';
 
-// Deklarasi global menggunakan var agar fleksibel
-var supabase = window.supabase;
 var currentUser = {};
 
 // Fungsi internal untuk mengambil session secara aman
