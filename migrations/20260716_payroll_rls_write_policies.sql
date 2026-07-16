@@ -190,6 +190,16 @@ create policy "payroll_template_details_update" on public.payroll_template_detai
         where t.id = template_id and t.office_id = public.current_app_client_id()
       )
     )
+  )
+  with check (
+    public.is_super_admin()
+    or (
+      public.current_app_role() in ('admin_all', 'admin_hr')
+      and exists (
+        select 1 from public.payroll_templates t
+        where t.id = template_id and t.office_id = public.current_app_client_id()
+      )
+    )
   );
 
 drop policy if exists "payroll_template_details_delete" on public.payroll_template_details;
@@ -280,6 +290,16 @@ drop policy if exists "payroll_mappings_update" on public.payroll_mappings;
 create policy "payroll_mappings_update" on public.payroll_mappings
   for update to authenticated
   using (
+    public.is_super_admin()
+    or (
+      public.current_app_role() in ('admin_all', 'admin_hr')
+      and exists (
+        select 1 from public.profiles p
+        where p.id = user_id and p.client_id = public.current_app_client_id()
+      )
+    )
+  )
+  with check (
     public.is_super_admin()
     or (
       public.current_app_role() in ('admin_all', 'admin_hr')
