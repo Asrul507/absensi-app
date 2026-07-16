@@ -342,9 +342,6 @@ function renderMenu(role) {
       ${menuHtml}
     </nav>
     <div style="padding: 15px; border-top: 1px solid rgba(255,255,255,0.08);">
-      <button onclick="logout()" class="btn-danger" style="width:100%; padding: 10px; font-size: 0.8rem; font-weight:700; border-radius:8px; cursor:pointer;">
-        <i class="fa fa-sign-out-alt"></i> Keluar Aplikasi
-      </button>
       <div style="margin-top:10px; text-align:center; font-size:.65rem; color:rgba(255,255,255,.3); letter-spacing:.3px; line-height:1.5;">
         &copy; ${new Date().getFullYear()} GenPro<br>Hak Cipta Dilindungi
       </div>
