@@ -287,7 +287,7 @@ function renderMenu(role) {
       menuHtml += `
         <div class="sidebar-section-title">MANAJEMEN PAYROLL</div>
         <a href="#" id="menu-payroll-config" onclick="navigate('payroll-config'); closeSidebar(); return false;"><i class="fas fa-cogs"></i> Konfigurasi & Template</a>
-        <a href="#" id="menu-payroll-mapping" onclick="navigate('payroll-mapping'); closeSidebar(); return false;"><i class="fas fa-users-cog"></i> Pemetaan Gaji Karyawan</a>
+        <a href="#" id="menu-payroll-mapping" onclick="navigate('payroll-mapping'); closeSidebar(); return false;"><i class="fas fa-users-cog"></i> Input Template Payroll</a>
         <a href="#" id="menu-generate-payroll" onclick="navigate('generate-payroll'); closeSidebar(); return false;"><i class="fas fa-calculator"></i> Generate & Run Payroll</a>
       `;
     }
