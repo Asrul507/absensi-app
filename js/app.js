@@ -424,7 +424,6 @@ function renderMenu(role) {
     `;
   }
 }
-}
 
 /* ================= NOTIFICATION CENTER (RINGKAS) ================= */
 async function refreshNotificationBadge() {
