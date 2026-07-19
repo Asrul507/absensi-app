@@ -809,13 +809,30 @@ window.navigate = async function (page) {
 
   window.currentPage = page
 
-  document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
-  document.getElementById(`menu-${page}`)?.classList.add('active')
+  // ========================================================
+  // KONTROL VISIBILITAS MENU GRID (ANTI-BERTUMPUK)
+  // ========================================================
+  const menuWrapEl = document.getElementById('hris-menu-wrap');
+  if (menuWrapEl) {
+    if (page === 'dashboard') {
+      // Tampilkan menu utama hanya saat berada di halaman Dashboard / Home
+      menuWrapEl.style.display = 'block';
+    } else {
+      // Sembunyikan menu utama sepenuhnya jika membuka menu/fitur lain agar layar tidak penuh sesak
+      menuWrapEl.style.display = 'none';
+    }
+  }
+
+  // Hapus/abaikan manipulasi class sidebar lama agar tidak memicu error visual
+  // document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
+  // document.getElementById(`menu-${page}`)?.classList.add('active')
+  
+  // Sinkronisasi class active untuk Navigasi Bawah (Bottom Nav)
   document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'))
   document.getElementById(`bnav-${page}`)?.classList.add('active')
 
   switch (page) {
-   case 'dashboard': 
+    case 'dashboard': 
       // Jika Super Admin masuk ke dashboard tanpa memilih office, 
       // bypass agar tidak memicu renderDashboard() lama yang memunculkan notif teks itu
       if (window.currentUser?.role === 'super_admin' && !localStorage.getItem('superadmin_active_office_id')) {
@@ -859,7 +876,6 @@ window.navigate = async function (page) {
       document.getElementById('content').innerHTML = `<div class="card"><h2>${page}</h2></div>`
   }
 }
-
 /* ================= PROFILE RENDERING MANAGEMENT ================= */
 function renderProfile() {
   const content = document.getElementById('content')
