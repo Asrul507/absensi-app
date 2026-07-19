@@ -171,14 +171,53 @@ function showAppPage() {
   if (hrisDashboard) hrisDashboard.style.display = 'none';
 
   // Logika pembagian halaman berdasarkan role
-  if (role === 'super_admin') {
-    // Jalur A: Super Admin masuk ke gerbang panel developer GenPro terlebih dahulu
-    if (devPanel) {
-      devPanel.style.display = 'flex';
-      
-      // Inject nama pengenal di panel developer
-      const devNameEl = document.getElementById('devWelcomeName');
-      if (devNameEl) devNameEl.innerText = `Hi, ${window.currentUser.nama_lengkap || 'Developer'}`;
+ if (role === 'super_admin') {
+  if (devPanel) {
+    devPanel.style.display = 'flex';
+    
+    const devNameEl = document.getElementById('devWelcomeName');
+    if (devNameEl) devNameEl.innerText = `Hi, ${window.currentUser.nama_lengkap || 'Developer'}`;
+
+    // SAKELAR BARU: Ambil data client secara live dari tabel database Supabase
+    (async () => {
+      const dropdown = document.getElementById('devClientDropdown');
+      if (dropdown && dropdown.options.length <= 1) { // Mencegah duplikasi data saat re-render
+        try {
+          const { data: clients, error } = await supabase
+            .from('clients')
+            .select('id, nama_client, kode_client')
+            .in('status', ['active', 'aktif'])
+            .order('nama_client');
+
+          if (error) throw error;
+
+          if (clients) {
+            dropdown.innerHTML = '<option value="">Pilih Client...</option>';
+            clients.forEach(c => {
+              const option = document.createElement('option');
+              option.value = c.id;
+              option.textContent = `${c.nama_client} (${c.kode_client || '-'})`;
+              dropdown.appendChild(option);
+            });
+          }
+        } catch (err) {
+          console.error('Gagal memuat daftar client ke dropdown:', err);
+        }
+      }
+    })();
+    
+    // Sinkronisasi angka statistik di widget bawah dashboard dev
+    (async () => {
+      try {
+        const { data: allClients } = await supabase.from('clients').select('id, status');
+        if (allClients) {
+          document.getElementById('devTotalClientVal').innerText = allClients.length;
+          document.getElementById('devClientAktifVal').innerText = allClients.filter(c => ['active', 'aktif'].includes(c.status)).length;
+        }
+      } catch (err) {
+        console.warn('Gagal memuat widget stats:', err);
+      }
+    })();
       
       // Load data statis jumlah client jika fungsinya sudah siap nanti
       window.refreshDevPanelStats?.();
@@ -545,8 +584,12 @@ function isAdminRole(role) {
 }
 
 function canAccessPage(user, page) {
-  const role = user?.role || 'staff'
-  return (isAdminRole(role) ? ADMIN_PAGES : STAFF_PAGES).includes(page)
+  const role = normalizeRole(user?.role || 'staff');
+  
+  // Jika Super Admin, bypass semua validasi halaman agar bebas membuka apapun
+  if (role === 'super_admin') return true;
+  
+  return (isAdminRole(role) ? ADMIN_PAGES : STAFF_PAGES).includes(page);
 }
 
 /* ================= SINGLE PAGE APPLICATION NAVIGATION ================= */
