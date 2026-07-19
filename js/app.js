@@ -152,93 +152,12 @@ async function denyInactiveAccount(message) {
 }
 
 function showAppPage() {
-  const loginPage = document.getElementById('loginPage');
-  const appPage   = document.getElementById('appPage');
-  
-  if (loginPage) loginPage.style.display = 'none';
-  if (appPage)   appPage.style.display   = 'block';
-
-  // SAKELAR BARU: Membaca role user global yang baru saja diset di checkUser()
-  const role = window.currentUser?.role;
-
-  // Dapatkan elemen kontainer panel baru kita dari index.html
-  const launchPage = document.getElementById('launch-page');
-  const devPanel = document.getElementById('developer-panel');
-  const hrisDashboard = document.getElementById('hris-dashboard');
-
-  // Sembunyikan dulu semua panel agar aman
-  if (devPanel) devPanel.style.display = 'none';
-  if (hrisDashboard) hrisDashboard.style.display = 'none';
-
-  // Logika pembagian halaman berdasarkan role
- if (role === 'super_admin') {
-  if (devPanel) {
-    devPanel.style.display = 'flex';
-    
-    const devNameEl = document.getElementById('devWelcomeName');
-    if (devNameEl) devNameEl.innerText = `Hi, ${window.currentUser.nama_lengkap || 'Developer'}`;
-
-    // SAKELAR BARU: Ambil data client secara live dari tabel database Supabase
-    (async () => {
-      const dropdown = document.getElementById('devClientDropdown');
-      if (dropdown && dropdown.options.length <= 1) { // Mencegah duplikasi data saat re-render
-        try {
-          const { data: clients, error } = await supabase
-            .from('clients')
-            .select('id, nama_client, kode_client')
-            .in('status', ['active', 'aktif'])
-            .order('nama_client');
-
-          if (error) throw error;
-
-          if (clients) {
-            dropdown.innerHTML = '<option value="">Pilih Client...</option>';
-            clients.forEach(c => {
-              const option = document.createElement('option');
-              option.value = c.id;
-              option.textContent = `${c.nama_client} (${c.kode_client || '-'})`;
-              dropdown.appendChild(option);
-            });
-          }
-        } catch (err) {
-          console.error('Gagal memuat daftar client ke dropdown:', err);
-        }
-      }
-    })();
-    
-    // Sinkronisasi angka statistik di widget bawah dashboard dev
-    (async () => {
-      try {
-        const { data: allClients } = await supabase.from('clients').select('id, status');
-        if (allClients) {
-          document.getElementById('devTotalClientVal').innerText = allClients.length;
-          document.getElementById('devClientAktifVal').innerText = allClients.filter(c => ['active', 'aktif'].includes(c.status)).length;
-        }
-      } catch (err) {
-        console.warn('Gagal memuat widget stats:', err);
-      }
-    })();
-      
-      // Load data statis jumlah client jika fungsinya sudah siap nanti
-      window.refreshDevPanelStats?.();
-    }
-} else {
-    // Jalur B: Staf / Admin biasa langsung diarahkan ke Dashboard HRIS operasional
-    if (hrisDashboard) {
-      hrisDashboard.style.display = 'flex';
-      
-      // SAKELAR PENTING: Picu pemuatan menu visual baru dan navigasi awal untuk Staf/Admin
-      renderMenu(role);
-      renderBottomNav(role);
-      navigate('dashboard');
-    }
-  }
-
-  // Buka tirai loading (Launch Page hilang dari pandangan) setelah 400ms agar smooth
-  setTimeout(() => {
-    if (launchPage) launchPage.style.display = 'none';
-  }, 400);
+  const loginPage = document.getElementById('loginPage')
+  const appPage   = document.getElementById('appPage')
+  if (loginPage) loginPage.style.display = 'none'
+  if (appPage)   appPage.style.display   = 'block'
 }
+
 async function autoFillOfficeFromUsername() {
   const usernameEl = document.getElementById('username')
   const clientEl = document.getElementById('clientCode')
@@ -350,274 +269,82 @@ window.changeActiveOfficeContext = async function () {
 }
 
 function renderMenu(role) {
-  const menuWrapEl = document.getElementById('hris-menu-wrap');
-  if (!menuWrapEl) return;
+  const sidebar = document.getElementById('sidebar')
+  if (!sidebar) return
 
   let menuHtml = '';
 
-  // ========================================================
-  // JALUR 1: MENU UNTUK STAFF / KARYAWAN
-  // ========================================================
   if (role === 'staff') {
     menuHtml = `
-      <!-- Kategori 1 -->
-      <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 12px; letter-spacing: 0.05em;">MENU UTAMA</div>
-      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; text-align: center; margin-bottom: 20px;">
-        
-        <div onclick="navigate('dashboard')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-house" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Home</span>
-        </div>
+      <div class="sidebar-section-title">MENU UTAMA</div>
+      <a href="#" id="menu-dashboard" onclick="navigate('dashboard'); closeSidebar(); return false;"><i class="fa fa-house"></i> Dashboard</a>
+      <a href="#" id="menu-absensi" onclick="navigate('absensi'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Absensi Kerja</a>
+      <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen</a>
+      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-file-alt"></i> Pengajuan Cuti/Sakit</a>
+      <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-alt"></i> Kalender Kerja</a>
 
-        <div onclick="navigate('absensi')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-clock" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Absen</span>
-        </div>
+      <div class="sidebar-section-title">RIWAYAT & LAPORAN</div>
+      <a href="#" id="menu-daftar-absensi" onclick="navigate('daftar-absensi'); closeSidebar(); return false;"><i class="fa fa-list-check"></i> Log Kehadiran</a>
+      <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-business-time"></i> Rekap In/Out</a>
+      <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Statistik</a>
+      <a href="#" id="menu-slip-gaji" onclick="navigate('slip-gaji'); closeSidebar(); return false;"><i class="fas fa-file-invoice-dollar"></i> Slip Gaji & Riwayat</a>
 
-        <div onclick="navigate('perbaikan-absen')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #fef9c3; color: #ca8a04; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-pencil-alt" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Koreksi</span>
-        </div>
-
-        <div onclick="navigate('pengajuan')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #ffe4e6; color: #e11d48; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-file-alt" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Cuti/Sakit</span>
-        </div>
-
-        <div onclick="navigate('kalender')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #f3e8ff; color: #9333ea; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-calendar-alt" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Kalender</span>
-        </div>
-      </div>
-
-      <!-- Kategori 2 -->
-      <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; margin-top: 10px; margin-bottom: 12px; letter-spacing: 0.05em;">RIWAYAT & LAPORAN</div>
-      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; text-align: center; margin-bottom: 10px;">
-        
-        <div onclick="navigate('daftar-absensi')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #ccfbf1; color: #0d9488; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-list-check" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Log Hadir</span>
-        </div>
-
-        <div onclick="navigate('rekap-inout')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #ffedd5; color: #ea580c; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-business-time" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">In/Out</span>
-        </div>
-
-        <div onclick="navigate('rekap')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #e0e7ff; color: #4f46e5; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-chart-bar" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Statistik</span>
-        </div>
-
-        <div onclick="navigate('slip-gaji')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #fae8ff; color: #c084fc; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fas fa-file-invoice-dollar" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Slip Gaji</span>
-        </div>
-      </div>
+      <div class="sidebar-section-title">PENGATURAN</div>
+      <a href="#" id="menu-profile" onclick="navigate('profile'); closeSidebar(); return false;"><i class="fa fa-user"></i> Profil Saya</a>
     `;
-  } 
-  
-  // ========================================================
-  // JALUR 2: MENU UNTUK ADMIN HR / ADMIN ALL / SUPER ADMIN YANG MASUK CLIENT
-  // ========================================================
-  else {
+  } else {
     menuHtml = `
-      <!-- Kategori 1 -->
-      <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 12px; letter-spacing: 0.05em;">DASHBOARD & ABSENSI</div>
-      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; text-align: center; margin-bottom: 20px;">
-        
-        <div onclick="navigate('dashboard')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-house" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Home Admin</span>
-        </div>
+      <div class="sidebar-section-title">DASHBOARD & ABSENSI</div>
+      <a href="#" id="menu-dashboard" onclick="navigate('dashboard'); closeSidebar(); return false;"><i class="fa fa-house"></i> Dashboard Admin</a>
+      <a href="#" id="menu-absensi" onclick="navigate('absensi'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Menu Absen</a>
+      <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-days"></i> Kalender HRD</a>
 
-        <div onclick="navigate('absensi')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-clock" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Menu Absen</span>
-        </div>
-
-        <div onclick="navigate('kalender')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #f3e8ff; color: #9333ea; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-calendar-days" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Kalender HR</span>
-        </div>
-      </div>
-
-      <!-- Kategori 2 -->
-      <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 12px; letter-spacing: 0.05em;">APPROVAL & MANAJEMEN</div>
-      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; text-align: center; margin-bottom: 20px;">
-        
-        <div onclick="navigate('pengajuan')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #ffe4e6; color: #e11d48; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-umbrella-beach" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Cuti & Izin</span>
-        </div>
-
-        <div onclick="navigate('perbaikan-absen')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #fef9c3; color: #ca8a04; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-pencil-alt" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Perbaikan</span>
-        </div>
-
-        <div onclick="navigate('approval-absensi')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #d1fae5; color: #065f46; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-clipboard-check" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Approval</span>
-        </div>
-
-        <div onclick="navigate('jadwal')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #e0e7ff; color: #4f46e5; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-calendar-week" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Atur Jadwal</span>
-        </div>
-
-        <div onclick="navigate('shift')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #ffedd5; color: #d97706; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-business-time" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Kelola Shift</span>
-        </div>
-      </div>
+      <div class="sidebar-section-title">APPROVAL & MANAJEMEN</div>
+      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-umbrella-beach"></i> Cuti Tahunan & Pengajuan <span class="sidebar-badge-info">HR</span></a>
+      <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen <span class="sidebar-badge-info">Staff</span></a>
+      <a href="#" id="menu-approval-absensi" onclick="navigate('approval-absensi'); closeSidebar(); return false;"><i class="fa fa-clipboard-check"></i> Approval Absensi <span class="sidebar-badge-info">OPEN</span></a>
+      <a href="#" id="menu-jadwal" onclick="navigate('jadwal'); closeSidebar(); return false;"><i class="fa fa-calendar-week"></i> Atur Jadwal Kerja</a>
+      <a href="#" id="menu-shift" onclick="navigate('shift'); closeSidebar(); return false;"><i class="fa fa-business-time"></i> Kelola Shift</a>
     `;
 
-    // Sub-Kategori Khusus Akses Keuangan/Payroll
+    // FITUR AKSES PAYROLL UNTUK MANAJEMEN KHUSUS (super_admin, admin_all, admin_hr)
     if (['super_admin', 'admin_all', 'admin_hr'].includes(role)) {
       menuHtml += `
-        <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 12px; letter-spacing: 0.05em;">MANAJEMEN PAYROLL</div>
-        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; text-align: center; margin-bottom: 20px;">
-          
-          <div onclick="navigate('payroll-config')" style="cursor:pointer;">
-            <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #f1f5f9; color: #475569; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-              <i class="fas fa-cogs" style="font-size: 1.2rem;"></i>
-            </div>
-            <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Config Gaji</span>
-          </div>
-
-          <div onclick="navigate('payroll-mapping')" style="cursor:pointer;">
-            <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #e2e8f0; color: #334155; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-              <i class="fas fa-users-cog" style="font-size: 1.2rem;"></i>
-            </div>
-            <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Mapping Komponen</span>
-          </div>
-
-          <div onclick="navigate('generate-payroll')" style="cursor:pointer;">
-            <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #fed7aa; color: #c2410c; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-              <i class="fas fa-calculator" style="font-size: 1.2rem;"></i>
-            </div>
-            <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Hitung Gaji</span>
-          </div>
-        </div>
+        <div class="sidebar-section-title">MANAJEMEN PAYROLL</div>
+        <a href="#" id="menu-payroll-config" onclick="navigate('payroll-config'); closeSidebar(); return false;"><i class="fas fa-cogs"></i> Konfigurasi & Template</a>
+        <a href="#" id="menu-payroll-mapping" onclick="navigate('payroll-mapping'); closeSidebar(); return false;"><i class="fas fa-users-cog"></i> Input Template Payroll</a>
+        <a href="#" id="menu-generate-payroll" onclick="navigate('generate-payroll'); closeSidebar(); return false;"><i class="fas fa-calculator"></i> Generate & Run Payroll</a>
       `;
     }
 
-    // Sub-Kategori Operasional & Laporan Karyawan
     menuHtml += `
-      <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 12px; letter-spacing: 0.05em;">KARYAWAN & OPERASIONAL</div>
-      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; text-align: center; margin-bottom: 20px;">
-        
-        <div onclick="navigate('users')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #ccfbf1; color: #0d9488; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-users" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Data Staff</span>
-        </div>
+      <div class="sidebar-section-title">KARYAWAN & OPERASIONAL</div>
+      <a href="#" id="menu-users" onclick="navigate('users'); closeSidebar(); return false;"><i class="fa fa-users"></i> Data Karyawan</a>
+      ${['super_admin', 'admin_all', 'admin_hr'].includes(role) ? `<a href="#" id="menu-personalia" onclick="navigate('personalia'); closeSidebar(); return false;"><i class="fa fa-id-card-clip"></i> HR Personalia / Kontrak</a>` : ''}
+      <a href="#" id="menu-admin-lokasi" onclick="navigate('admin-lokasi'); closeSidebar(); return false;"><i class="fa fa-map-location-dot"></i> Titik Radius GPS</a>
 
-        ${['super_admin', 'admin_all', 'admin_hr'].includes(role) ? `
-        <div onclick="navigate('personalia')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #fae8ff; color: #a21caf; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-id-card-clip" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Kontrak HR</span>
-        </div>` : ''}
-
-        <div onclick="navigate('admin-lokasi')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #fffee7; color: #854d0e; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-map-location-dot" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Radius GPS</span>
-        </div>
-      </div>
-
-      <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 12px; letter-spacing: 0.05em;">LAPORAN REKAPITULASI</div>
-      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; text-align: center; margin-bottom: 20px;">
-        
-        <div onclick="navigate('daftar-absensi')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #f0fdf4; color: #16a34a; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-list-check" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Log Ringkas</span>
-        </div>
-
-        <div onclick="navigate('rekap-inout')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #fff7ed; color: #ea580c; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-clock" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Rekap Bulalan</span>
-        </div>
-
-        <div onclick="navigate('rekap')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #edf2f7; color: #4a5568; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-chart-bar" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Laporan Rekap</span>
-        </div>
-
-        <div onclick="navigate('laporan-keseluruhan')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #f5f3ff; color: #6d28d9; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-file-lines" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Laporan Full</span>
-        </div>
-
-        <div onclick="navigate('slip-gaji')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #fae8ff; color: #c084fc; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fas fa-file-invoice-dollar" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Slip Gaji</span>
-        </div>
-
-        ${role === 'super_admin' ? `
-        <div onclick="navigate('settings-app')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #f8fafc; border: 1px solid #cbd5e1; color: #0f172a; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px auto;">
-            <i class="fa fa-building-user" style="font-size: 1.2rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 600; display: block; line-height: 1.2;">Setup Office</span>
-        </div>` : ''}
-      </div>
+      <div class="sidebar-section-title">LAPORAN REKAPITULASI</div>
+      <a href="#" id="menu-daftar-absensi" onclick="navigate('daftar-absensi'); closeSidebar(); return false;"><i class="fa fa-list-check"></i> Log Kehadiran Ringkas</a>
+      <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Rekap Bulanan In/Out</a>
+      <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Rekap Absensi</a>
+      <a href="#" id="menu-laporan-keseluruhan" onclick="navigate('laporan-keseluruhan'); closeSidebar(); return false;"><i class="fa fa-file-lines"></i> Laporan Keseluruhan <span class="sidebar-badge-info">NEW</span></a>
+      <a href="#" id="menu-slip-gaji" onclick="navigate('slip-gaji'); closeSidebar(); return false;"><i class="fas fa-file-invoice-dollar"></i> Slip Gaji & Riwayat</a>
+      ${role === 'super_admin' ? `<div class="sidebar-section-title">SETTINGS APP</div><a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Office & Department</a>` : ''}
     `;
   }
 
-  // 3. Suntikkan HTML ke pembungkus menu di layar
-  menuWrapEl.innerHTML = `
-    <div style="padding: 6px 0 10px 0;">
+  const appTitle = getAppTitle(window.currentUser)
+  sidebar.innerHTML = `
+    <div class="sidebar-header">
+      <div class="sb-name">${appTitle}</div>
+    </div>
+    <nav class="sidebar-nav">
       ${menuHtml}
+    </nav>
+    <div style="padding: 15px; border-top: 1px solid rgba(255,255,255,0.08);">
+      <div style="margin-top:10px; text-align:center; font-size:.65rem; color:rgba(255,255,255,.3); letter-spacing:.3px; line-height:1.5;">
+        &copy; ${new Date().getFullYear()} GenPro<br>Hak Cipta Dilindungi
+      </div>
     </div>
   `;
 }
@@ -783,25 +510,13 @@ function isAdminRole(role) {
 }
 
 function canAccessPage(user, page) {
-  const role = normalizeRole(user?.role || 'staff');
-  
-  // Jika Super Admin, bypass semua validasi halaman agar bebas membuka apapun
-  if (role === 'super_admin') return true;
-  
-  return (isAdminRole(role) ? ADMIN_PAGES : STAFF_PAGES).includes(page);
+  const role = user?.role || 'staff'
+  return (isAdminRole(role) ? ADMIN_PAGES : STAFF_PAGES).includes(page)
 }
 
 /* ================= SINGLE PAGE APPLICATION NAVIGATION ================= */
 window.navigate = async function (page) {
   if (!window.currentUser) { showToast('Sesi berakhir. Silakan login ulang.', 'warning'); showLoginPage(); return }
-  
-  // SAKELAR BARU: Jika halaman yang dituju adalah panel developer, langsung arahkan tanpa validasi HRIS
-  if (page === 'dev-panel') {
-    window.devKembaliKePanel?.();
-    return;
-  }
-
-  // Validasi akses halaman
   if (!canAccessPage(window.currentUser, page)) {
     showToast('Anda tidak memiliki akses ke menu tersebut.', 'warning')
     page = 'dashboard'
@@ -809,38 +524,13 @@ window.navigate = async function (page) {
 
   window.currentPage = page
 
-  // ========================================================
-  // KONTROL VISIBILITAS MENU GRID (ANTI-BERTUMPUK)
-  // ========================================================
-  const menuWrapEl = document.getElementById('hris-menu-wrap');
-  if (menuWrapEl) {
-    if (page === 'dashboard') {
-      // Tampilkan menu utama hanya saat berada di halaman Dashboard / Home
-      menuWrapEl.style.display = 'block';
-    } else {
-      // Sembunyikan menu utama sepenuhnya jika membuka menu/fitur lain agar layar tidak penuh sesak
-      menuWrapEl.style.display = 'none';
-    }
-  }
-
-  // Hapus/abaikan manipulasi class sidebar lama agar tidak memicu error visual
-  // document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
-  // document.getElementById(`menu-${page}`)?.classList.add('active')
-  
-  // Sinkronisasi class active untuk Navigasi Bawah (Bottom Nav)
+  document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
+  document.getElementById(`menu-${page}`)?.classList.add('active')
   document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'))
   document.getElementById(`bnav-${page}`)?.classList.add('active')
 
   switch (page) {
-    case 'dashboard': 
-      // Jika Super Admin masuk ke dashboard tanpa memilih office, 
-      // bypass agar tidak memicu renderDashboard() lama yang memunculkan notif teks itu
-      if (window.currentUser?.role === 'super_admin' && !localStorage.getItem('superadmin_active_office_id')) {
-        // Biarkan tetap di panel developer, jangan di-timpa tampilannya
-        break;
-      }
-      renderDashboard(); 
-      break
+    case 'dashboard': renderDashboard(); break
     case 'absensi':   renderAbsensi(window.currentUser); break
     case 'daftar-absensi': renderDaftarAbsensi(window.currentUser); break
     case 'rekap-inout': renderRekapInOut(window.currentUser); break
@@ -876,6 +566,7 @@ window.navigate = async function (page) {
       document.getElementById('content').innerHTML = `<div class="card"><h2>${page}</h2></div>`
   }
 }
+
 /* ================= PROFILE RENDERING MANAGEMENT ================= */
 function renderProfile() {
   const content = document.getElementById('content')
@@ -2457,53 +2148,4 @@ window.previewImageFullScreen = function(urlSrc) {
       document.removeEventListener('keydown', escClose)
     }
   })
-}
-
-// Aksi khusus Super Admin untuk masuk dari panel developer ke dashboard HRIS client
-window.devBukaAplikasiPenuh = async function () {
-  const dropdown = document.getElementById('devClientDropdown');
-  const selectedClientId = dropdown?.value;
-
-  if (!selectedClientId) {
-    showToast('Silakan pilih Client / Office terlebih Dahulu!', 'warning');
-    return;
-  }
-
-  // 1. Tampilkan kembali layar loading sebentar untuk transisi data
-  const launchPage = document.getElementById('launch-page');
-  if (launchPage) launchPage.style.display = 'flex';
-
-  try {
-    // 2. Tembak context office aktif agar Supabase menyaring data kantor tersebut
-    if (window.ensureSuperAdminOfficeContext) {
-      // Set target context client id ke sistem local storage / state
-      localStorage.setItem('superadmin_active_office_id', selectedClientId);
-    }
-
-    // 3. Update nama kantor di header dan sinkronisasi title
-    window.updateHeaderOfficeContext?.();
-
-   // 4. Ubah visibilitas panel secara dinamis
-    document.getElementById('developer-panel').style.display = 'none';
-    document.getElementById('hris-dashboard').style.display = 'flex';
-
-    // SAKELAR PENTING: Paksa sistem menggambar menu operasional client untuk Super Admin yang masuk
-    renderMenu('super_admin');
-    renderBottomNav('super_admin');
-
-    // 5. Muat ulang halaman dashboard internal client tersebut
-    navigate('dashboard');
-
-    
-
-    showToast('Berhasil mengaktifkan ruang kerja client', 'success');
-  } catch (err) {
-    console.error('Gagal memuat workspace client:', err);
-    showToast('Gagal memuat workspace client.', 'error');
-  } finally {
-    // Tutup kembali tirai loading setelah proses selesai
-    setTimeout(() => {
-      if (launchPage) launchPage.style.display = 'none';
-    }, 400);
-  }
 }
