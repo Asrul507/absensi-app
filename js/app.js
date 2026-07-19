@@ -222,9 +222,16 @@ function showAppPage() {
       // Load data statis jumlah client jika fungsinya sudah siap nanti
       window.refreshDevPanelStats?.();
     }
-  } else {
+} else {
     // Jalur B: Staf / Admin biasa langsung diarahkan ke Dashboard HRIS operasional
-    if (hrisDashboard) hrisDashboard.style.display = 'flex';
+    if (hrisDashboard) {
+      hrisDashboard.style.display = 'flex';
+      
+      // SAKELAR PENTING: Picu pemuatan menu visual baru dan navigasi awal untuk Staf/Admin
+      renderMenu(role);
+      renderBottomNav(role);
+      navigate('dashboard');
+    }
   }
 
   // Buka tirai loading (Launch Page hilang dari pandangan) setelah 400ms agar smooth
@@ -343,84 +350,79 @@ window.changeActiveOfficeContext = async function () {
 }
 
 function renderMenu(role) {
-  const sidebar = document.getElementById('sidebar')
-  if (!sidebar) return
+  // 1. Ambil kontainer konten HRIS dinamis
+  const contentEl = document.getElementById('content');
+  if (!contentEl) return;
 
   let menuHtml = '';
 
+  // 2. Petakan isi menu berdasarkan Role (Menggunakan Font Awesome)
   if (role === 'staff') {
     menuHtml = `
-      <div class="sidebar-section-title">MENU UTAMA</div>
-      <a href="#" id="menu-dashboard" onclick="navigate('dashboard'); closeSidebar(); return false;"><i class="fa fa-house"></i> Dashboard</a>
-      <a href="#" id="menu-absensi" onclick="navigate('absensi'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Absensi Kerja</a>
-      <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen</a>
-      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-file-alt"></i> Pengajuan Cuti/Sakit</a>
-      <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-alt"></i> Kalender Kerja</a>
+      <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-bottom: 12px; letter-spacing: 0.05em;">MENU UTAMA</div>
+      <div onclick="navigate('dashboard')" class="menu-item-card"><i class="fa fa-house"></i> <span>Dashboard</span></div>
+      <div onclick="navigate('absensi')" class="menu-item-card"><i class="fa fa-clock"></i> <span>Absensi Kerja</span></div>
+      <div onclick="navigate('perbaikan-absen')" class="menu-item-card"><i class="fa fa-pencil-alt"></i> <span>Perbaikan Absen</span></div>
+      <div onclick="navigate('pengajuan')" class="menu-item-card"><i class="fa fa-file-alt"></i> <span>Pengajuan Cuti/Sakit</span></div>
+      <div onclick="navigate('kalender')" class="menu-item-card"><i class="fa fa-calendar-alt"></i> <span>Kalender Kerja</span></div>
 
-      <div class="sidebar-section-title">RIWAYAT & LAPORAN</div>
-      <a href="#" id="menu-daftar-absensi" onclick="navigate('daftar-absensi'); closeSidebar(); return false;"><i class="fa fa-list-check"></i> Log Kehadiran</a>
-      <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-business-time"></i> Rekap In/Out</a>
-      <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Statistik</a>
-      <a href="#" id="menu-slip-gaji" onclick="navigate('slip-gaji'); closeSidebar(); return false;"><i class="fas fa-file-invoice-dollar"></i> Slip Gaji & Riwayat</a>
-
-      <div class="sidebar-section-title">PENGATURAN</div>
-      <a href="#" id="menu-profile" onclick="navigate('profile'); closeSidebar(); return false;"><i class="fa fa-user"></i> Profil Saya</a>
+      <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-top: 20px; margin-bottom: 12px; letter-spacing: 0.05em;">RIWAYAT & LAPORAN</div>
+      <div onclick="navigate('daftar-absensi')" class="menu-item-card"><i class="fa fa-list-check"></i> <span>Log Kehadiran</span></div>
+      <div onclick="navigate('rekap-inout')" class="menu-item-card"><i class="fa fa-business-time"></i> <span>Rekap In/Out</span></div>
+      <div onclick="navigate('rekap')" class="menu-item-card"><i class="fa fa-chart-bar"></i> <span>Laporan Statistik</span></div>
+      <div onclick="navigate('slip-gaji')" class="menu-item-card"><i class="fas fa-file-invoice-dollar"></i> <span>Slip Gaji & Riwayat</span></div>
     `;
   } else {
+    // Untuk role: admin_all, admin_hr, admin
     menuHtml = `
-      <div class="sidebar-section-title">DASHBOARD & ABSENSI</div>
-      <a href="#" id="menu-dashboard" onclick="navigate('dashboard'); closeSidebar(); return false;"><i class="fa fa-house"></i> Dashboard Admin</a>
-      <a href="#" id="menu-absensi" onclick="navigate('absensi'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Menu Absen</a>
-      <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-days"></i> Kalender HRD</a>
+      <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-bottom: 12px; letter-spacing: 0.05em;">DASHBOARD & ABSENSI</div>
+      <div onclick="navigate('dashboard')" class="menu-item-card"><i class="fa fa-house"></i> <span>Dashboard Admin</span></div>
+      <div onclick="navigate('absensi')" class="menu-item-card"><i class="fa fa-clock"></i> <span>Menu Absen</span></div>
+      <div onclick="navigate('kalender')" class="menu-item-card"><i class="fa fa-calendar-days"></i> <span>Kalender HRD</span></div>
 
-      <div class="sidebar-section-title">APPROVAL & MANAJEMEN</div>
-      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-umbrella-beach"></i> Cuti Tahunan & Pengajuan <span class="sidebar-badge-info">HR</span></a>
-      <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen <span class="sidebar-badge-info">Staff</span></a>
-      <a href="#" id="menu-approval-absensi" onclick="navigate('approval-absensi'); closeSidebar(); return false;"><i class="fa fa-clipboard-check"></i> Approval Absensi <span class="sidebar-badge-info">OPEN</span></a>
-      <a href="#" id="menu-jadwal" onclick="navigate('jadwal'); closeSidebar(); return false;"><i class="fa fa-calendar-week"></i> Atur Jadwal Kerja</a>
-      <a href="#" id="menu-shift" onclick="navigate('shift'); closeSidebar(); return false;"><i class="fa fa-business-time"></i> Kelola Shift</a>
+      <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-top: 20px; margin-bottom: 12px; letter-spacing: 0.05em;">APPROVAL & MANAJEMEN</div>
+      <div onclick="navigate('pengajuan')" class="menu-item-card"><i class="fa fa-umbrella-beach"></i> <span>Cuti & Pengajuan</span></div>
+      <div onclick="navigate('perbaikan-absen')" class="menu-item-card"><i class="fa fa-pencil-alt"></i> <span>Perbaikan Absen</span></div>
+      <div onclick="navigate('approval-absensi')" class="menu-item-card"><i class="fa fa-clipboard-check"></i> <span>Approval Absensi</span></div>
+      <div onclick="navigate('jadwal')" class="menu-item-card"><i class="fa fa-calendar-week"></i> <span>Atur Jadwal Kerja</span></div>
+      <div onclick="navigate('shift')" class="menu-item-card"><i class="fa fa-business-time"></i> <span>Kelola Shift</span></div>
     `;
 
-    // FITUR AKSES PAYROLL UNTUK MANAJEMEN KHUSUS (super_admin, admin_all, admin_hr)
+    // Menu khusus Payroll & Personalia
     if (['super_admin', 'admin_all', 'admin_hr'].includes(role)) {
       menuHtml += `
-        <div class="sidebar-section-title">MANAJEMEN PAYROLL</div>
-        <a href="#" id="menu-payroll-config" onclick="navigate('payroll-config'); closeSidebar(); return false;"><i class="fas fa-cogs"></i> Konfigurasi & Template</a>
-        <a href="#" id="menu-payroll-mapping" onclick="navigate('payroll-mapping'); closeSidebar(); return false;"><i class="fas fa-users-cog"></i> Input Template Payroll</a>
-        <a href="#" id="menu-generate-payroll" onclick="navigate('generate-payroll'); closeSidebar(); return false;"><i class="fas fa-calculator"></i> Generate & Run Payroll</a>
+        <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-top: 20px; margin-bottom: 12px; letter-spacing: 0.05em;">MANAJEMEN PAYROLL</div>
+        <div onclick="navigate('payroll-config')" class="menu-item-card"><i class="fas fa-cogs"></i> <span>Konfigurasi & Template</span></div>
+        <div onclick="navigate('payroll-mapping')" class="menu-item-card"><i class="fas fa-users-cog"></i> <span>Input Template Payroll</span></div>
+        <div onclick="navigate('generate-payroll')" class="menu-item-card"><i class="fas fa-calculator"></i> <span>Generate & Run Payroll</span></div>
       `;
     }
 
     menuHtml += `
-      <div class="sidebar-section-title">KARYAWAN & OPERASIONAL</div>
-      <a href="#" id="menu-users" onclick="navigate('users'); closeSidebar(); return false;"><i class="fa fa-users"></i> Data Karyawan</a>
-      ${['super_admin', 'admin_all', 'admin_hr'].includes(role) ? `<a href="#" id="menu-personalia" onclick="navigate('personalia'); closeSidebar(); return false;"><i class="fa fa-id-card-clip"></i> HR Personalia / Kontrak</a>` : ''}
-      <a href="#" id="menu-admin-lokasi" onclick="navigate('admin-lokasi'); closeSidebar(); return false;"><i class="fa fa-map-location-dot"></i> Titik Radius GPS</a>
+      <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-top: 20px; margin-bottom: 12px; letter-spacing: 0.05em;">KARYAWAN & OPERASIONAL</div>
+      <div onclick="navigate('users')" class="menu-item-card"><i class="fa fa-users"></i> <span>Data Karyawan</span></div>
+      ${['super_admin', 'admin_all', 'admin_hr'].includes(role) ? `<div onclick="navigate('personalia')" class="menu-item-card"><i class="fa fa-id-card-clip"></i> <span>HR Personalia / Kontrak</span></div>` : ''}
+      <div onclick="navigate('admin-lokasi')" class="menu-item-card"><i class="fa fa-map-location-dot"></i> <span>Titik Radius GPS</span></div>
 
-      <div class="sidebar-section-title">LAPORAN REKAPITULASI</div>
-      <a href="#" id="menu-daftar-absensi" onclick="navigate('daftar-absensi'); closeSidebar(); return false;"><i class="fa fa-list-check"></i> Log Kehadiran Ringkas</a>
-      <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Rekap Bulanan In/Out</a>
-      <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Rekap Absensi</a>
-      <a href="#" id="menu-laporan-keseluruhan" onclick="navigate('laporan-keseluruhan'); closeSidebar(); return false;"><i class="fa fa-file-lines"></i> Laporan Keseluruhan <span class="sidebar-badge-info">NEW</span></a>
-      <a href="#" id="menu-slip-gaji" onclick="navigate('slip-gaji'); closeSidebar(); return false;"><i class="fas fa-file-invoice-dollar"></i> Slip Gaji & Riwayat</a>
-      ${role === 'super_admin' ? `<div class="sidebar-section-title">SETTINGS APP</div><a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Office & Department</a>` : ''}
+      <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-top: 20px; margin-bottom: 12px; letter-spacing: 0.05em;">LAPORAN REKAPITULASI</div>
+      <div onclick="navigate('daftar-absensi')" class="menu-item-card"><i class="fa fa-list-check"></i> <span>Log Kehadiran Ringkas</span></div>
+      <div onclick="navigate('rekap-inout')" class="menu-item-card"><i class="fa fa-clock"></i> <span>Rekap Bulanan In/Out</span></div>
+      <div onclick="navigate('rekap')" class="menu-item-card"><i class="fa fa-chart-bar"></i> <span>Laporan Rekap Absensi</span></div>
+      <div onclick="navigate('laporan-keseluruhan')" class="menu-item-card"><i class="fa fa-file-lines"></i> <span>Laporan Keseluruhan</span></div>
+      <div onclick="navigate('slip-gaji')" class="menu-item-card"><i class="fas fa-file-invoice-dollar"></i> <span>Slip Gaji & Riwayat</span></div>
+      ${role === 'super_admin' ? `<div style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-top: 20px; margin-bottom: 12px; letter-spacing: 0.05em;">SETTINGS APP</div><div onclick="navigate('settings-app')" class="menu-item-card"><i class="fa fa-building-user"></i> <span>Office & Department</span></div>` : ''}
     `;
   }
 
-  const appTitle = getAppTitle(window.currentUser)
-  sidebar.innerHTML = `
-    <div class="sidebar-header">
-      <div class="sb-name">${appTitle}</div>
-    </div>
-    <nav class="sidebar-nav">
-      ${menuHtml}
-    </nav>
-    <div style="padding: 15px; border-top: 1px solid rgba(255,255,255,0.08);">
-      <div style="margin-top:10px; text-align:center; font-size:.65rem; color:rgba(255,255,255,.3); letter-spacing:.3px; line-height:1.5;">
-        &copy; ${new Date().getFullYear()} GenPro<br>Hak Cipta Dilindungi
+  // 3. Suntikkan menuHtml ke area konten utama jika user BUKAN super_admin
+  // Karena super_admin punya halaman awal Developer Panel sendiri.
+  if (role !== 'super_admin') {
+    contentEl.innerHTML = `
+      <div style="padding: 4px 0 20px 0;">
+        ${menuHtml}
       </div>
-    </div>
-  `;
+    `;
+  }
 }
 
 /* ================= NOTIFICATION CENTER (RINGKAS) ================= */
