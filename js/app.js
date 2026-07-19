@@ -152,12 +152,47 @@ async function denyInactiveAccount(message) {
 }
 
 function showAppPage() {
-  const loginPage = document.getElementById('loginPage')
-  const appPage   = document.getElementById('appPage')
-  if (loginPage) loginPage.style.display = 'none'
-  if (appPage)   appPage.style.display   = 'block'
-}
+  const loginPage = document.getElementById('loginPage');
+  const appPage   = document.getElementById('appPage');
+  
+  if (loginPage) loginPage.style.display = 'none';
+  if (appPage)   appPage.style.display   = 'block';
 
+  // SAKELAR BARU: Membaca role user global yang baru saja diset di checkUser()
+  const role = window.currentUser?.role;
+
+  // Dapatkan elemen kontainer panel baru kita dari index.html
+  const launchPage = document.getElementById('launch-page');
+  const devPanel = document.getElementById('developer-panel');
+  const hrisDashboard = document.getElementById('hris-dashboard');
+
+  // Sembunyikan dulu semua panel agar aman
+  if (devPanel) devPanel.style.display = 'none';
+  if (hrisDashboard) hrisDashboard.style.display = 'none';
+
+  // Logika pembagian halaman berdasarkan role
+  if (role === 'super_admin') {
+    // Jalur A: Super Admin masuk ke gerbang panel developer GenPro terlebih dahulu
+    if (devPanel) {
+      devPanel.style.display = 'flex';
+      
+      // Inject nama pengenal di panel developer
+      const devNameEl = document.getElementById('devWelcomeName');
+      if (devNameEl) devNameEl.innerText = `Hi, ${window.currentUser.nama_lengkap || 'Developer'}`;
+      
+      // Load data statis jumlah client jika fungsinya sudah siap nanti
+      window.refreshDevPanelStats?.();
+    }
+  } else {
+    // Jalur B: Staf / Admin biasa langsung diarahkan ke Dashboard HRIS operasional
+    if (hrisDashboard) hrisDashboard.style.display = 'flex';
+  }
+
+  // Buka tirai loading (Launch Page hilang dari pandangan) setelah 400ms agar smooth
+  setTimeout(() => {
+    if (launchPage) launchPage.style.display = 'none';
+  }, 400);
+}
 async function autoFillOfficeFromUsername() {
   const usernameEl = document.getElementById('username')
   const clientEl = document.getElementById('clientCode')
@@ -2148,4 +2183,47 @@ window.previewImageFullScreen = function(urlSrc) {
       document.removeEventListener('keydown', escClose)
     }
   })
+}
+
+// Aksi khusus Super Admin untuk masuk dari panel developer ke dashboard HRIS client
+window.devBukaAplikasiPenuh = async function () {
+  const dropdown = document.getElementById('devClientDropdown');
+  const selectedClientId = dropdown?.value;
+
+  if (!selectedClientId) {
+    showToast('Silakan pilih Client / Office terlebih Dahulu!', 'warning');
+    return;
+  }
+
+  // 1. Tampilkan kembali layar loading sebentar untuk transisi data
+  const launchPage = document.getElementById('launch-page');
+  if (launchPage) launchPage.style.display = 'flex';
+
+  try {
+    // 2. Tembak context office aktif agar Supabase menyaring data kantor tersebut
+    if (window.ensureSuperAdminOfficeContext) {
+      // Set target context client id ke sistem local storage / state
+      localStorage.setItem('superadmin_active_office_id', selectedClientId);
+    }
+
+    // 3. Update nama kantor di header dan sinkronisasi title
+    window.updateHeaderOfficeContext?.();
+
+    // 4. Ubah visibilitas panel secara dinamis
+    document.getElementById('developer-panel').style.display = 'none';
+    document.getElementById('hris-dashboard').style.display = 'flex';
+
+    // 5. Muat ulang halaman dashboard internal client tersebut
+    navigate('dashboard');
+
+    showToast('Berhasil mengaktifkan ruang kerja client', 'success');
+  } catch (err) {
+    console.error('Gagal memuat workspace client:', err);
+    showToast('Gagal memuat workspace client.', 'error');
+  } finally {
+    // Tutup kembali tirai loading setelah proses selesai
+    setTimeout(() => {
+      if (launchPage) launchPage.style.display = 'none';
+    }, 400);
+  }
 }
