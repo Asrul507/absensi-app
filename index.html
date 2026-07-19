@@ -22,9 +22,9 @@
 </head>
 <body>
 
-<!-- 1. HALAMAN LOGIN (Dipertahankan bentuk aslinya agar logic login tidak patah) -->
 <div id="loginPage">
   <div class="login-box">
+
     <div class="login-logo">
       <span class="login-icon">🏢</span>
       <h1>GenPro</h1>
@@ -57,149 +57,59 @@
       </button>
     </form>
 
-    <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200);">
-      <p style="font-size:.8rem;color:var(--text-muted);margin:0;">Akun dibuat oleh HRD/admin. Tidak ada self-register.</p>
-    </div>
+    <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200);"><p style="font-size:.8rem;color:var(--text-muted);margin:0;">Akun dibuat oleh HRD/admin. Tidak ada self-register.</p></div>
   </div>
 </div>
 
-
-<!-- ==========================================
-     STRUKTUR BARU: MOBILE-FIRST DASHBOARD SPA
-     ========================================== -->
 <div id="appPage" style="display:none;">
-  
-  <!-- Frame HP Container: Otomatis memadat di tengah layar jika dibuka di PC -->
-  <div style="max-w: 480px; min-height: 100vh; background-color: #ffffff; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); position: relative; flex-direction: column; display: flex; padding-bottom: 70px;">
-    
-    <!-- A. LAUNCH / LOADING PAGE INTERNAL -->
-    <div id="launch-page" style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: absolute; inset: 0; bg-linear-to-br: from-cyan-600 to-blue-700; background: linear-gradient(135deg, #0284c7, #1d4ed8); color: white; z-index: 99;">
-      <div style="text-align: center; animation: bounce 1s infinite alternate;">
-        <i class="fa fa-refresh fa-spin" style="font-size: 3rem; margin-bottom: 12px;"></i>
-        <h1 style="font-size: 1.5rem; font-weight: 700;">GenPro</h1>
-        <p style="font-size: 0.75rem; opacity: 0.8; margin-top: 4px;">Sinkronisasi data sistem...</p>
-      </div>
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="btn-menu" onclick="toggleSidebar()" aria-label="Menu">
+        <i class="fa fa-bars"></i>
+      </button>
+      <div class="topbar-title" id="topbarTitle">GenPro</div>
+      <button type="button" id="activeOfficeContext" class="topbar-office-context" onclick="window.changeActiveOfficeContext?.()" style="display:none;"></button>
     </div>
-
-    <!-- B. DEVELOPER PANEL CONTAINER (Hanya muncul jika Role = Super Admin sebelum pilih client) -->
-    <div id="developer-panel" style="display: none; flex-direction: column; flex: 1; padding: 16px;">
-      
-      <!-- Header Dev -->
-      <div style="background: linear-gradient(135deg, #0f766e, #0d9488); color: white; padding: 16px; border-radius: 0 0 16px 16px; margin: -16px -16px 16px -16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        <h3 style="font-size: 1.1rem; font-weight: 700; margin: 0;">GenPro Developer</h3>
-        <p style="font-size: 0.8rem; opacity: 0.9; margin: 4px 0 0 0;" id="devWelcomeName">Hi, Developer</p>
-        <span style="font-size: 0.7rem; opacity: 0.7;" id="devServerTime">Owner Panel</span>
-      </div>
-
-      <!-- Hero Card: Pilih Domain / Client -->
-      <div style="background-color: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 16px; padding: 16px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-        <h4 style="color: #0f766e; font-weight: 700; font-size: 0.95rem; margin: 0 0 4px 0;">PILIH CLIENT / DOMAIN</h4>
-        <p style="color: #4b5563; font-size: 0.75rem; margin: 0 0 12px 0;">Silakan pilih office untuk mengaktifkan modul absensi penuh.</p>
-        
-        <!-- Dropdown Client Selection -->
-        <select id="devClientDropdown" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.85rem; background-color: white; margin-bottom: 12px; color: #334155;">
-          <option value="">Pilih Client...</option>
-          <!-- Opsi client akan di-inject dinamis oleh backend Supabase -->
-        </select>
-
-        <button type="button" onclick="window.devBukaAplikasiPenuh?.()" style="width: 100%; background-color: #0d9488; color: white; font-size: 0.85rem; font-weight: 600; padding: 10px; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s;">
-          <i class="fa fa-folder-open"></i> Buka Aplikasi Penuh
-        </button>
-      </div>
-
-      <!-- Grid Menu Developer (4 Kolom) -->
-      <h5 style="color: #475569; font-weight: 700; font-size: 0.8rem; margin: 0 0 12px 0; letter-spacing: 0.05em;">MENU UTAMA DEVELOPER</h5>
-      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; text-align: center; margin-bottom: 24px;">
-        
-        <div onclick="window.navigate?.('client-settings')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #ccfbf1; color: #0d9488; display: flex; align-items: center; justify-content: center; margin: 0 auto 4px auto;">
-            <i class="fa fa-cloud" style="font-size: 1.25rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 500; display: block; line-height: 1.2;">Domain & Client</span>
-        </div>
-
-        <div onclick="window.navigate?.('package-settings')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; margin: 0 auto 4px auto;">
-            <i class="fa fa-box-open" style="font-size: 1.25rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 500; display: block; line-height: 1.2;">Paket & Fitur</span>
-        </div>
-
-        <div onclick="window.navigate?.('audit-trail')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #f3e8ff; color: #9333ea; display: flex; align-items: center; justify-content: center; margin: 0 auto 4px auto;">
-            <i class="fa fa-shield-alt" style="font-size: 1.25rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 500; display: block; line-height: 1.2;">Log Aktivitas</span>
-        </div>
-
-        <div onclick="window.navigate?.('global-reports')" style="cursor:pointer;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #ffedd5; color: #ea580c; display: flex; align-items: center; justify-content: center; margin: 0 auto 4px auto;">
-            <i class="fa fa-globe" style="font-size: 1.25rem;"></i>
-          </div>
-          <span style="font-size: 0.68rem; color: #334155; font-weight: 500; display: block; line-height: 1.2;">Laporan Global</span>
-        </div>
-
-      </div>
-
-      <!-- Live Stats Panel Developer (Ringkas Horizontal) -->
-      <h5 style="color: #475569; font-weight: 700; font-size: 0.8rem; margin: 0 0 12px 0; letter-spacing: 0.05em;">STATISTIK SISTEM GLOBAL</h5>
-      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;" id="devLiveStatsWidget">
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 12px;">
-          <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">TOTAL CLIENT</span>
-          <div style="font-size: 1.4rem; font-weight: 800; color: #1e293b; margin-top: 2px;" id="devTotalClientVal">0</div>
-        </div>
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 12px;">
-          <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">CLIENT AKTIF</span>
-          <div style="font-size: 1.4rem; font-weight: 800; color: #16a34a; margin-top: 2px;" id="devClientAktifVal">0</div>
-        </div>
-      </div>
+    <div class="topbar-right">
+      <button type="button" id="userName" class="topbar-user-name" onclick="window.navigate('profile')" title="Profil saya"></button>
+      <button class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Ganti tema">
+        <i class="fa fa-moon" id="themeIcon"></i>
+      </button>
+      <button class="btn-logout-top" onclick="logout()" aria-label="Keluar">
+        <i class="fa fa-sign-out-alt"></i>
+      </button>
     </div>
-
-    <!-- C. HRIS DASHBOARD PANEL (Operasional Absen & Manajemen sesuai User Role) -->
-    <div id="hris-dashboard" style="display: none; flex-direction: column; flex: 1;">
-      
-      <!-- Topbar Navbar HP Modis (Menggantikan Topbar Desktop Lama) -->
-      <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: linear-gradient(135deg, #0284c7, #1d4ed8); color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-        <div>
-          <span style="font-size: 0.7rem; opacity: 0.85; display: block; line-height: 1;">Selamat Datang,</span>
-          <span id="hrisUserGreeting" style="font-size: 0.95rem; font-weight: 700;" onclick="window.navigate('profile')">Nama Karyawan</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <button type="button" id="hrisOfficeBadge" style="background-color: rgba(255,255,255,0.2); border: none; color: white; font-size: 0.75rem; padding: 4px 10px; border-radius: 20px; font-weight: 600;"></button>
-          <i class="fa fa-moon" onclick="toggleTheme()" style="cursor: pointer; font-size: 1.1rem;"></i>
-          <i class="fa fa-sign-out-alt" onclick="logout()" style="cursor: pointer; font-size: 1.1rem; color: #fca5a5;"></i>
-        </div>
-      </div>
-
-     <!-- Rumah Baru untuk Menu Grid (Dibuat Full Screen Kanan-Kiri) -->
-<div id="hris-menu-wrap" style="padding: 16px 8px 0 8px; width: 100%; background-color: #f8fafc; box-sizing: border-box;"></div>
-
-<!-- Main Dynamic Content Wrapper -->
-<div id="content" style="flex: 1; padding: 16px; background-color: #f8fafc; margin-top: -10px;">
-  <!-- Konten Halaman default dimuat di sini secara asinkron -->
-</div>
-
-    </div>
-
-    <!-- D. BOTTOM NAVIGATION BAR (Selalu melayang tetap di bawah container frame HP) -->
-    <div id="bottomNav" style="position: absolute; bottom: 0; left: 0; right: 0; height: 64px; background-color: white; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-around; align-items: center; z-index: 40;">
-      <!-- Item menu navigasi bawah akan di-render dinamis oleh js/ui.js berdasarkan role -->
-    </div>
-
   </div>
+
+  <div id="overlay" onclick="closeSidebar()"></div>
+
+  <div id="sidebar"></div>
+
+  <div id="content">
+    <div style="display:flex;align-items:center;justify-content:center;height:60vh;">
+      <div style="text-align:center;">
+        <i class="fa fa-spinner fa-spin" style="font-size:2rem;color:var(--primary);"></i>
+        <p style="margin-top:12px;color:var(--text-muted);font-size:.85rem;">Memuat...</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="bottomNav"></div>
+
 </div>
 
-<!-- Opsi global bawaan lama -->
 <div id="loading-overlay">
   <div class="loading-spinner"></div>
   <div class="loading-text">Memproses...</div>
 </div>
+
 <div id="toast-container"></div>
 
-<!-- JS Dependensi -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script>
+  // Guard sementara agar klik tombol login sebelum modul siap tidak melempar ReferenceError.
   window.login = window.login || function () {
     console.warn('App masih dimuat, coba lagi beberapa detik.')
   }
@@ -211,8 +121,10 @@
 <script type="module" src="js/laporan-total-details.js?v=20260622-1"></script>
 <script type="module" src="js/admin-report-access.js?v=20260622-1"></script>
 
+
 <script>
   document.addEventListener('click', function(e) {
+    // Jika user meng-klik elemen gambar profil utama di dalam menu / halaman edit profil
     if (e.target && e.target.tagName === 'IMG' && (e.target.src.includes('supabase.co/storage/v1/object/public/avatars/') || e.target.id === 'editAvatarPreview')) {
       if (window.previewImageFullScreen) {
         window.previewImageFullScreen(e.target.src);
