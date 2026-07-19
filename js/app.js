@@ -414,17 +414,16 @@ function renderMenu(role) {
     `;
   }
 
-  // 3. Suntikkan menuHtml ke rumah menu baru agar terpisah dari isi halaman
-  if (role !== 'super_admin') {
-    const menuWrapEl = document.getElementById('hris-menu-wrap');
-    if (menuWrapEl) {
-      menuWrapEl.innerHTML = `
-        <div style="padding: 4px 0 10px 0;">
-          ${menuHtml}
-        </div>
-      `;
-    }
+  // Suntikkan menuHtml ke rumah menu baru tanpa memandang role (termasuk super_admin yang sedang menyamar)
+  const menuWrapEl = document.getElementById('hris-menu-wrap');
+  if (menuWrapEl) {
+    menuWrapEl.innerHTML = `
+      <div style="padding: 4px 0 10px 0;">
+        ${menuHtml}
+      </div>
+    `;
   }
+}
 }
 
 /* ================= NOTIFICATION CENTER (RINGKAS) ================= */
@@ -2256,12 +2255,18 @@ window.devBukaAplikasiPenuh = async function () {
     // 3. Update nama kantor di header dan sinkronisasi title
     window.updateHeaderOfficeContext?.();
 
-    // 4. Ubah visibilitas panel secara dinamis
+   // 4. Ubah visibilitas panel secara dinamis
     document.getElementById('developer-panel').style.display = 'none';
     document.getElementById('hris-dashboard').style.display = 'flex';
 
+    // SAKELAR PENTING: Paksa sistem menggambar menu operasional client untuk Super Admin yang masuk
+    renderMenu('super_admin');
+    renderBottomNav('super_admin');
+
     // 5. Muat ulang halaman dashboard internal client tersebut
     navigate('dashboard');
+
+    
 
     showToast('Berhasil mengaktifkan ruang kerja client', 'success');
   } catch (err) {
