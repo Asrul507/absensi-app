@@ -815,7 +815,15 @@ window.navigate = async function (page) {
   document.getElementById(`bnav-${page}`)?.classList.add('active')
 
   switch (page) {
-    case 'dashboard': renderDashboard(); break
+   case 'dashboard': 
+      // Jika Super Admin masuk ke dashboard tanpa memilih office, 
+      // bypass agar tidak memicu renderDashboard() lama yang memunculkan notif teks itu
+      if (window.currentUser?.role === 'super_admin' && !localStorage.getItem('superadmin_active_office_id')) {
+        // Biarkan tetap di panel developer, jangan di-timpa tampilannya
+        break;
+      }
+      renderDashboard(); 
+      break
     case 'absensi':   renderAbsensi(window.currentUser); break
     case 'daftar-absensi': renderDaftarAbsensi(window.currentUser); break
     case 'rekap-inout': renderRekapInOut(window.currentUser); break
