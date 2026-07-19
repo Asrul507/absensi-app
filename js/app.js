@@ -414,14 +414,16 @@ function renderMenu(role) {
     `;
   }
 
-  // 3. Suntikkan menuHtml ke area konten utama jika user BUKAN super_admin
-  // Karena super_admin punya halaman awal Developer Panel sendiri.
+  // 3. Suntikkan menuHtml ke rumah menu baru agar terpisah dari isi halaman
   if (role !== 'super_admin') {
-    contentEl.innerHTML = `
-      <div style="padding: 4px 0 20px 0;">
-        ${menuHtml}
-      </div>
-    `;
+    const menuWrapEl = document.getElementById('hris-menu-wrap');
+    if (menuWrapEl) {
+      menuWrapEl.innerHTML = `
+        <div style="padding: 4px 0 10px 0;">
+          ${menuHtml}
+        </div>
+      `;
+    }
   }
 }
 
