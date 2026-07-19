@@ -794,6 +794,14 @@ function canAccessPage(user, page) {
 /* ================= SINGLE PAGE APPLICATION NAVIGATION ================= */
 window.navigate = async function (page) {
   if (!window.currentUser) { showToast('Sesi berakhir. Silakan login ulang.', 'warning'); showLoginPage(); return }
+  
+  // SAKELAR BARU: Jika halaman yang dituju adalah panel developer, langsung arahkan tanpa validasi HRIS
+  if (page === 'dev-panel') {
+    window.devKembaliKePanel?.();
+    return;
+  }
+
+  // Validasi akses halaman
   if (!canAccessPage(window.currentUser, page)) {
     showToast('Anda tidak memiliki akses ke menu tersebut.', 'warning')
     page = 'dashboard'
