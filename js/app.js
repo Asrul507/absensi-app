@@ -32,6 +32,7 @@ import { logAuditEvent } from './audit-trail.js'
 import { renderAttendanceApproval, canApproveAttendance } from './attendance-approval.js'
 import { assertSameDepartment, canAccessAllDepartments, canManageUserByDepartment, getAccessibleProfiles, getUserDepartment, normalizeRole, isSuperAdmin, isAdminAll, isAdminHR, isAdmin, isStaff, applyTenantFilter } from './access-control.js'
 import { renderSettingsApp } from './settings-app.js'
+import { renderRekapAbsensi } from './rekap-absensi.js'
 
 
 /* ================= GLOBAL VARIABLES ================= */
@@ -211,6 +212,8 @@ window.login = async function () {
 }
 
 window.logout = async function () {
+  window.navHistory = []
+  updateBackButton()
   stopNotificationPolling()
   await logout()
 }
@@ -286,6 +289,7 @@ function renderMenu(role) {
       <a href="#" id="menu-absensi" onclick="navigate('absensi'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Absensi Kerja</a>
       <a href="#" id="menu-daftar-absensi" onclick="navigate('daftar-absensi'); closeSidebar(); return false;"><i class="fa fa-list-check"></i> Log Kehadiran</a>
       <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-business-time"></i> Rekap In/Out</a>
+      <a href="#" id="menu-rekap-absensi" onclick="navigate('rekap-absensi'); closeSidebar(); return false;"><i class="fa fa-chart-pie"></i> Statistik Absensi</a>
       <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Statistik</a>
 
       <div class="sidebar-section-title">JADWAL</div>
@@ -309,6 +313,7 @@ function renderMenu(role) {
       <a href="#" id="menu-absensi" onclick="navigate('absensi'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Menu Absen</a>
       <a href="#" id="menu-daftar-absensi" onclick="navigate('daftar-absensi'); closeSidebar(); return false;"><i class="fa fa-list-check"></i> Log Kehadiran</a>
       <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Rekap Bulanan In/Out</a>
+      <a href="#" id="menu-rekap-absensi" onclick="navigate('rekap-absensi'); closeSidebar(); return false;"><i class="fa fa-chart-pie"></i> Statistik Absensi</a>
       <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Rekap Absensi</a>
       ${isPayrollAdmin ? `<a href="#" id="menu-laporan-keseluruhan" onclick="navigate('laporan-keseluruhan'); closeSidebar(); return false;"><i class="fa fa-file-lines"></i> Laporan Keseluruhan <span class="sidebar-badge-info">NEW</span></a>` : ''}
 
@@ -492,9 +497,10 @@ function renderBottomNav(role) {
   if (!nav) return
   const items = role === 'staff'
     ? [
-        { key:'dashboard', icon:'fa-house',    label:'Home' },
-        { key:'absensi',   icon:'fa-clock',    label:'Absen' },
-        { key:'profile',   icon:'fa-user',     label:'Profil' },
+        { key:'dashboard',     icon:'fa-house',    label:'Home' },
+        { key:'absensi',       icon:'fa-clock',    label:'Absen' },
+        { key:'rekap-absensi', icon:'fa-chart-pie',label:'Statistik' },
+        { key:'profile',       icon:'fa-user',     label:'Profil' },
       ]
     : [
         { key:'dashboard', icon:'fa-house',    label:'Home' },
@@ -513,8 +519,8 @@ function renderBottomNav(role) {
 // DAFTAR HALAMAN YANG DIIZINKAN (SUDAH DIUPDATE)
 // ==========================================
 const ADMIN_ROLES = ['super_admin', 'admin_all', 'admin_hr', 'admin']
-const STAFF_PAGES = ['dashboard', 'absensi', 'perbaikan-absen', 'pengajuan', 'kalender', 'daftar-absensi', 'rekap-inout', 'rekap', 'slip-gaji', 'profile']
-const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'daftar-absensi', 'rekap-inout', 'rekap', 'laporan-keseluruhan', 'payroll-config', 'payroll-mapping', 'generate-payroll', 'slip-gaji', 'profile', 'settings-app']
+const STAFF_PAGES = ['dashboard', 'absensi', 'perbaikan-absen', 'pengajuan', 'kalender', 'daftar-absensi', 'rekap-inout', 'rekap', 'rekap-absensi', 'slip-gaji', 'profile']
+const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'daftar-absensi', 'rekap-inout', 'rekap', 'rekap-absensi', 'laporan-keseluruhan', 'payroll-config', 'payroll-mapping', 'generate-payroll', 'slip-gaji', 'profile', 'settings-app']
 
 function isAdminRole(role) {
   return ADMIN_ROLES.includes(normalizeRole(role))
@@ -525,15 +531,39 @@ function canAccessPage(user, page) {
   return (isAdminRole(role) ? ADMIN_PAGES : STAFF_PAGES).includes(page)
 }
 
+/* ================= NAVIGATION HISTORY (BACK BUTTON) ================= */
+window.navHistory = []
+
+function updateBackButton() {
+  const btn = document.getElementById('btnBack')
+  if (!btn) return
+  btn.style.display = window.navHistory.length > 0 ? 'flex' : 'none'
+}
+
+window.goBack = function () {
+  if (window.navHistory.length > 0) {
+    const prev = window.navHistory.pop()
+    window.navigate(prev, { addToHistory: false })
+  } else {
+    window.navigate('dashboard', { addToHistory: false })
+  }
+}
+
 /* ================= SINGLE PAGE APPLICATION NAVIGATION ================= */
-window.navigate = async function (page) {
+window.navigate = async function (page, { addToHistory = true } = {}) {
   if (!window.currentUser) { showToast('Sesi berakhir. Silakan login ulang.', 'warning'); showLoginPage(); return }
   if (!canAccessPage(window.currentUser, page)) {
     showToast('Anda tidak memiliki akses ke menu tersebut.', 'warning')
+    addToHistory = false
     page = 'dashboard'
   }
 
+  if (addToHistory && window.currentPage && window.currentPage !== page) {
+    window.navHistory.push(window.currentPage)
+  }
+
   window.currentPage = page
+  updateBackButton()
 
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
   document.getElementById(`menu-${page}`)?.classList.add('active')
@@ -552,6 +582,7 @@ window.navigate = async function (page) {
     case 'pengajuan': renderPengajuan(window.currentUser); break
     case 'personalia': await renderPersonalia(); break
     case 'rekap':      renderRekap(window.currentUser); break
+    case 'rekap-absensi': renderRekapAbsensi(window.currentUser); break
     case 'kalender':  renderKalenderHR(); break
     case 'profile':   renderProfile(); break
     case 'users':      await renderUsers(); break

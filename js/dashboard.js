@@ -1,6 +1,5 @@
 import { supabase } from './supabase.js'
-import { getTodayLokal, getDurasiMenit, toJamLokal, toTanggalLokal, toTanggalAbsensiLokal } from './timezone.js'
-import { createTotalJamKerjaChart, createAktivitasChart, createAbsensiChart } from './chart-helpers.js'
+import { getTodayLokal } from './timezone.js'
 import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
 import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
 import { getSisaCuti } from './services/leave-service.js'
@@ -99,34 +98,8 @@ export async function renderDashboard() {
     window.currentUser.foto_url = profile.foto_url
   }
 
-  // Date range (current month)
-  // Gunakan tanggal lokal (dari titik radius) sebagai basis bulan
-  const todayLocal = getTodayLokal()
-  const [tyear, tmonth] = todayLocal.split('-').map(Number)
-  const firstDay = new Date(Date.UTC(tyear, tmonth - 1, 1))
-  const lastDay  = new Date(Date.UTC(tyear, tmonth, 0))
-  const dateFrom = firstDay.toISOString().split('T')[0]
-  const dateTo   = lastDay.toISOString().split('T')[0]
-
+  // Date range — hanya dipakai untuk grid menu, tidak lagi fetch chart data di sini
   const isAdmin = canApproveAttendance(user) && !isStaff(user)
-
-  // Get total jam kerja (personal user login)
-  const absensiMonthAll = await fetchAbsensiRowsForUser({
-    userId: user.id,
-    nama: fullName,
-    dateFrom,
-    dateTo,
-    select: 'tanggal, waktu_masuk, waktu_pulang, status_masuk, status_absensi, status_kehadiran'
-  })
-  const absensiMonth = (absensiMonthAll || []).filter(a => a.status_absensi === 'COMPLETE')
-
-  let totalJamKerja = 0
-  absensiMonth?.forEach(a => {
-    if (a.waktu_masuk && a.waktu_pulang) {
-      const durasiMenit = getDurasiMenit(a.waktu_masuk, a.waktu_pulang)
-      if (durasiMenit !== null) totalJamKerja += durasiMenit / 60
-    }
-  })
 
   // ===== MENU GRID NAVIGASI BERDASARKAN ROLE =====
   const buildGridMenuItems = (role) => {
@@ -140,6 +113,7 @@ export async function renderDashboard() {
         { nav: 'kalender',         icon: 'fa-calendar-alt',       label: 'Kalender Kerja',    color: '#0891b2', color2: '#67e8f9', cat: 'utama' },
         { nav: 'daftar-absensi',   icon: 'fa-list-check',         label: 'Log Kehadiran',     color: '#059669', color2: '#6ee7b7', cat: 'laporan' },
         { nav: 'rekap-inout',      icon: 'fa-business-time',      label: 'Rekap In/Out',      color: '#d97706', color2: '#fcd34d', cat: 'laporan' },
+        { nav: 'rekap-absensi',    icon: 'fa-chart-pie',          label: 'Statistik Absensi', color: '#7c3aed', color2: '#c4b5fd', cat: 'laporan' },
         { nav: 'rekap',            icon: 'fa-chart-bar',          label: 'Laporan Statistik', color: '#0284c7', color2: '#7dd3fc', cat: 'laporan' },
         { nav: 'slip-gaji',        icon: 'fa-file-invoice-dollar',label: 'Slip Gaji',         color: '#15803d', color2: '#4ade80', cat: 'laporan' },
       ]
@@ -157,6 +131,7 @@ export async function renderDashboard() {
       { nav: 'admin-lokasi',       icon: 'fa-map-location-dot',   label: 'Titik Radius GPS',  color: '#b91c1c', color2: '#f87171', cat: 'karyawan' },
       { nav: 'daftar-absensi',     icon: 'fa-list-check',         label: 'Log Kehadiran',     color: '#059669', color2: '#6ee7b7', cat: 'laporan' },
       { nav: 'rekap-inout',        icon: 'fa-clock',              label: 'Rekap In/Out',      color: '#d97706', color2: '#fcd34d', cat: 'laporan' },
+      { nav: 'rekap-absensi',      icon: 'fa-chart-pie',          label: 'Statistik Absensi', color: '#7c3aed', color2: '#c4b5fd', cat: 'laporan' },
       { nav: 'rekap',              icon: 'fa-chart-bar',          label: 'Laporan Rekap',     color: '#0284c7', color2: '#7dd3fc', cat: 'laporan' },
       { nav: 'laporan-keseluruhan',icon: 'fa-file-lines',         label: 'Lap. Keseluruhan',  color: '#15803d', color2: '#4ade80', cat: 'laporan' },
       { nav: 'slip-gaji',          icon: 'fa-file-invoice-dollar',label: 'Slip Gaji',         color: '#1d4ed8', color2: '#93c5fd', cat: 'laporan' },
@@ -255,141 +230,9 @@ export async function renderDashboard() {
     }
   }
 
-  // ===== DASHBOARD PERSONAL STAFF =====
-  const absensiHariIni = await fetchAbsensiSingleForUser({
-    userId: user.id,
-    nama: fullName,
-    tanggal: todayLocal,
-    select: 'waktu_masuk, waktu_pulang, status_absensi, status_kehadiran'
-  })
+  // ===== DASHBOARD PERSONAL STAFF — data dihapus dari sini, pindah ke halaman Statistik Absensi =====
 
-  const { data: shiftHariIni } = await supabase
-    .from('jadwal')
-    .select('shift_code, status_override')
-    .eq('user_id', user.id)
-    .eq('tanggal', todayLocal)
-    .maybeSingle()
-
-  const totalHadirBulanIni = absensiMonth?.filter(a => a.waktu_masuk && a.status_absensi === 'COMPLETE').length || 0
-  const totalTerlambatBulanIni = absensiMonth?.filter(a => a.status_masuk === 'Terlambat').length || 0
-  const totalLupaPulangBulanIni = absensiMonth?.filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG').length || 0
-
-  const riwayatTerbaru = (absensiMonthAll || [])
-    .slice()
-    .sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)))
-    .slice(0, 5)
-
-  const personalHtml = `
-    <div style="margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Dashboard Personal</div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Hadir Bulan Ini</div><div style="font-size:1.2rem;font-weight:800">${totalHadirBulanIni}</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Terlambat Bulan Ini</div><div style="font-size:1.2rem;font-weight:800">${totalTerlambatBulanIni}</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Lupa Absen Pulang</div><div style="font-size:1.2rem;font-weight:800">${totalLupaPulangBulanIni}</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Jam Kerja Bulan Ini</div><div style="font-size:1.2rem;font-weight:800">${totalJamKerja.toFixed(1)} jam</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Shift Hari Ini</div><div style="font-size:1rem;font-weight:800">${shiftHariIni?.status_override || shiftHariIni?.shift_code || '-'}</div></div>
-        <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Status Absensi Hari Ini</div><div style="font-size:1rem;font-weight:800">${absensiHariIni?.status_absensi || 'Belum Absen'}</div></div>
-      </div>
-    </div>
-
-    <div class="card fade-up" style="padding: 16px; margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Riwayat Absensi Terbaru</div>
-      ${(riwayatTerbaru || []).map(r => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>${toTanggalAbsensiLokal(r?.tanggal, r?.waktu_masuk || r?.waktu_pulang)}</span><span>${r.waktu_masuk ? toJamLokal(r.waktu_masuk) : '-'} → ${r.waktu_pulang ? toJamLokal(r.waktu_pulang) : '-'}</span><strong>${r.status_absensi || '-'}</strong></div>`).join('') || '<div style="font-size:.82rem;color:var(--text-muted)">Belum ada riwayat absensi.</div>'}
-    </div>
-  `
-
-  // ===== HR ANALYTICS GLOBAL (ADMIN / SUPER ADMIN) =====
-  let adminGlobalHtml = ''
-  if (isAdmin) {
-    let globalAbsensiQuery = supabase
-      .from('absensi')
-      .select('user_id, nama, tanggal, status_masuk, status_absensi, status_kehadiran, waktu_masuk, waktu_pulang, menit_pulang_cepat, client_id, department_id, departemen')
-      .gte('tanggal', dateFrom)
-      .lte('tanggal', dateTo)
-    globalAbsensiQuery = applyTenantFilter(globalAbsensiQuery, { user, legacyDepartmentColumn: 'departemen' })
-    const { data: globalAbsensi } = await globalAbsensiQuery
-
-    let globalJadwalQuery = supabase
-      .from('jadwal')
-      .select('user_id, tanggal, shift_code, status_override, client_id, department_id, departemen')
-      .gte('tanggal', dateFrom)
-      .lte('tanggal', dateTo)
-    globalJadwalQuery = applyTenantFilter(globalJadwalQuery, { user, legacyDepartmentColumn: 'departemen' })
-    const { data: globalJadwal } = await globalJadwalQuery
-
-    const todayValue = todayLocal
-    const completedAbsensi = (globalAbsensi || []).filter(a => a.status_absensi === 'COMPLETE')
-    const hadirGlobal = completedAbsensi.filter(a => a.waktu_masuk).length
-    const terlambatGlobal = completedAbsensi.filter(a => a.status_masuk === 'Terlambat' || a.status_kehadiran === 'TERLAMBAT').length
-    const pulangCepatGlobal = completedAbsensi.filter(a => a.status_kehadiran === 'PULANG_CEPAT' || Number(a.menit_pulang_cepat || 0) > 0).length
-    const lupaPulangGlobal = (globalAbsensi || []).filter(a => a.status_kehadiran === 'LUPA_ABSEN_PULANG').length
-    const openApprovalGlobal = (globalAbsensi || []).filter(a => a.status_absensi === 'OPEN').length
-    const cutiGlobal = (globalJadwal || []).filter(j => j.status_override === 'cuti').length
-    const izinGlobal = (globalJadwal || []).filter(j => j.status_override === 'izin').length
-    const sakitGlobal = (globalJadwal || []).filter(j => j.status_override === 'sakit').length
-    const offGlobal = (globalJadwal || []).filter(j => j.status_override === 'off' || j.shift_code === '8').length
-    const attendanceKeys = new Set((globalAbsensi || []).map(a => `${a.user_id || a.nama}|${a.tanggal}`))
-    const alphaGlobal = (globalJadwal || []).filter(j => {
-      if (!j.user_id || !j.tanggal || j.tanggal > todayValue) return false
-      if (['cuti', 'izin', 'sakit', 'off'].includes(j.status_override) || j.shift_code === '8') return false
-      return !attendanceKeys.has(`${j.user_id}|${j.tanggal}`)
-    }).length
-
-    const rankMap = {}
-    completedAbsensi.forEach(a => {
-      const key = a.nama || a.user_id
-      if (!key) return
-      if (!rankMap[key]) rankMap[key] = { nama: a.nama || 'Tanpa Nama', hadir: 0, tepat: 0, terlambat: 0, masalah: 0 }
-      if (a.waktu_masuk) rankMap[key].hadir += 1
-      const isLate = a.status_masuk === 'Terlambat' || a.status_kehadiran === 'TERLAMBAT'
-      if (isLate) rankMap[key].terlambat += 1
-      else if (a.waktu_masuk) rankMap[key].tepat += 1
-      if (isLate || ['LUPA_ABSEN_MASUK', 'LUPA_ABSEN_PULANG'].includes(a.status_kehadiran) || !a.waktu_masuk || !a.waktu_pulang) rankMap[key].masalah += 1
-    })
-    const rankRows = Object.values(rankMap)
-    const renderRankList = (rows, metric, suffix) => rows.length
-      ? rows.slice(0, 5).map((v, i) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem;"><span>#${i + 1} ${v.nama}</span><strong>${v[metric]} ${suffix}</strong></div>`).join('')
-      : '<div style="font-size:.82rem;color:var(--text-muted);padding:10px 0;">Belum ada data bulan ini.</div>'
-    const rajinHtml = renderRankList([...rankRows].sort((a, b) => b.tepat - a.tepat), 'tepat', 'tepat waktu')
-    const terlambatRankHtml = renderRankList([...rankRows].sort((a, b) => b.terlambat - a.terlambat), 'terlambat', 'telat')
-    const baikHtml = renderRankList([...rankRows].sort((a, b) => (b.hadir - b.terlambat) - (a.hadir - a.terlambat)), 'hadir', 'hadir')
-    const burukHtml = renderRankList([...rankRows].sort((a, b) => b.masalah - a.masalah), 'masalah', 'masalah')
-
-    adminGlobalHtml = `
-      <div style="margin-bottom: 20px;">
-        <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">HR Analytics Global</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Hadir</div><div style="font-size:1.2rem;font-weight:800">${hadirGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Terlambat</div><div style="font-size:1.2rem;font-weight:800">${terlambatGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Pulang Cepat</div><div style="font-size:1.2rem;font-weight:800">${pulangCepatGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Cuti</div><div style="font-size:1.2rem;font-weight:800">${cutiGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Izin</div><div style="font-size:1.2rem;font-weight:800">${izinGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Sakit</div><div style="font-size:1.2rem;font-weight:800">${sakitGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Off</div><div style="font-size:1.2rem;font-weight:800">${offGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Alpha</div><div style="font-size:1.2rem;font-weight:800">${alphaGlobal}</div></div>
-          <div class="card" style="padding:12px;"><div style="font-size:.7rem;color:var(--text-muted)">Pending Approval</div><div style="font-size:1.2rem;font-weight:800">${openApprovalGlobal}</div></div>
-        </div>
-      </div>
-      <div class="card fade-up" style="padding:16px;margin-bottom:20px;" id="adminGlobalStats" data-hadir="${hadirGlobal}" data-terlambat="${terlambatGlobal}" data-pulang-cepat="${pulangCepatGlobal}" data-cuti="${cutiGlobal}" data-izin="${izinGlobal}" data-sakit="${sakitGlobal}" data-off="${offGlobal}" data-alpha="${alphaGlobal}" data-pending="${openApprovalGlobal}">
-        <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Ranking Kehadiran Bulan Ini</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
-          <div><strong style="font-size:.78rem;">Paling Rajin Tepat Waktu</strong>${rajinHtml}</div>
-          <div><strong style="font-size:.78rem;">Paling Sering Terlambat</strong>${terlambatRankHtml}</div>
-          <div><strong style="font-size:.78rem;">Kehadiran Paling Baik</strong>${baikHtml}</div>
-          <div><strong style="font-size:.78rem;">Kehadiran Paling Buruk</strong>${burukHtml}</div>
-        </div>
-      </div>
-      <div class="card fade-up" style="padding:16px;margin-bottom:20px;">
-        <div style="font-size:.75rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">Grafik Global Kehadiran</div>
-        <div style="position:relative;width:100%;height:220px;"><canvas id="adminGlobalChart"></canvas></div>
-      </div>
-    `
-  }
   content.innerHTML = `
-    <div class="page-header" style="margin-bottom: 20px;">
-      <h2 style="margin: 0;"><i class="fa fa-tachometer-alt"></i> Dashboard</h2>
-    </div>
-
     <div class="card fade-up" style="padding: 16px; margin-bottom: 16px; text-align:center;">
       <div style="font-size:.7rem;color:var(--text-muted);font-weight:800;text-transform:uppercase;margin-bottom:4px;">Waktu Server</div>
       <div id="dashboardLiveClock" style="font-family:monospace;font-size:1.8rem;font-weight:900;color:var(--primary);">--:--:--</div>
@@ -413,64 +256,6 @@ export async function renderDashboard() {
       ${menuHtml}
     </div>
 
-    ${isAdmin ? adminGlobalHtml : personalHtml}
-
-    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; text-align: center;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 14px;">Total Jam Kerja</div>
-      <div style="position: relative; width: 160px; height: 160px; margin: 0 auto;">
-        <canvas id="jamKerjaChart"></canvas>
-        <div id="jamKerjaChart-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;"></div>
-      </div>
-    </div>
-
-    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Aktivitas Saya (Jam Datang & Pulang)</div>
-      <div style="font-size: .75rem; color: var(--text-muted); margin-bottom: 12px;">
-        ${toTanggalLokal(firstDay.toISOString())} - ${toTanggalLokal(lastDay.toISOString())}
-      </div>
-      <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-        <div style="position: relative; width: 100%; min-width: 600px; height: 300px;">
-          <canvas id="aktivitasChart"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Distribusi Absensi</div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-        <div class="card fade-up" style="padding: 14px;">
-          <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Kehadiran</div>
-          <div style="position: relative; width: 100%; height: 200px;">
-            <canvas id="absensiChartKehadiran"></canvas>
-          </div>
-        </div>
-        <div class="card fade-up" style="padding: 14px;">
-          <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Absen Masuk</div>
-          <div style="position: relative; width: 100%; height: 200px;">
-            <canvas id="absensiChartMasuk"></canvas>
-          </div>
-        </div>
-        <div class="card fade-up" style="padding: 14px;">
-          <div style="font-size: .75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center;">Absen Pulang</div>
-          <div style="position: relative; width: 100%; height: 200px;">
-            <canvas id="absensiChartPulang"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card fade-up" style="padding: 18px; margin-bottom: 20px;">
-      <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 14px;">
-        <i class="fa fa-calendar-alt" style="color: var(--primary);"></i> Kalender HRD
-      </div>
-      <div style="padding: 10px 0; text-align: center; border: 1.5px dashed var(--border); border-radius: var(--r-md); background: var(--gray-50);">
-        <p style="font-size: .85rem; color: var(--text-muted); margin-bottom: 8px;">Lihat jadwal kerja dan agenda perusahaan bulan ini</p>
-        <button class="btn-primary btn-sm" onclick="window.navigate('kalender')" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-          <i class="fa fa-eye"></i> Buka Kalender HRD
-        </button>
-      </div>
-    </div>
-
     <style>
       .home-grid-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.18) !important; }
       .home-grid-btn:active { transform: translateY(-1px); }
@@ -478,22 +263,12 @@ export async function renderDashboard() {
   `
 
   startServerDigitalClock({ key: 'dashboard', timeElementId: 'dashboardLiveClock', dateElementId: 'dashboardLiveDate', serverIso: dashboardServerIso || new Date().toISOString() })
-
-  if (typeof Chart === 'undefined') {
-    const script = document.createElement('script')
-    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
-    script.onload = () => { loadCharts(user.id, dateFrom, dateTo, totalJamKerja) }
-    document.head.appendChild(script)
-  } else {
-    loadCharts(user.id, dateFrom, dateTo, totalJamKerja)
-  }
   } catch (err) {
     console.error('Gagal render dashboard:', err)
     content.innerHTML = `<div class="card" style="padding:18px;border-color:#fecaca;background:#fef2f2;color:#991b1b;"><strong>Dashboard gagal dimuat.</strong><p style="margin:.5rem 0 0;">Data tidak dapat ditampilkan. Coba muat ulang atau hubungi admin.</p></div>`
     window.showToast?.('Dashboard gagal dimuat.', 'error')
   }
 }
-
 
 async function renderSuperAdminDashboard(content) {
   try {
@@ -550,34 +325,5 @@ async function renderSuperAdminDashboard(content) {
   }
 }
 
-async function loadCharts(userId, dateFrom, dateTo, totalJamKerja) {
-  setTimeout(() => {
-    createTotalJamKerjaChart('jamKerjaChart', totalJamKerja)
-    createAktivitasChart('aktivitasChart', userId, dateFrom, dateTo).catch(err => console.warn('Gagal render chart aktivitas:', err))
-    createAbsensiChart('absensiChartKehadiran', 'absensiChartMasuk', 'absensiChartPulang', userId, dateFrom, dateTo).catch(err => console.warn('Gagal render chart absensi:', err))
-    if (typeof Chart !== 'undefined' && canApproveAttendance(window.currentUser) && document.getElementById('adminGlobalChart')) {
-      const ctx = document.getElementById('adminGlobalChart')
-      const statsEl = document.getElementById('adminGlobalStats')
-      const hadir = Number(statsEl?.dataset?.hadir || 0)
-      const terlambat = Number(statsEl?.dataset?.terlambat || 0)
-      const pulangCepat = Number(statsEl?.dataset?.pulangCepat || 0)
-      const cuti = Number(statsEl?.dataset?.cuti || 0)
-      const izin = Number(statsEl?.dataset?.izin || 0)
-      const sakit = Number(statsEl?.dataset?.sakit || 0)
-      const off = Number(statsEl?.dataset?.off || 0)
-      const alpha = Number(statsEl?.dataset?.alpha || 0)
-      const pending = Number(statsEl?.dataset?.pending || 0)
-      window.appCharts = window.appCharts || {}
-      window.appCharts.adminGlobalChart?.destroy()
-      Chart.getChart(ctx)?.destroy()
-      window.appCharts.adminGlobalChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: ['Hadir', 'Terlambat', 'Pulang Cepat', 'Cuti', 'Izin', 'Sakit', 'Off', 'Alpha', 'Pending'],
-          datasets: [{ data: [hadir, terlambat, pulangCepat, cuti, izin, sakit, off, alpha, pending], backgroundColor: ['#16a34a', '#d97706', '#0ea5e9', '#22c55e', '#3b82f6', '#f59e0b', '#64748b', '#dc2626', '#8b5cf6'] }]
-        },
-        options: { responsive: true, plugins: { legend: { display: false } } }
-      })
-    }
-  }, 100)
-}
+
+
