@@ -50,29 +50,29 @@
         <input type="password" id="password" placeholder="Password" autocomplete="current-password"/>
       </div>
 
-      <p id="loginError" style="display:none;color:var(--danger);font-size:.82rem;margin-top:8px; padding:10px 12px;background:var(--danger-light);border:1px solid var(--danger-mid); border-radius:var(--r-md);line-height:1.5;"></p>
+      <p id="loginError" class="login-error"></p>
 
       <button class="btn-login" id="btnLogin" type="submit">
         <i class="fa fa-sign-in-alt"></i> Masuk
       </button>
     </form>
 
-    <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200);"><p style="font-size:.8rem;color:var(--text-muted);margin:0;">Akun dibuat oleh HRD/admin. Tidak ada self-register.</p></div>
+    <div class="app-inline-note"><p>Akun dibuat oleh HRD/admin. Tidak ada self-register.</p></div>
   </div>
 </div>
 
-<div id="appPage" style="display:none;">
+<div id="appPage" class="is-hidden">
 
   <div class="topbar">
     <div class="topbar-left">
-      <button class="btn-menu" id="btnBack" onclick="goBack()" aria-label="Kembali" style="display:none;">
+      <button class="btn-menu is-hidden" id="btnBack" onclick="goBack()" aria-label="Kembali">
         <i class="fa fa-arrow-left"></i>
       </button>
       <button class="btn-menu" onclick="toggleSidebar()" aria-label="Menu">
         <i class="fa fa-bars"></i>
       </button>
       <div class="topbar-title" id="topbarTitle">GenPro</div>
-      <button type="button" id="activeOfficeContext" class="topbar-office-context" onclick="window.changeActiveOfficeContext?.()" style="display:none;"></button>
+      <button type="button" id="activeOfficeContext" class="topbar-office-context is-hidden" onclick="window.changeActiveOfficeContext?.()"></button>
     </div>
     <div class="topbar-right">
       <button class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Ganti tema">
@@ -81,17 +81,17 @@
     </div>
   </div>
   <!-- hidden elements referenced by JS -->
-  <span id="userName" style="display:none;"></span>
+  <span id="userName" class="is-hidden"></span>
 
   <div id="overlay" onclick="closeSidebar()"></div>
 
   <div id="sidebar"></div>
 
   <div id="content">
-    <div style="display:flex;align-items:center;justify-content:center;height:60vh;">
-      <div style="text-align:center;">
-        <i class="fa fa-spinner fa-spin" style="font-size:2rem;color:var(--primary);"></i>
-        <p style="margin-top:12px;color:var(--text-muted);font-size:.85rem;">Memuat...</p>
+    <div class="app-loading-state">
+      <div>
+        <i class="fa fa-spinner fa-spin"></i>
+        <p>Memuat...</p>
       </div>
     </div>
   </div>

@@ -56,20 +56,20 @@
 </head>
 <body>
 
-<div class="container my-5">
+<div class="container my-5 payroll-shell">
     <!-- FILTER SECTION (HISTORY) -->
-    <div class="card card-payroll shadow-sm mb-4 no-print">
-        <div class="card-header d-flex justify-content-between align-items-center" style="background:var(--gray-100);color:var(--text);border-color:var(--border);">
+    <div class="card card-payroll shadow-sm mb-4 no-print payroll-card">
+        <div class="card-header d-flex justify-content-between align-items-center payroll-card-header payroll-card-header--soft">
             <h5 class="mb-0">Riwayat & Slip Gaji</h5>
-            <button class="btn btn-sm btn-outline-light" onclick="window.print()">Cetak Slip</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">Cetak Slip</button>
         </div>
         <div class="card-body">
             <div class="row g-3">
-                <div class="col-md-3" id="div-filter-kantor" style="display: none;">
+                <div class="col-md-3 is-hidden" id="div-filter-kantor">
                     <label class="form-label small font-monospace">Kantor/Domain</label>
                     <select id="filter-kantor" class="form-select form-select-sm"></select>
                 </div>
-                <div class="col-md-3" id="div-filter-karyawan" style="display: none;">
+                <div class="col-md-3 is-hidden" id="div-filter-karyawan">
                     <label class="form-label small font-monospace">Pilih Karyawan</label>
                     <select id="filter-karyawan" class="form-select form-select-sm"></select>
                 </div>
@@ -87,8 +87,8 @@
     </div>
 
     <!-- AREA SLIP GAJI (PRINT AREA) -->
-    <div id="slip-container" class="print-area" style="display: none;">
-        <div class="card card-payroll shadow-sm slip-box">
+    <div id="slip-container" class="print-area is-hidden">
+        <div class="card card-payroll shadow-sm slip-box payroll-card">
             <div class="row border-bottom pb-3 mb-4">
                 <div class="col-6">
                     <h3 class="fw-bold text-primary mb-0" id="slip-nama-kantor">NAMA PERUSAHAAN</h3>
@@ -100,7 +100,7 @@
                 </div>
             </div>
 
-            <div class="row mb-4 p-3 rounded mx-1 slip-info-row" style="background:var(--gray-50);">
+            <div class="row mb-4 p-3 rounded mx-1 slip-info-row payroll-slip-info">
                 <div class="col-md-6">
                     <table class="table table-sm table-borderless mb-0">
                         <tr><td width="35%" class="text-muted">Nama</td><td>: <span id="slip-nama-karyawan" class="fw-bold">-</span></td></tr>
@@ -134,7 +134,7 @@
                 </div>
             </div>
 
-            <div class="row border-top pt-3 align-items-center rounded p-2 mx-1 slip-thp-row" style="background:var(--gray-100);color:var(--text);">
+            <div class="row border-top pt-3 align-items-center rounded p-2 mx-1 slip-thp-row payroll-slip-total">
                 <div class="col-6">
                     <h5 class="mb-0 fw-bold">TOTAL GAJI BERSIH (Take Home Pay)</h5>
                 </div>
@@ -153,7 +153,7 @@
         </div>
     </div>
 
-    <div id="slip-empty" class="alert alert-warning text-center" style="display: block;">
+    <div id="slip-empty" class="alert alert-warning text-center">
         Silakan pilih filter di atas dan klik <strong>Cari Data</strong> untuk memuat slip gaji.
     </div>
 </div>

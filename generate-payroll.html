@@ -40,15 +40,15 @@
 </head>
 <body>
 
-<div class="container my-5">
-    <div class="card shadow-sm mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center" style="background:var(--gray-100);color:var(--text);border-color:var(--border);">
+<div class="container my-5 payroll-shell">
+    <div class="card shadow-sm mb-4 payroll-card">
+        <div class="card-header d-flex justify-content-between align-items-center payroll-card-header payroll-card-header--soft">
             <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>4. Run & Generate Payroll</h5>
             <span id="role-indicator" class="badge bg-secondary">Role: Loading...</span>
         </div>
         <div class="card-body">
             <!-- Filter & Aksi Utama -->
-            <div class="row g-3 align-items-center mb-3">
+            <div class="row g-3 align-items-center mb-3 payroll-action-row">
                 <div class="col-md-3">
                     <label class="form-label small font-monospace">Pilih Periode Aktif/Lalu</label>
                     <select id="run-pilih-periode" class="form-select form-select-sm">
@@ -62,12 +62,12 @@
                     </select>
                 </div>
                 <div class="col-md-3 align-self-end">
-                    <button id="btn-proses-hitung" class="btn btn-primary btn-sm w-100" style="display: none;">
+                    <button id="btn-proses-hitung" class="btn btn-primary btn-sm w-100 is-hidden">
                         <i class="fas fa-cogs me-1"></i> Ambil Template & Hitung Gaji
                     </button>
                 </div>
                 <div class="col-md-3 align-self-end text-end">
-                    <button id="btn-approve-massal" class="btn btn-success btn-sm w-100" style="display: none;">
+                    <button id="btn-approve-massal" class="btn btn-success btn-sm w-100 is-hidden">
                         <i class="fas fa-check-double me-1"></i> Approve Semua & Terbitkan Slip
                     </button>
                 </div>
@@ -85,7 +85,7 @@
 
             <!-- Tabel Hasil Pemrosesan -->
             <div class="table-responsive">
-                <table class="table table-striped table-hover align-middle small">
+                <table class="table table-striped table-hover align-middle small payroll-table payroll-table--wide">
                     <thead class="table-secondary">
                         <tr>
                             <th>Karyawan</th>
@@ -107,7 +107,7 @@
             </div>
 
             <!-- Ringkasan Total THP -->
-            <div id="payroll-total-summary" class="mt-3 p-3 rounded payroll-summary" style="background:var(--gray-100);color:var(--text);display:none;">
+            <div id="payroll-total-summary" class="payroll-summary payroll-summary-box">
             </div>
         </div>
     </div>
