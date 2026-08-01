@@ -4,7 +4,7 @@ var currentUser = {};
 let activeTemplateId = '';
 let activeTemplateName = '';
 const PAYROLL_COMPONENT_COLUMN_COUNT = 4;
-const TEMPLATE_DETAIL_COLUMN_COUNT = 4;
+const TEMPLATE_DETAIL_COLUMN_COUNT = 5;
 const PAYROLL_MESSAGES = {
     noTemplateSelected: 'Pilih template terlebih dahulu',
     noComponents: 'Belum ada komponen payroll',
@@ -139,11 +139,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             const tempId = document.getElementById('aktif-template-id')?.value;
             const compId = document.getElementById('pilih-komponen')?.value;
             const nominal = document.getElementById('nominal-komponen')?.value;
+            const tipeNilai = document.getElementById('tipe-nilai-komponen')?.value || 'nominal';
 
             if (!tempId) return alert("Tidak ada template yang dipilih. Silakan pilih template dari daftar terlebih dahulu.");
             if (!compId) return alert("Tidak ada komponen yang dipilih. Silakan pilih komponen yang ingin dimasukkan ke template.");
             if (nominal === '' || nominal === null || nominal === undefined) {
                 return alert("Nominal komponen wajib diisi.");
+            }
+            if (!['nominal', 'persen'].includes(tipeNilai)) {
+                return alert("Tipe nilai komponen tidak valid.");
             }
 
             const { data: existingDetail, error: existingError } = await supabase
@@ -158,14 +162,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             const payload = {
                 template_id: tempId,
                 component_id: compId,
-                nominal: Number(nominal)
+                nominal: Number(nominal),
+                tipe_nilai: tipeNilai
             };
             let error = null;
             // If the component already exists in the template, update only its nominal value.
             if (existingDetail?.id) {
                 const updateResult = await supabase
                     .from('payroll_template_details')
-                    .update({ nominal: payload.nominal })
+                    .update({ nominal: payload.nominal, tipe_nilai: payload.tipe_nilai })
                     .eq('id', existingDetail.id);
                 error = updateResult.error;
             } else {
@@ -178,10 +183,29 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (error) return alert("Gagal menambah rincian: " + error.message);
             const selectKomponen = document.getElementById('pilih-komponen');
             const inputNominal = document.getElementById('nominal-komponen');
+            const inputTipeNilai = document.getElementById('tipe-nilai-komponen');
             if (selectKomponen) selectKomponen.value = '';
             if (inputNominal) inputNominal.value = '';
+            if (inputTipeNilai) inputTipeNilai.value = 'nominal';
             await loadDetailTemplate(tempId);
         });
+    }
+
+    const tipeNilaiInput = document.getElementById('tipe-nilai-komponen');
+    const nominalInput = document.getElementById('nominal-komponen');
+    const syncLabelTipeNilai = () => {
+        if (!tipeNilaiInput || !nominalInput) return;
+        if (tipeNilaiInput.value === 'persen') {
+            nominalInput.placeholder = 'Persen (%)';
+            nominalInput.max = '100';
+        } else {
+            nominalInput.placeholder = 'Nominal Rp.';
+            nominalInput.removeAttribute('max');
+        }
+    };
+    if (tipeNilaiInput) {
+        tipeNilaiInput.addEventListener('change', syncLabelTipeNilai);
+        syncLabelTipeNilai();
     }
 
     const detailTable = document.getElementById('list-detail-template');
@@ -404,7 +428,7 @@ async function loadDetailTemplate(templateId) {
     if (!templateId) return;
     const { data } = await supabase
         .from('payroll_template_details')
-        .select(`id, nominal, payroll_components ( nama_komponen, jenis )`)
+        .select(`id, nominal, tipe_nilai, payroll_components ( nama_komponen, jenis )`)
         .eq('template_id', templateId);
 
     const tbody = document.getElementById('list-detail-template');
@@ -420,11 +444,16 @@ async function loadDetailTemplate(templateId) {
     data.forEach(d => {
         if (d.payroll_components) {
             const jenisClass = d.payroll_components.jenis === 'pemasukan' ? 'text-success' : 'text-danger';
+            const tipeNilai = d.tipe_nilai === 'persen' ? 'persen' : 'nominal';
+            const nilaiFormatted = tipeNilai === 'persen'
+                ? `${parseFloat(d.nominal || 0).toLocaleString('id-ID')}%`
+                : `Rp ${parseFloat(d.nominal || 0).toLocaleString('id-ID')}`;
             detailRowsHtml += `
             <tr>
                 <td>${escapeHtml(d.payroll_components.nama_komponen)}</td>
                 <td class="${jenisClass}">${escapeHtml(d.payroll_components.jenis)}</td>
-                <td>Rp ${parseFloat(d.nominal).toLocaleString('id-ID')}</td>
+                <td class="text-uppercase">${escapeHtml(tipeNilai)}</td>
+                <td>${nilaiFormatted}</td>
                 <td>
                     <button class="btn btn-danger btn-sm py-0 px-1"
                         data-action="hapus-detail"

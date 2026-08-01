@@ -112,6 +112,8 @@
                     <table class="table table-sm table-borderless mb-0">
                         <tr><td width="35%" class="text-muted">Periode</td><td>: <span id="slip-periode" class="fw-bold">-</span></td></tr>
                         <tr><td class="text-muted">No. Rekening</td><td>: <span id="slip-nomor-rekening">-</span></td></tr>
+                        <tr><td class="text-muted">Mode Gaji</td><td>: <span id="slip-salary-mode">-</span></td></tr>
+                        <tr><td class="text-muted">Hari Kerja/Bulan</td><td>: <span id="slip-hari-kerja">-</span></td></tr>
                         <tr><td class="text-muted">Tanggal Cetak</td><td>: <span id="slip-tanggal-cetak">-</span></td></tr>
                     </table>
                 </div>
@@ -138,6 +140,14 @@
                 </div>
                 <div class="col-6 text-end">
                     <h3 class="mb-0 fw-bold text-warning" id="slip-total-bersih">Rp 0</h3>
+                </div>
+            </div>
+            <div class="row pt-2 align-items-center rounded p-2 mx-1">
+                <div class="col-6">
+                    <h6 class="mb-0 fw-bold">GAJI PER HARI</h6>
+                </div>
+                <div class="col-6 text-end">
+                    <h5 class="mb-0 fw-bold text-primary" id="slip-gaji-per-hari">-</h5>
                 </div>
             </div>
         </div>

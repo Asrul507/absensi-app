@@ -26,6 +26,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadDataMapping();
 
     const formMapping = document.getElementById('form-mapping');
+    const salaryModeSelect = document.getElementById('salary-mode');
+    const hariKerjaWrapper = document.getElementById('hari-kerja-wrapper');
+    const hariKerjaInput = document.getElementById('hari-kerja-per-bulan');
+
+    const syncModeHarianInput = () => {
+        const isHarian = salaryModeSelect?.value === 'harian';
+        if (hariKerjaWrapper) hariKerjaWrapper.style.display = isHarian ? 'block' : 'none';
+        if (hariKerjaInput) {
+            hariKerjaInput.value = isHarian ? (hariKerjaInput.value || '26') : '26';
+            hariKerjaInput.required = isHarian;
+        }
+    };
+
+    if (salaryModeSelect) {
+        salaryModeSelect.addEventListener('change', syncModeHarianInput);
+        syncModeHarianInput();
+    }
+
     if (formMapping) {
         formMapping.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -33,22 +51,36 @@ document.addEventListener("DOMContentLoaded", async () => {
             const templateId = document.getElementById('pilih-template')?.value;
             const namaBank = document.getElementById('nama-bank')?.value || '';
             const nomorRekening = document.getElementById('nomor-rekening')?.value || '';
+            const salaryMode = document.getElementById('salary-mode')?.value || 'bulanan';
+            const hariKerjaRaw = parseInt(document.getElementById('hari-kerja-per-bulan')?.value || '26', 10);
+            const hariKerja = Number.isFinite(hariKerjaRaw) ? hariKerjaRaw : 26;
 
             if (!userId || !templateId) {
                 return alert("Silakan pilih karyawan dan template terlebih dahulu!");
+            }
+            if (!['bulanan', 'harian'].includes(salaryMode)) {
+                return alert("Mode gaji tidak valid.");
+            }
+            if (salaryMode === 'harian' && (hariKerja < 20 || hariKerja > 31)) {
+                return alert("Hari kerja per bulan wajib antara 20 sampai 31.");
             }
 
             const { error } = await supabase.from('payroll_mappings').upsert([{
                 user_id: userId,
                 template_id: templateId,
                 nama_bank: namaBank,
-                nomor_rekening: nomorRekening
+                nomor_rekening: nomorRekening,
+                salary_mode: salaryMode,
+                hari_kerja_per_bulan: salaryMode === 'harian' ? hariKerja : 26
             }], { onConflict: 'user_id' });
 
             if (error) return alert("Gagal menyimpan pemetaan: " + error.message);
             
             alert("Pemetaan gaji karyawan berhasil disimpan!");
             formMapping.reset();
+            if (salaryModeSelect) salaryModeSelect.value = 'bulanan';
+            if (hariKerjaInput) hariKerjaInput.value = '26';
+            syncModeHarianInput();
             await loadDataMapping();
         });
     }
@@ -97,6 +129,8 @@ async function loadDataMapping() {
             template_id,
             nama_bank,
             nomor_rekening,
+            salary_mode,
+            hari_kerja_per_bulan,
             profiles!inner ( nama_lengkap, client_id ),
             payroll_templates ( nama_template )
         `);
@@ -118,7 +152,7 @@ async function loadDataMapping() {
     ) || [];
 
     if (filteredData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada pemetaan karyawan</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Belum ada pemetaan karyawan</td></tr>';
         return;
     }
 
@@ -126,11 +160,16 @@ async function loadDataMapping() {
         const bankInfo = m.nama_bank && m.nomor_rekening
             ? `${m.nama_bank} / ${m.nomor_rekening}`
             : (m.nama_bank || m.nomor_rekening || '<span class="text-muted small">-</span>');
+        const salaryMode = m.salary_mode === 'harian' ? 'Harian' : 'Bulanan';
+        const modeInfo = m.salary_mode === 'harian'
+            ? `${salaryMode}<br><small class="text-muted">${m.hari_kerja_per_bulan || 26} hari/bulan</small>`
+            : salaryMode;
         tbody.innerHTML += `
             <tr>
                 <td>${m.profiles?.nama_lengkap || 'Tidak Diketahui'}</td>
                 <td>${m.payroll_templates?.nama_template || 'Tanpa Template'}</td>
                 <td>${bankInfo}</td>
+                <td>${modeInfo}</td>
                 <td>
                     <button class="btn btn-sm btn-danger py-0 px-2" onclick="hapusMapping('${m.user_id}')">Hapus</button>
                 </td>

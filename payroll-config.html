@@ -103,8 +103,14 @@
                         <div class="col-md-5">
                             <select id="pilih-komponen" class="form-select" required></select>
                         </div>
-                        <div class="col-md-4">
-                            <input type="number" id="nominal-komponen" class="form-control" placeholder="Nominal Rp." required>
+                        <div class="col-md-3">
+                            <select id="tipe-nilai-komponen" class="form-select" required>
+                                <option value="nominal">Nominal (Rp)</option>
+                                <option value="persen">Persen dari Gaji Pokok (%)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="number" id="nominal-komponen" class="form-control" placeholder="Nominal Rp." step="0.01" min="0" required>
                         </div>
                         <div class="col-md-3">
                             <button type="submit" class="btn btn-success btn-sm w-100">+ Tambah</button>
@@ -112,9 +118,9 @@
                     </form>
                     
                     <table class="table table-sm table-bordered">
-                        <thead class="table-light"><tr><th>Komponen</th><th>Jenis</th><th>Nominal</th><th>Aksi</th></tr></thead>
+                        <thead class="table-light"><tr><th>Komponen</th><th>Jenis</th><th>Tipe Nilai</th><th>Nilai</th><th>Aksi</th></tr></thead>
                         <tbody id="list-detail-template">
-                            <tr><td colspan="4" class="text-center text-muted">Pilih template terlebih dahulu</td></tr>
+                            <tr><td colspan="5" class="text-center text-muted">Pilih template terlebih dahulu</td></tr>
                         </tbody>
                     </table>
                 </div>

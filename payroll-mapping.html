@@ -67,9 +67,20 @@
                     <label class="form-label small font-monospace fw-bold">3. Nama Bank</label>
                     <input type="text" id="nama-bank" class="form-control form-control-sm" placeholder="Contoh: BCA, Mandiri" required>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <label class="form-label small font-monospace fw-bold">4. No. Rekening</label>
                     <input type="text" id="nomor-rekening" class="form-control form-control-sm" placeholder="Nomor rekening" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small font-monospace fw-bold">5. Mode Gaji</label>
+                    <select id="salary-mode" class="form-select form-select-sm" required>
+                        <option value="bulanan">Bulanan</option>
+                        <option value="harian">Harian</option>
+                    </select>
+                </div>
+                <div class="col-md-2" id="hari-kerja-wrapper" style="display: none;">
+                    <label class="form-label small font-monospace fw-bold">Hari Kerja/Bulan</label>
+                    <input type="number" id="hari-kerja-per-bulan" class="form-control form-control-sm" min="20" max="31" value="26">
                 </div>
                 <div class="col-md-2 align-self-end">
                     <button type="submit" class="btn btn-success btn-sm w-100"><i class="fas fa-save me-1"></i> Simpan</button>
@@ -85,12 +96,13 @@
                             <th>Template Gaji yang Digunakan</th>
                             <!-- PENGEMBANGAN TABEL: Kolom Tambahan Informasi Bank -->
                             <th>Informasi Bank / Rekening</th>
+                            <th>Mode Gaji</th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
                     <tbody id="list-mapping-table">
                         <tr>
-                            <td colspan="4" class="text-center text-muted">Memuat data...</td>
+                            <td colspan="5" class="text-center text-muted">Memuat data...</td>
                         </tr>
                     </tbody>
                 </table>
