@@ -32,6 +32,7 @@ import { logAuditEvent } from './audit-trail.js'
 import { renderAttendanceApproval, canApproveAttendance } from './attendance-approval.js'
 import { assertSameDepartment, canAccessAllDepartments, canManageUserByDepartment, getAccessibleProfiles, getUserDepartment, normalizeRole, isSuperAdmin, isAdminAll, isAdminHR, isAdmin, isStaff, applyTenantFilter } from './access-control.js'
 import { renderSettingsApp } from './settings-app.js'
+import { renderRekapAbsensi } from './rekap-absensi.js'
 
 
 /* ================= GLOBAL VARIABLES ================= */
@@ -211,6 +212,8 @@ window.login = async function () {
 }
 
 window.logout = async function () {
+  window.navHistory = []
+  updateBackButton()
   stopNotificationPolling()
   await logout()
 }
@@ -276,6 +279,74 @@ function renderMenu(role) {
   const userName = user?.nama_lengkap || user?.email || ''
   const userRole = (user?.role || 'staff').replace(/_/g, ' ')
 
+  const isPayrollAdmin = ['super_admin', 'admin_all', 'admin_hr'].includes(role)
+
+  let menuHtml = ''
+  if (role === 'staff') {
+    menuHtml = `
+      <div class="sidebar-section-title">ABSENSI</div>
+      <a href="#" id="menu-dashboard" onclick="navigate('dashboard'); closeSidebar(); return false;"><i class="fa fa-house"></i> Dashboard</a>
+      <a href="#" id="menu-absensi" onclick="navigate('absensi'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Absensi Kerja</a>
+      <a href="#" id="menu-daftar-absensi" onclick="navigate('daftar-absensi'); closeSidebar(); return false;"><i class="fa fa-list-check"></i> Log Kehadiran</a>
+      <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-business-time"></i> Rekap In/Out</a>
+      <a href="#" id="menu-rekap-absensi" onclick="navigate('rekap-absensi'); closeSidebar(); return false;"><i class="fa fa-chart-pie"></i> Statistik Absensi</a>
+      <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Statistik</a>
+
+      <div class="sidebar-section-title">JADWAL</div>
+      <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-alt"></i> Kalender Kerja</a>
+
+      <div class="sidebar-section-title">PENGAJUAN & APPROVAL</div>
+      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-file-alt"></i> Pengajuan Cuti/Sakit</a>
+      <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen</a>
+
+      <div class="sidebar-section-title">PAYROLL</div>
+      <a href="#" id="menu-slip-gaji" onclick="navigate('slip-gaji'); closeSidebar(); return false;"><i class="fas fa-file-invoice-dollar"></i> Slip Gaji & Riwayat</a>
+
+      <div class="sidebar-section-title">PENGATURAN AKUN</div>
+      <a href="#" id="menu-profile" onclick="navigate('profile'); closeSidebar(); return false;"><i class="fa fa-user-cog"></i> Profil & Pengaturan</a>
+      <a href="#" onclick="logout(); return false;" class="sidebar-logout-btn"><i class="fa fa-sign-out-alt"></i> Keluar</a>
+    `;
+  } else {
+    menuHtml = `
+      <div class="sidebar-section-title">ABSENSI</div>
+      <a href="#" id="menu-dashboard" onclick="navigate('dashboard'); closeSidebar(); return false;"><i class="fa fa-house"></i> Dashboard Admin</a>
+      <a href="#" id="menu-absensi" onclick="navigate('absensi'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Menu Absen</a>
+      <a href="#" id="menu-daftar-absensi" onclick="navigate('daftar-absensi'); closeSidebar(); return false;"><i class="fa fa-list-check"></i> Log Kehadiran</a>
+      <a href="#" id="menu-rekap-inout" onclick="navigate('rekap-inout'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Rekap Bulanan In/Out</a>
+      <a href="#" id="menu-rekap-absensi" onclick="navigate('rekap-absensi'); closeSidebar(); return false;"><i class="fa fa-chart-pie"></i> Statistik Absensi</a>
+      <a href="#" id="menu-rekap" onclick="navigate('rekap'); closeSidebar(); return false;"><i class="fa fa-chart-bar"></i> Laporan Rekap Absensi</a>
+      ${isPayrollAdmin ? `<a href="#" id="menu-laporan-keseluruhan" onclick="navigate('laporan-keseluruhan'); closeSidebar(); return false;"><i class="fa fa-file-lines"></i> Laporan Keseluruhan <span class="sidebar-badge-info">NEW</span></a>` : ''}
+
+      <div class="sidebar-section-title">JADWAL</div>
+      <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-days"></i> Kalender HRD</a>
+      <a href="#" id="menu-jadwal" onclick="navigate('jadwal'); closeSidebar(); return false;"><i class="fa fa-calendar-week"></i> Atur Jadwal Kerja</a>
+      <a href="#" id="menu-shift" onclick="navigate('shift'); closeSidebar(); return false;"><i class="fa fa-business-time"></i> Kelola Shift</a>
+
+      <div class="sidebar-section-title">PENGAJUAN & APPROVAL</div>
+      <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-umbrella-beach"></i> Cuti Tahunan & Pengajuan <span class="sidebar-badge-info">HR</span></a>
+      <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen <span class="sidebar-badge-info">Staff</span></a>
+      <a href="#" id="menu-approval-absensi" onclick="navigate('approval-absensi'); closeSidebar(); return false;"><i class="fa fa-clipboard-check"></i> Approval Absensi <span class="sidebar-badge-info">OPEN</span></a>
+
+      <div class="sidebar-section-title">PAYROLL</div>
+      ${isPayrollAdmin ? `
+        <a href="#" id="menu-payroll-config" onclick="navigate('payroll-config'); closeSidebar(); return false;"><i class="fas fa-cogs"></i> Konfigurasi & Template</a>
+        <a href="#" id="menu-payroll-mapping" onclick="navigate('payroll-mapping'); closeSidebar(); return false;"><i class="fas fa-users-cog"></i> Input Template Payroll</a>
+        <a href="#" id="menu-generate-payroll" onclick="navigate('generate-payroll'); closeSidebar(); return false;"><i class="fas fa-calculator"></i> Generate & Run Payroll</a>
+      ` : ''}
+      <a href="#" id="menu-slip-gaji" onclick="navigate('slip-gaji'); closeSidebar(); return false;"><i class="fas fa-file-invoice-dollar"></i> Slip Gaji & Riwayat</a>
+
+      <div class="sidebar-section-title">KARYAWAN & OPERASIONAL</div>
+      <a href="#" id="menu-users" onclick="navigate('users'); closeSidebar(); return false;"><i class="fa fa-users"></i> Data Karyawan</a>
+      ${isPayrollAdmin ? `<a href="#" id="menu-personalia" onclick="navigate('personalia'); closeSidebar(); return false;"><i class="fa fa-id-card-clip"></i> HR Personalia / Kontrak</a>` : ''}
+      <a href="#" id="menu-admin-lokasi" onclick="navigate('admin-lokasi'); closeSidebar(); return false;"><i class="fa fa-map-location-dot"></i> Titik Radius GPS</a>
+
+      <div class="sidebar-section-title">PENGATURAN AKUN</div>
+      <a href="#" id="menu-profile" onclick="navigate('profile'); closeSidebar(); return false;"><i class="fa fa-user-cog"></i> Profil & Pengaturan</a>
+      ${role === 'super_admin' ? `<a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Office & Department</a>` : ''}
+      <a href="#" onclick="logout(); return false;" class="sidebar-logout-btn"><i class="fa fa-sign-out-alt"></i> Keluar</a>
+    `;
+  }
+
   const appTitle = getAppTitle(user)
   sidebar.innerHTML = `
     <div class="sidebar-header">
@@ -284,10 +355,7 @@ function renderMenu(role) {
       <div class="sb-office" style="margin-top:2px;font-size:.6rem;opacity:.7;text-transform:uppercase;letter-spacing:.4px;">${userRole}</div>
     </div>
     <nav class="sidebar-nav">
-      <div class="sidebar-section-title">PENGATURAN AKUN</div>
-      <a href="#" id="menu-profile" onclick="navigate('profile'); closeSidebar(); return false;"><i class="fa fa-user-cog"></i> Profil & Pengaturan</a>
-      ${role === 'super_admin' ? `<a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Office & Department</a>` : ''}
-      <a href="#" onclick="logout(); return false;" class="sidebar-logout-btn"><i class="fa fa-sign-out-alt"></i> Keluar</a>
+      ${menuHtml}
     </nav>
     <div style="padding: 15px; border-top: 1px solid rgba(255,255,255,0.08);">
       <div style="margin-top:10px; text-align:center; font-size:.65rem; color:rgba(255,255,255,.3); letter-spacing:.3px; line-height:1.5;">
@@ -429,9 +497,10 @@ function renderBottomNav(role) {
   if (!nav) return
   const items = role === 'staff'
     ? [
-        { key:'dashboard', icon:'fa-house',    label:'Home' },
-        { key:'absensi',   icon:'fa-clock',    label:'Absen' },
-        { key:'profile',   icon:'fa-user',     label:'Profil' },
+        { key:'dashboard',     icon:'fa-house',    label:'Home' },
+        { key:'absensi',       icon:'fa-clock',    label:'Absen' },
+        { key:'rekap-absensi', icon:'fa-chart-pie',label:'Statistik' },
+        { key:'profile',       icon:'fa-user',     label:'Profil' },
       ]
     : [
         { key:'dashboard', icon:'fa-house',    label:'Home' },
@@ -450,8 +519,8 @@ function renderBottomNav(role) {
 // DAFTAR HALAMAN YANG DIIZINKAN (SUDAH DIUPDATE)
 // ==========================================
 const ADMIN_ROLES = ['super_admin', 'admin_all', 'admin_hr', 'admin']
-const STAFF_PAGES = ['dashboard', 'absensi', 'perbaikan-absen', 'pengajuan', 'kalender', 'daftar-absensi', 'rekap-inout', 'rekap', 'slip-gaji', 'profile']
-const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'daftar-absensi', 'rekap-inout', 'rekap', 'laporan-keseluruhan', 'payroll-config', 'payroll-mapping', 'generate-payroll', 'slip-gaji', 'profile', 'settings-app']
+const STAFF_PAGES = ['dashboard', 'absensi', 'perbaikan-absen', 'pengajuan', 'kalender', 'daftar-absensi', 'rekap-inout', 'rekap', 'rekap-absensi', 'slip-gaji', 'profile']
+const ADMIN_PAGES = ['dashboard', 'absensi', 'kalender', 'pengajuan', 'perbaikan-absen', 'approval-absensi', 'jadwal', 'shift', 'users', 'personalia', 'admin-lokasi', 'daftar-absensi', 'rekap-inout', 'rekap', 'rekap-absensi', 'laporan-keseluruhan', 'payroll-config', 'payroll-mapping', 'generate-payroll', 'slip-gaji', 'profile', 'settings-app']
 
 function isAdminRole(role) {
   return ADMIN_ROLES.includes(normalizeRole(role))
@@ -462,15 +531,39 @@ function canAccessPage(user, page) {
   return (isAdminRole(role) ? ADMIN_PAGES : STAFF_PAGES).includes(page)
 }
 
+/* ================= NAVIGATION HISTORY (BACK BUTTON) ================= */
+window.navHistory = []
+
+function updateBackButton() {
+  const btn = document.getElementById('btnBack')
+  if (!btn) return
+  btn.style.display = window.navHistory.length > 0 ? 'flex' : 'none'
+}
+
+window.goBack = function () {
+  if (window.navHistory.length > 0) {
+    const prev = window.navHistory.pop()
+    window.navigate(prev, { addToHistory: false })
+  } else {
+    window.navigate('dashboard', { addToHistory: false })
+  }
+}
+
 /* ================= SINGLE PAGE APPLICATION NAVIGATION ================= */
-window.navigate = async function (page) {
+window.navigate = async function (page, { addToHistory = true } = {}) {
   if (!window.currentUser) { showToast('Sesi berakhir. Silakan login ulang.', 'warning'); showLoginPage(); return }
   if (!canAccessPage(window.currentUser, page)) {
     showToast('Anda tidak memiliki akses ke menu tersebut.', 'warning')
+    addToHistory = false
     page = 'dashboard'
   }
 
+  if (addToHistory && window.currentPage && window.currentPage !== page) {
+    window.navHistory.push(window.currentPage)
+  }
+
   window.currentPage = page
+  updateBackButton()
 
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'))
   document.getElementById(`menu-${page}`)?.classList.add('active')
@@ -489,6 +582,7 @@ window.navigate = async function (page) {
     case 'pengajuan': renderPengajuan(window.currentUser); break
     case 'personalia': await renderPersonalia(); break
     case 'rekap':      renderRekap(window.currentUser); break
+    case 'rekap-absensi': renderRekapAbsensi(window.currentUser); break
     case 'kalender':  renderKalenderHR(); break
     case 'profile':   renderProfile(); break
     case 'users':      await renderUsers(); break
