@@ -26,7 +26,7 @@
   <div class="login-box">
 
     <div class="login-logo">
-      <span class="login-icon">🏢</span>
+      <i class="fa fa-building login-icon-fa"></i>
       <h1>GenPro</h1>
       <p>HR & Attendance Management System</p>
     </div>
@@ -72,15 +72,13 @@
       <button type="button" id="activeOfficeContext" class="topbar-office-context" onclick="window.changeActiveOfficeContext?.()" style="display:none;"></button>
     </div>
     <div class="topbar-right">
-      <button type="button" id="userName" class="topbar-user-name" onclick="window.navigate('profile')" title="Profil saya"></button>
       <button class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Ganti tema">
         <i class="fa fa-moon" id="themeIcon"></i>
       </button>
-      <button class="btn-logout-top" onclick="logout()" aria-label="Keluar">
-        <i class="fa fa-sign-out-alt"></i>
-      </button>
     </div>
   </div>
+  <!-- hidden elements referenced by JS -->
+  <span id="userName" style="display:none;"></span>
 
   <div id="overlay" onclick="closeSidebar()"></div>
 

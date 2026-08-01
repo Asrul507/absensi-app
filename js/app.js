@@ -272,10 +272,13 @@ function renderMenu(role) {
   const sidebar = document.getElementById('sidebar')
   if (!sidebar) return
 
-  let menuHtml = '';
+  const user = window.currentUser
+  const userName = user?.nama_lengkap || user?.email || ''
+  const userRole = (user?.role || 'staff').replace(/_/g, ' ')
 
   const isPayrollAdmin = ['super_admin', 'admin_all', 'admin_hr'].includes(role)
 
+  let menuHtml = ''
   if (role === 'staff') {
     menuHtml = `
       <div class="sidebar-section-title">ABSENSI</div>
@@ -295,8 +298,9 @@ function renderMenu(role) {
       <div class="sidebar-section-title">PAYROLL</div>
       <a href="#" id="menu-slip-gaji" onclick="navigate('slip-gaji'); closeSidebar(); return false;"><i class="fas fa-file-invoice-dollar"></i> Slip Gaji & Riwayat</a>
 
-      <div class="sidebar-section-title">PENGATURAN</div>
-      <a href="#" id="menu-profile" onclick="navigate('profile'); closeSidebar(); return false;"><i class="fa fa-user"></i> Profil Saya</a>
+      <div class="sidebar-section-title">PENGATURAN AKUN</div>
+      <a href="#" id="menu-profile" onclick="navigate('profile'); closeSidebar(); return false;"><i class="fa fa-user-cog"></i> Profil & Pengaturan</a>
+      <a href="#" onclick="logout(); return false;" class="sidebar-logout-btn"><i class="fa fa-sign-out-alt"></i> Keluar</a>
     `;
   } else {
     menuHtml = `
@@ -331,14 +335,19 @@ function renderMenu(role) {
       ${isPayrollAdmin ? `<a href="#" id="menu-personalia" onclick="navigate('personalia'); closeSidebar(); return false;"><i class="fa fa-id-card-clip"></i> HR Personalia / Kontrak</a>` : ''}
       <a href="#" id="menu-admin-lokasi" onclick="navigate('admin-lokasi'); closeSidebar(); return false;"><i class="fa fa-map-location-dot"></i> Titik Radius GPS</a>
 
-      ${role === 'super_admin' ? `<div class="sidebar-section-title">SETTINGS APP</div><a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Office & Department</a>` : ''}
+      <div class="sidebar-section-title">PENGATURAN AKUN</div>
+      <a href="#" id="menu-profile" onclick="navigate('profile'); closeSidebar(); return false;"><i class="fa fa-user-cog"></i> Profil & Pengaturan</a>
+      ${role === 'super_admin' ? `<a href="#" id="menu-settings-app" onclick="navigate('settings-app'); closeSidebar(); return false;"><i class="fa fa-building-user"></i> Office & Department</a>` : ''}
+      <a href="#" onclick="logout(); return false;" class="sidebar-logout-btn"><i class="fa fa-sign-out-alt"></i> Keluar</a>
     `;
   }
 
-  const appTitle = getAppTitle(window.currentUser)
+  const appTitle = getAppTitle(user)
   sidebar.innerHTML = `
     <div class="sidebar-header">
       <div class="sb-name">${appTitle}</div>
+      <div class="sb-office">${userName ? `<i class="fa fa-user-circle"></i> ${userName}` : ''}</div>
+      <div class="sb-office" style="margin-top:2px;font-size:.6rem;opacity:.7;text-transform:uppercase;letter-spacing:.4px;">${userRole}</div>
     </div>
     <nav class="sidebar-nav">
       ${menuHtml}
