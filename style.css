@@ -4374,69 +4374,74 @@ body, body * {
 
 /* Judul kategori pemisah menu — Light Mode */
 .sidebar-section-title {
-  font-size: .63rem;
-  font-weight: 900;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-  color: #334155;
-  padding: 16px 16px 6px;
+  font-size: .8rem;
+  font-weight: 800;
+  letter-spacing: .4px;
+  text-transform: none;
+  color: #0f172a;
+  padding: 13px 14px;
   margin-bottom: 0;
-  border-bottom: 1px solid rgba(226,232,240,.6);
+  border: 1px solid rgba(226,232,240,.9);
+  border-radius: 10px;
   user-select: none;
   /* Button resets for <button> element */
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   width: 100%;
   background: none;
-  border: none;
-  border-bottom: 1px solid rgba(226,232,240,.6);
   cursor: pointer;
   font-family: inherit;
+  min-height: 44px;
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
 }
 
 .sidebar-section-title:hover {
   color: #1e293b;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.sidebar-section-title.active {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #93c5fd;
 }
 
 .sidebar-section-icon {
-  font-size: .72rem;
-  opacity: .65;
+  font-size: .85rem;
+  opacity: .85;
   flex-shrink: 0;
 }
 
 .sidebar-section-chevron {
   margin-left: auto;
-  font-size: .62rem;
-  opacity: .5;
+  font-size: .72rem;
+  opacity: .62;
   flex-shrink: 0;
-  transition: transform .25s ease;
-}
-
-.sidebar-section.open .sidebar-section-chevron {
-  transform: rotate(180deg);
+  transition: opacity .18s ease;
 }
 
 .sidebar-section-items {
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height .3s ease;
-}
-
-.sidebar-section.open .sidebar-section-items {
-  max-height: 700px;
+  display: none !important;
 }
 
 /* Dark Mode override — pakai :root.dark sesuai konvensi file ini */
 html.dark .sidebar-section-title {
-  color: rgba(255,255,255,.45);
-  border-bottom-color: rgba(255,255,255,.05);
+  color: rgba(255,255,255,.86);
+  border-color: rgba(255,255,255,.12);
 }
 html.dark .sidebar-section-title:hover {
-  color: rgba(255,255,255,.7);
+  color: rgba(255,255,255,.95);
+  background: rgba(148,163,184,.16);
+}
+html.dark .sidebar-section-title.active {
+  color: #93c5fd;
+  background: rgba(59,130,246,.14);
+  border-color: rgba(59,130,246,.4);
 }
 html.dark .sidebar-section-chevron {
-  color: rgba(255,255,255,.35);
+  color: rgba(255,255,255,.5);
 }
 
 /* Badge info kecil di kanan teks menu */
@@ -4522,7 +4527,7 @@ html.dark .sidebar-logout-btn:hover { background: rgba(239,68,68,.15) !important
    ============================================= */
 .home-grid-menu {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -4531,8 +4536,8 @@ html.dark .sidebar-logout-btn:hover { background: rgba(239,68,68,.15) !important
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 16px 8px 14px;
+  gap: 10px;
+  padding: 16px 10px 14px;
   background: linear-gradient(135deg, var(--btn-color2, #60a5fa) 0%, var(--btn-color, #2563eb) 100%);
   border: none;
   border-radius: var(--r-lg);
@@ -4542,7 +4547,7 @@ html.dark .sidebar-logout-btn:hover { background: rgba(239,68,68,.15) !important
   font-weight: 700;
   transition: transform .2s, box-shadow .2s;
   box-shadow: 0 3px 10px rgba(0,0,0,.14);
-  min-height: 80px;
+  min-height: 94px;
 }
 
 .home-grid-icon {
@@ -4551,7 +4556,7 @@ html.dark .sidebar-logout-btn:hover { background: rgba(239,68,68,.15) !important
 }
 
 .home-grid-label {
-  font-size: .68rem;
+  font-size: .72rem;
   line-height: 1.25;
   text-align: center;
   font-weight: 800;
@@ -4559,17 +4564,21 @@ html.dark .sidebar-logout-btn:hover { background: rgba(239,68,68,.15) !important
 }
 
 @media (min-width: 400px) {
-  .home-grid-menu { grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .home-grid-menu { grid-template-columns: repeat(3, 1fr); gap: 10px; }
 }
 
 @media (min-width: 640px) {
-  .home-grid-menu { grid-template-columns: repeat(5, 1fr); gap: 12px; }
-  .home-grid-btn  { padding: 18px 10px 16px; min-height: 90px; }
+  .home-grid-menu { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .home-grid-btn  { padding: 18px 10px 16px; min-height: 96px; }
   .home-grid-label { font-size: .72rem; }
 }
 
 @media (min-width: 900px) {
-  .home-grid-menu { grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  .home-grid-menu { grid-template-columns: repeat(5, 1fr); gap: 14px; }
+}
+
+@media (min-width: 1200px) {
+  .home-grid-menu { grid-template-columns: repeat(6, 1fr); }
 }
 
 html.dark .home-grid-btn {
