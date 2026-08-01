@@ -368,6 +368,9 @@ function renderMenu(role) {
       ${menuHtml}
     </nav>
     <div style="padding: 15px; border-top: 1px solid rgba(255,255,255,0.08);">
+      <a href="#" onclick="logout(); return false;" class="sidebar-logout-btn" style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;font-size:.85rem;font-weight:700;text-decoration:none;width:100%;box-sizing:border-box;">
+        <i class="fa fa-sign-out-alt"></i> Keluar
+      </a>
       <div style="margin-top:10px; text-align:center; font-size:.65rem; color:rgba(255,255,255,.3); letter-spacing:.3px; line-height:1.5;">
         &copy; ${new Date().getFullYear()} GenPro<br>Hak Cipta Dilindungi
       </div>
