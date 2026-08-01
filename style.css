@@ -4439,3 +4439,91 @@ html.dark .sidebar-badge-info {
   .topbar-office-context { max-width: 36vw; font-size: .7rem; padding: 5px 8px; }
   .btn-theme-toggle, .btn-logout-top, .btn-menu { width: 34px !important; height: 34px; }
 }
+
+/* =============================================
+   LOGIN ICON — Font Awesome replacement
+   ============================================= */
+.login-icon-fa {
+  font-size: 3.2rem;
+  display: block;
+  margin-bottom: 12px;
+  color: var(--primary);
+  filter: drop-shadow(0 4px 12px rgba(37,99,235,.35));
+}
+
+/* =============================================
+   SIDEBAR — logout button & user info
+   ============================================= */
+.sidebar-logout-btn {
+  margin-top: 8px;
+  color: #ef4444 !important;
+  border-color: transparent !important;
+}
+.sidebar-logout-btn i { color: #ef4444 !important; }
+.sidebar-logout-btn:hover {
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+  border-color: #fca5a5 !important;
+}
+html.dark .sidebar-logout-btn { color: #f87171 !important; }
+html.dark .sidebar-logout-btn i { color: #f87171 !important; }
+html.dark .sidebar-logout-btn:hover { background: rgba(239,68,68,.15) !important; }
+
+/* =============================================
+   HOME GRID MENU — mobile-first navigation grid
+   ============================================= */
+.home-grid-menu {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.home-grid-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 8px 14px;
+  background: linear-gradient(135deg, var(--btn-color2, #60a5fa) 0%, var(--btn-color, #2563eb) 100%);
+  border: none;
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  color: white;
+  font-family: inherit;
+  font-weight: 700;
+  transition: transform .2s, box-shadow .2s;
+  box-shadow: 0 3px 10px rgba(0,0,0,.14);
+  min-height: 80px;
+}
+
+.home-grid-icon {
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.home-grid-label {
+  font-size: .68rem;
+  line-height: 1.25;
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+@media (min-width: 400px) {
+  .home-grid-menu { grid-template-columns: repeat(4, 1fr); gap: 10px; }
+}
+
+@media (min-width: 640px) {
+  .home-grid-menu { grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .home-grid-btn  { padding: 18px 10px 16px; min-height: 90px; }
+  .home-grid-label { font-size: .72rem; }
+}
+
+@media (min-width: 900px) {
+  .home-grid-menu { grid-template-columns: repeat(6, 1fr); gap: 14px; }
+}
+
+html.dark .home-grid-btn {
+  box-shadow: 0 3px 12px rgba(0,0,0,.35);
+}

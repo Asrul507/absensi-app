@@ -128,41 +128,66 @@ export async function renderDashboard() {
     }
   })
 
-  // Batasi menu utama agar tidak duplikasi
-  const menuItems = [
-    { nav: 'absensi',       icon: 'fa-clock',        label: 'Absensi',          color: '#3b82f6', color2: '#60a5fa' },
-    { nav: 'pengajuan',     icon: 'fa-file-alt',     label: 'Pengajuan',        color: '#8b5cf6', color2: '#a78bfa' },
-    { nav: 'perbaikan-absen',icon: 'fa-pencil-alt',    label: 'Perbaikan Absen',  color: '#ef4444', color2: '#f87171' }
-  ]
+  // ===== MENU GRID NAVIGASI BERDASARKAN ROLE =====
+  const buildGridMenuItems = (role) => {
+    const isAdminRoleVal = ['super_admin', 'admin_all', 'admin_hr', 'admin'].includes(role)
+    if (!isAdminRoleVal) {
+      // Staff menu
+      return [
+        { nav: 'absensi',          icon: 'fa-clock',              label: 'Absensi Kerja',     color: '#2563eb', color2: '#60a5fa', cat: 'utama' },
+        { nav: 'pengajuan',        icon: 'fa-file-alt',           label: 'Pengajuan',         color: '#7c3aed', color2: '#a78bfa', cat: 'utama' },
+        { nav: 'perbaikan-absen',  icon: 'fa-pencil-alt',         label: 'Perbaikan Absen',   color: '#dc2626', color2: '#f87171', cat: 'utama' },
+        { nav: 'kalender',         icon: 'fa-calendar-alt',       label: 'Kalender Kerja',    color: '#0891b2', color2: '#67e8f9', cat: 'utama' },
+        { nav: 'daftar-absensi',   icon: 'fa-list-check',         label: 'Log Kehadiran',     color: '#059669', color2: '#6ee7b7', cat: 'laporan' },
+        { nav: 'rekap-inout',      icon: 'fa-business-time',      label: 'Rekap In/Out',      color: '#d97706', color2: '#fcd34d', cat: 'laporan' },
+        { nav: 'rekap',            icon: 'fa-chart-bar',          label: 'Laporan Statistik', color: '#0284c7', color2: '#7dd3fc', cat: 'laporan' },
+        { nav: 'slip-gaji',        icon: 'fa-file-invoice-dollar',label: 'Slip Gaji',         color: '#15803d', color2: '#4ade80', cat: 'laporan' },
+      ]
+    }
+    // Admin menu
+    const items = [
+      { nav: 'absensi',            icon: 'fa-clock',              label: 'Menu Absen',        color: '#2563eb', color2: '#60a5fa', cat: 'absensi' },
+      { nav: 'kalender',           icon: 'fa-calendar-days',      label: 'Kalender HRD',      color: '#0891b2', color2: '#67e8f9', cat: 'absensi' },
+      { nav: 'pengajuan',          icon: 'fa-umbrella-beach',     label: 'Cuti & Pengajuan',  color: '#7c3aed', color2: '#a78bfa', cat: 'approval' },
+      { nav: 'perbaikan-absen',    icon: 'fa-pencil-alt',         label: 'Perbaikan Absen',   color: '#dc2626', color2: '#f87171', cat: 'approval' },
+      { nav: 'approval-absensi',   icon: 'fa-clipboard-check',    label: 'Approval Absensi',  color: '#b45309', color2: '#fbbf24', cat: 'approval' },
+      { nav: 'jadwal',             icon: 'fa-calendar-week',      label: 'Atur Jadwal',       color: '#0369a1', color2: '#38bdf8', cat: 'approval' },
+      { nav: 'shift',              icon: 'fa-business-time',      label: 'Kelola Shift',      color: '#4338ca', color2: '#818cf8', cat: 'approval' },
+      { nav: 'users',              icon: 'fa-users',              label: 'Data Karyawan',     color: '#0f766e', color2: '#2dd4bf', cat: 'karyawan' },
+      { nav: 'admin-lokasi',       icon: 'fa-map-location-dot',   label: 'Titik Radius GPS',  color: '#b91c1c', color2: '#f87171', cat: 'karyawan' },
+      { nav: 'daftar-absensi',     icon: 'fa-list-check',         label: 'Log Kehadiran',     color: '#059669', color2: '#6ee7b7', cat: 'laporan' },
+      { nav: 'rekap-inout',        icon: 'fa-clock',              label: 'Rekap In/Out',      color: '#d97706', color2: '#fcd34d', cat: 'laporan' },
+      { nav: 'rekap',              icon: 'fa-chart-bar',          label: 'Laporan Rekap',     color: '#0284c7', color2: '#7dd3fc', cat: 'laporan' },
+      { nav: 'laporan-keseluruhan',icon: 'fa-file-lines',         label: 'Lap. Keseluruhan',  color: '#15803d', color2: '#4ade80', cat: 'laporan' },
+      { nav: 'slip-gaji',          icon: 'fa-file-invoice-dollar',label: 'Slip Gaji',         color: '#1d4ed8', color2: '#93c5fd', cat: 'laporan' },
+    ]
+    if (['super_admin', 'admin_all', 'admin_hr'].includes(role)) {
+      items.push(
+        { nav: 'personalia',       icon: 'fa-id-card-clip',       label: 'HR Personalia',     color: '#7c3aed', color2: '#c4b5fd', cat: 'karyawan' },
+        { nav: 'payroll-config',   icon: 'fa-cogs',               label: 'Payroll Config',    color: '#92400e', color2: '#fbbf24', cat: 'payroll' },
+        { nav: 'payroll-mapping',  icon: 'fa-users-cog',          label: 'Input Payroll',     color: '#1e40af', color2: '#93c5fd', cat: 'payroll' },
+        { nav: 'generate-payroll', icon: 'fa-calculator',         label: 'Generate Payroll',  color: '#166534', color2: '#86efac', cat: 'payroll' },
+      )
+    }
+    if (role === 'super_admin') {
+      items.push(
+        { nav: 'settings-app',     icon: 'fa-building-user',      label: 'Office & Dept',     color: '#334155', color2: '#94a3b8', cat: 'settings' }
+      )
+    }
+    return items
+  }
 
-  const menuHtml = menuItems.map(m => `
-    <button
-      onclick="window.navigate('${m.nav}')"
-      class="fav-btn"
-      style="
-        background: linear-gradient(135deg, ${m.color2} 0%, ${m.color} 100%);
-        border: none;
-        border-radius: 14px;
-        cursor: pointer;
-        text-align: center;
-        color: white;
-        font-weight: 700;
-        padding: 14px 8px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        min-width: 85px;
-        width: 85px;
-        flex-shrink: 0;
-        transition: all 0.2s;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-      ">
-      <i class="fa ${m.icon}" style="font-size:1.5rem;"></i>
-      <span style="font-size:.7rem; line-height:1.2; white-space: nowrap;">${m.label}</span>
-    </button>
-  `).join('')
+  const gridMenuItems = buildGridMenuItems(user.role || 'staff')
+  const menuHtml = `
+    <div class="home-grid-menu">
+      ${gridMenuItems.map(m => `
+        <button class="home-grid-btn" onclick="window.navigate('${m.nav}')" style="--btn-color:${m.color};--btn-color2:${m.color2};">
+          <span class="home-grid-icon"><i class="fa ${m.icon}"></i></span>
+          <span class="home-grid-label">${m.label}</span>
+        </button>
+      `).join('')}
+    </div>
+  `
 
   // ===== WIDGET STATISTIK KEHADIRAN REAL-TIME KHUSUS ADMIN =====
   let adminWidgetHtml = ''
@@ -382,30 +407,13 @@ export async function renderDashboard() {
     </div>
 
     ${adminWidgetHtml}
-    ${isAdmin ? adminGlobalHtml : personalHtml}
 
-    <div style="margin-bottom: 25px; display: flex; justify-content: center; width: 100%;">
-      <div style="
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 6px;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(0,0,0,0.15) transparent;
-        max-width: 100%;
-      ">
-        <div style="
-          display: flex;
-          flex-direction: row;
-          justify-content: center;
-          gap: 12px;
-          width: max-content;
-          padding: 4px 6px;
-          margin: 0 auto;
-        ">
-          ${menuHtml}
-        </div>
-      </div>
+    <div class="card fade-up" style="padding:16px;margin-bottom:20px;">
+      <div style="font-size:.72rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;"><i class="fa fa-th" style="color:var(--primary);margin-right:6px;"></i>Menu Navigasi</div>
+      ${menuHtml}
     </div>
+
+    ${isAdmin ? adminGlobalHtml : personalHtml}
 
     <div class="card fade-up" style="padding: 18px; margin-bottom: 20px; text-align: center;">
       <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 14px;">Total Jam Kerja</div>
@@ -464,8 +472,8 @@ export async function renderDashboard() {
     </div>
 
     <style>
-      .fav-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18) !important; }
-      .fav-btn:active { transform: translateY(-1px); }
+      .home-grid-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.18) !important; }
+      .home-grid-btn:active { transform: translateY(-1px); }
     </style>
   `
 
