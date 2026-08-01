@@ -225,7 +225,7 @@ function getCurrentOfficeLabel(user) {
   const name = client?.nama_client || user?.nama_client || user?.client_name || ''
   const code = client?.domain_login || client?.kode_client || ''
   if (!name && !code) return ''
-  return name && code ? `${name} (${code})` : (name || code)
+  return name || code
 }
 
 window.getCurrentOfficeLabel = getCurrentOfficeLabel
@@ -235,7 +235,8 @@ function getAppTitle(user) {
   if (label) return label
   if (normalizeRole(user?.role) === 'super_admin') {
     const ctxLabel = getActiveOfficeContextLabel(user)
-    return ctxLabel || 'GenPro'
+    const officeName = String(ctxLabel || '').replace(/\s*\([^)]*\)\s*$/, '').trim()
+    return officeName || 'GenPro'
   }
   return 'GenPro'
 }
@@ -245,13 +246,8 @@ window.getAppTitle = getAppTitle
 window.updateHeaderOfficeContext = function () {
   const el = document.getElementById('activeOfficeContext')
   if (el) {
-    const label = getActiveOfficeContextLabel(window.currentUser)
-    if (!label) { el.style.display = 'none'; el.textContent = '' }
-    else {
-      el.textContent = `Office Aktif: ${label}`
-      el.title = normalizeRole(window.currentUser?.role) === 'super_admin' ? 'Klik untuk ganti Office aktif' : 'Office akun'
-      el.style.display = 'inline-flex'
-    }
+    el.style.display = 'none'
+    el.textContent = ''
   }
 
   const appTitle = getAppTitle(window.currentUser)
@@ -281,12 +277,12 @@ function renderMenu(role) {
 
   const isPayrollAdmin = ['super_admin', 'admin_all', 'admin_hr'].includes(role)
 
-  // Helper to build a collapsible sidebar section
-  const section = (id, icon, title, items, defaultOpen = false) => `
-    <div class="sidebar-section${defaultOpen ? ' open' : ''}" data-section="${id}" data-title="${title}" data-icon="${icon}">
+  // Helper to build sidebar group source (submenu tidak ditampilkan permanen)
+  const section = (id, icon, title, items) => `
+    <div class="sidebar-section" data-section="${id}" data-title="${title}" data-icon="${icon}">
       <button class="sidebar-section-title" onclick="toggleSidebarSection(this)">
         <i class="fa ${icon} sidebar-section-icon"></i> ${title}
-        <i class="fa fa-chevron-down sidebar-section-chevron"></i>
+        <i class="fa fa-table-cells sidebar-section-chevron"></i>
       </button>
       <div class="sidebar-section-items">
         ${items}
@@ -301,7 +297,7 @@ function renderMenu(role) {
         <a href="#" id="menu-absensi" onclick="navigate('absensi'); closeSidebar(); return false;"><i class="fa fa-clock"></i> Absensi Kerja</a>
         <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-file-alt"></i> Pengajuan Cuti/Sakit</a>
         <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen</a>
-      `, true)}
+      `)}
       ${section('jadwal', 'fa-calendar', 'JADWAL', `
         <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-alt"></i> Kalender Kerja</a>
       `)}
@@ -327,7 +323,7 @@ function renderMenu(role) {
         <a href="#" id="menu-pengajuan" onclick="navigate('pengajuan'); closeSidebar(); return false;"><i class="fa fa-umbrella-beach"></i> Cuti Tahunan & Pengajuan <span class="sidebar-badge-info">HR</span></a>
         <a href="#" id="menu-perbaikan-absen" onclick="navigate('perbaikan-absen'); closeSidebar(); return false;"><i class="fa fa-pencil-alt"></i> Perbaikan Absen <span class="sidebar-badge-info">Staff</span></a>
         <a href="#" id="menu-approval-absensi" onclick="navigate('approval-absensi'); closeSidebar(); return false;"><i class="fa fa-clipboard-check"></i> Approval Absensi <span class="sidebar-badge-info">OPEN</span></a>
-      `, true)}
+      `)}
       ${section('jadwal', 'fa-calendar', 'JADWAL', `
         <a href="#" id="menu-kalender" onclick="navigate('kalender'); closeSidebar(); return false;"><i class="fa fa-calendar-days"></i> Kalender HRD</a>
         <a href="#" id="menu-jadwal" onclick="navigate('jadwal'); closeSidebar(); return false;"><i class="fa fa-calendar-week"></i> Atur Jadwal Kerja</a>
@@ -378,16 +374,6 @@ function renderMenu(role) {
     </div>
   `
 
-  // Restore section open/closed states from localStorage
-  try {
-    const savedStates = JSON.parse(localStorage.getItem('sbSections') || '{}')
-    sidebar.querySelectorAll('.sidebar-section[data-section]').forEach(sec => {
-      const id = sec.dataset.section
-      if (id in savedStates) {
-        savedStates[id] ? sec.classList.add('open') : sec.classList.remove('open')
-      }
-    })
-  } catch (_) {}
 }
 
 /* ================= NOTIFICATION CENTER (RINGKAS) ================= */
@@ -2211,15 +2197,8 @@ function renderSidebarSectionGrid(sectionEl) {
 window.toggleSidebarSection = (btn) => {
   const sec = btn.closest('.sidebar-section')
   if (!sec) return
-  const isOpen = sec.classList.toggle('open')
-  const sectionId = sec.dataset.section
-  if (sectionId) {
-    try {
-      const states = JSON.parse(localStorage.getItem('sbSections') || '{}')
-      states[sectionId] = isOpen
-      localStorage.setItem('sbSections', JSON.stringify(states))
-    } catch (_) {}
-  }
+  document.querySelectorAll('.sidebar-section-title.active').forEach(el => el.classList.remove('active'))
+  btn.classList.add('active')
   renderSidebarSectionGrid(sec)
   closeSidebar()
 }
