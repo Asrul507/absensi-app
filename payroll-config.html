@@ -45,11 +45,11 @@
 </head>
 <body>
 
-<div class="container my-5">
+<div class="container my-5 payroll-shell">
     
     <!-- Bagian 1: Master Komponen Gaji -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header" style="background:var(--primary);color:#fff;">
+    <div class="card shadow-sm mb-4 payroll-card">
+        <div class="card-header payroll-card-header payroll-card-header--primary">
             <h5 class="mb-0">1. Master Komponen Gaji</h5>
         </div>
         <div class="card-body">
@@ -71,7 +71,7 @@
                 </div>
             </form>
             
-            <table class="table table-sm mt-3 table-striped">
+            <table class="table table-sm mt-3 table-striped payroll-table">
                 <thead><tr><th>Kode</th><th>Nama Komponen</th><th>Jenis</th><th>Aksi</th></tr></thead>
                 <tbody id="list-komponen-table"></tbody>
             </table>
@@ -79,8 +79,8 @@
     </div>
 
     <!-- Bagian 2: Template Gaji -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header" style="background:var(--gray-100);color:var(--text);border-color:var(--border);">
+    <div class="card shadow-sm mb-4 payroll-card">
+        <div class="card-header payroll-card-header payroll-card-header--soft">
             <h5 class="mb-0">2. Template Gaji & Nominal</h5>
         </div>
         <div class="card-body">
@@ -98,7 +98,7 @@
                 
                 <div class="col-md-8">
                     <h6>Isi Rincian Template: <span id="template-terpilih-nama" class="text-primary">-</span></h6>
-                    <form id="form-detail-template" class="row g-2 mb-3" style="display: none;">
+                    <form id="form-detail-template" class="row g-2 mb-3 is-hidden">
                         <input type="hidden" id="aktif-template-id">
                         <div class="col-md-5">
                             <select id="pilih-komponen" class="form-select" required></select>
@@ -117,7 +117,7 @@
                         </div>
                     </form>
                     
-                    <table class="table table-sm table-bordered">
+                    <table class="table table-sm table-bordered payroll-table">
                         <thead class="table-light"><tr><th>Komponen</th><th>Jenis</th><th>Tipe Nilai</th><th>Nilai</th><th>Aksi</th></tr></thead>
                         <tbody id="list-detail-template">
                             <tr><td colspan="5" class="text-center text-muted">Pilih template terlebih dahulu</td></tr>
@@ -129,8 +129,8 @@
     </div>
 
     <!-- Bagian 3: Periode Gaji -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header" style="background:var(--primary);color:#fff;">
+    <div class="card shadow-sm mb-4 payroll-card">
+        <div class="card-header payroll-card-header payroll-card-header--primary">
             <h5 class="mb-0">3. Pengaturan Periode Gaji</h5>
         </div>
         <div class="card-body">
@@ -151,7 +151,7 @@
                 </div>
             </form>
             
-            <table class="table table-sm mt-3 table-hover">
+            <table class="table table-sm mt-3 table-hover payroll-table">
                 <thead><tr><th>Nama Periode</th><th>Rentang Tanggal</th><th>Status</th><th>Aksi</th></tr></thead>
                 <tbody id="list-periode-table"></tbody>
             </table>

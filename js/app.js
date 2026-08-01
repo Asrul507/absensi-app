@@ -603,16 +603,16 @@ window.navigate = async function (page, { addToHistory = true } = {}) {
     
     // PENAMBAHAN ROUTER ROUTE UNTUK MENAMPILKAN HALAMAN PAYROLL BARU
     case 'payroll-config':
-      document.getElementById('content').innerHTML = `<iframe src="payroll-config.html" style="width:100%; height:85vh; border:none; border-radius:8px;"></iframe>`;
+      document.getElementById('content').innerHTML = `<iframe src="payroll-config.html" class="app-embed-frame"></iframe>`;
       break
     case 'payroll-mapping':
-      document.getElementById('content').innerHTML = `<iframe src="payroll-mapping.html" style="width:100%; height:85vh; border:none; border-radius:8px;"></iframe>`;
+      document.getElementById('content').innerHTML = `<iframe src="payroll-mapping.html" class="app-embed-frame"></iframe>`;
       break
     case 'generate-payroll':
-      document.getElementById('content').innerHTML = `<iframe src="generate-payroll.html" style="width:100%; height:85vh; border:none; border-radius:8px;"></iframe>`;
+      document.getElementById('content').innerHTML = `<iframe src="generate-payroll.html" class="app-embed-frame"></iframe>`;
       break
     case 'slip-gaji':
-      document.getElementById('content').innerHTML = `<iframe src="slip-gaji.html" style="width:100%; height:85vh; border:none; border-radius:8px;"></iframe>`;
+      document.getElementById('content').innerHTML = `<iframe src="slip-gaji.html" class="app-embed-frame"></iframe>`;
       break
       
     default:
