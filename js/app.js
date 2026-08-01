@@ -283,7 +283,7 @@ function renderMenu(role) {
 
   // Helper to build a collapsible sidebar section
   const section = (id, icon, title, items, defaultOpen = false) => `
-    <div class="sidebar-section${defaultOpen ? ' open' : ''}" data-section="${id}">
+    <div class="sidebar-section${defaultOpen ? ' open' : ''}" data-section="${id}" data-title="${title}" data-icon="${icon}">
       <button class="sidebar-section-title" onclick="toggleSidebarSection(this)">
         <i class="fa ${icon} sidebar-section-icon"></i> ${title}
         <i class="fa fa-chevron-down sidebar-section-chevron"></i>
@@ -2155,6 +2155,59 @@ window.toggleSidebar = () => {
   document.getElementById('overlay')?.classList.toggle('active')
 }
 
+function renderSidebarSectionGrid(sectionEl) {
+  const content = document.getElementById('content')
+  if (!content || !sectionEl) return
+
+  const sectionTitle = sectionEl.dataset.title || 'Menu'
+  const sectionIcon = sectionEl.dataset.icon || 'fa-layer-group'
+  const palette = [
+    ['#2563eb', '#60a5fa'],
+    ['#7c3aed', '#a78bfa'],
+    ['#dc2626', '#f87171'],
+    ['#0891b2', '#67e8f9'],
+    ['#059669', '#6ee7b7'],
+    ['#d97706', '#fcd34d']
+  ]
+
+  const items = Array.from(sectionEl.querySelectorAll('.sidebar-section-items a[id^="menu-"]'))
+    .map((anchor, idx) => {
+      const route = anchor.id.replace('menu-', '')
+      const iconClass = Array.from(anchor.querySelector('i')?.classList || []).find(cls => cls.startsWith('fa-') && cls !== 'fa') || 'fa-circle'
+      const label = anchor.textContent.replace(/\s+/g, ' ').trim()
+      const [color, color2] = palette[idx % palette.length]
+      return { route, iconClass, label, color, color2 }
+    })
+
+  if (!items.length) {
+    content.innerHTML = `
+      <div class="card" style="padding:16px;">
+        <div style="font-size:.78rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">
+          <i class="fa ${sectionIcon}" style="margin-right:6px;color:var(--primary);"></i>${sectionTitle}
+        </div>
+        <p style="margin-top:10px;color:var(--text-muted);">Belum ada submenu.</p>
+      </div>
+    `
+    return
+  }
+
+  content.innerHTML = `
+    <div class="card fade-up" style="padding:16px;margin-bottom:16px;">
+      <div style="font-size:.78rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;">
+        <i class="fa ${sectionIcon}" style="margin-right:6px;color:var(--primary);"></i>${sectionTitle}
+      </div>
+      <div class="home-grid-menu">
+        ${items.map(item => `
+          <button class="home-grid-btn" onclick="window.navigate('${item.route}')" style="--btn-color:${item.color};--btn-color2:${item.color2};">
+            <span class="home-grid-icon"><i class="fa ${item.iconClass}"></i></span>
+            <span class="home-grid-label">${item.label}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `
+}
+
 window.toggleSidebarSection = (btn) => {
   const sec = btn.closest('.sidebar-section')
   if (!sec) return
@@ -2167,6 +2220,8 @@ window.toggleSidebarSection = (btn) => {
       localStorage.setItem('sbSections', JSON.stringify(states))
     } catch (_) {}
   }
+  renderSidebarSectionGrid(sec)
+  closeSidebar()
 }
 // Reset cache timezone saat admin mengubah titik lokasi
 window.resetTimezoneCache = resetTimezoneCache
