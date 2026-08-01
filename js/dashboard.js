@@ -1,9 +1,8 @@
 import { supabase } from './supabase.js'
 import { getTodayLokal } from './timezone.js'
-import { canApproveAttendance, RADIUS_STATUS } from './attendance-approval.js'
 import { getServerTimeIso, startServerDigitalClock } from './server-time.js'
 import { getSisaCuti } from './services/leave-service.js'
-import { applyTenantFilter, isSuperAdmin, isStaff } from './access-control.js'
+import { applyTenantFilter, isSuperAdmin } from './access-control.js'
 
 async function fetchAbsensiRowsForUser({ userId, nama, dateFrom = null, dateTo = null, tanggal = null, select = '*' } = {}) {
   async function applyFilters(query) {
@@ -99,7 +98,6 @@ export async function renderDashboard() {
   }
 
   // Date range — hanya dipakai untuk grid menu, tidak lagi fetch chart data di sini
-  const isAdmin = canApproveAttendance(user) && !isStaff(user)
 
   // ===== MENU GRID NAVIGASI BERDASARKAN ROLE =====
   const buildGridMenuItems = (role) => {
@@ -164,72 +162,6 @@ export async function renderDashboard() {
     </div>
   `
 
-  // ===== WIDGET STATISTIK KEHADIRAN REAL-TIME KHUSUS ADMIN =====
-  let adminWidgetHtml = ''
-  
-  if (isAdmin) {
-    try {
-      const hariIniStr = getTodayLokal()
-      
-      const { data: absenHariIni } = await applyTenantFilter(supabase.from('absensi').select('*').eq('tanggal', hariIniStr), { user })
-      const { data: jadwalHariIni } = await applyTenantFilter(supabase.from('jadwal').select('*').eq('tanggal', hariIniStr), { user })
-      
-      let tepatWaktu = 0, terlambat = 0, sedangKerja = 0, liburAtauCuti = 0, openApproval = 0, outRadius = 0, lupaAbsen = 0
-      
-      absenHariIni?.forEach(a => {
-        if (a.status_absensi === 'OPEN') openApproval++
-        if (a.radius_status === RADIUS_STATUS.OUT_RADIUS) outRadius++
-        if (a.approval_flag === 'LATE_CHECKIN_MISSING' || (a.waktu_masuk && !a.waktu_pulang)) lupaAbsen++
-        if (a.waktu_masuk && a.waktu_pulang && a.status_absensi === 'COMPLETE') {
-          if (a.status_masuk === 'Terlambat') terlambat++
-          else tepatWaktu++
-        } else if (a.waktu_masuk && !a.waktu_pulang) {
-          sedangKerja++
-        }
-      })
-      
-      jadwalHariIni?.forEach(j => {
-        if (['OFF', 'cuti', 'sakit', 'izin'].includes(j.status_override) || j.shift_code === '8') {
-          liburAtauCuti++
-        }
-      })
-      
-      adminWidgetHtml = `
-        <div class="card fade-up" style="padding: 16px; margin-bottom: 20px;">
-          <div style="font-size: .75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">
-            <i class="fa fa-chart-line" style="color: var(--primary);"></i> Live Monitoring Kehadiran Hari Ini
-          </div>
-          ${openApproval > 0 ? `<button onclick="window.navigate('approval-absensi')" style="width:100%;margin-bottom:10px;border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:10px;padding:9px;font-weight:900;cursor:pointer;"><i class="fa fa-bell"></i> Absensi Menunggu Approval (${openApproval})</button>` : ''}
-          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center;">
-            <div style="background: #dcfce7; padding: 10px 4px; border-radius: 10px;">
-              <div style="font-size: 1.2rem; font-weight: 900; color: #166534;">${tepatWaktu}</div>
-              <div style="font-size: .6rem; color: #166534; font-weight: 700;">Tepat Waktu</div>
-            </div>
-            <div style="background: #fffbeb; padding: 10px 4px; border-radius: 10px;">
-              <div style="font-size: 1.2rem; font-weight: 900; color: #b45309;">${sedangKerja}</div>
-              <div style="font-size: .6rem; color: #b45309; font-weight: 700;">On Duty</div>
-            </div>
-            <div style="background: #fee2e2; padding: 10px 4px; border-radius: 10px;">
-              <div style="font-size: 1.2rem; font-weight: 900; color: #991b1b;">${terlambat}</div>
-              <div style="font-size: .6rem; color: #991b1b; font-weight: 700;">Terlambat</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 10px 4px; border-radius: 10px;">
-              <div style="font-size: 1.2rem; font-weight: 900; color: #475569;">${liburAtauCuti}</div>
-              <div style="font-size: .6rem; color: #475569; font-weight: 700;">Off / Cuti</div>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;text-align:center;margin-top:8px;">
-            <div style="background:#fffbeb;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#b45309;">${openApproval}</div><div style="font-size:.6rem;color:#b45309;font-weight:700;">Menunggu Approval</div></div>
-            <div style="background:#fee2e2;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#991b1b;">${outRadius}</div><div style="font-size:.6rem;color:#991b1b;font-weight:700;">Out Radius</div></div>
-            <div style="background:#fef3c7;padding:10px 4px;border-radius:10px;"><div style="font-size:1.2rem;font-weight:900;color:#92400e;">${lupaAbsen}</div><div style="font-size:.6rem;color:#92400e;font-weight:700;">Lupa Absen</div></div>
-          </div>
-        </div>
-      `
-    } catch (err) {
-      console.error("Gagal memuat widget live monitoring hrd:", err)
-    }
-  }
-
   // ===== DASHBOARD PERSONAL STAFF — data dihapus dari sini, pindah ke halaman Statistik Absensi =====
 
   content.innerHTML = `
@@ -248,8 +180,6 @@ export async function renderDashboard() {
         <div style="text-align: right; font-size: 2.2rem; opacity: 0.2;"><i class="fa fa-id-badge"></i></div>
       </div>
     </div>
-
-    ${adminWidgetHtml}
 
     <div class="card fade-up" style="padding:16px;margin-bottom:20px;">
       <div style="font-size:.72rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;"><i class="fa fa-th" style="color:var(--primary);margin-right:6px;"></i>Menu Navigasi</div>

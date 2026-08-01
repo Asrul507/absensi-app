@@ -4379,16 +4379,64 @@ body, body * {
   letter-spacing: 1.4px;
   text-transform: uppercase;
   color: #334155;
-  padding: 18px 16px 6px;
-  margin-bottom: 2px;
+  padding: 16px 16px 6px;
+  margin-bottom: 0;
   border-bottom: 1px solid rgba(226,232,240,.6);
   user-select: none;
+  /* Button resets for <button> element */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(226,232,240,.6);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sidebar-section-title:hover {
+  color: #1e293b;
+}
+
+.sidebar-section-icon {
+  font-size: .72rem;
+  opacity: .65;
+  flex-shrink: 0;
+}
+
+.sidebar-section-chevron {
+  margin-left: auto;
+  font-size: .62rem;
+  opacity: .5;
+  flex-shrink: 0;
+  transition: transform .25s ease;
+}
+
+.sidebar-section.open .sidebar-section-chevron {
+  transform: rotate(180deg);
+}
+
+.sidebar-section-items {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .3s ease;
+}
+
+.sidebar-section.open .sidebar-section-items {
+  max-height: 700px;
 }
 
 /* Dark Mode override — pakai :root.dark sesuai konvensi file ini */
 html.dark .sidebar-section-title {
   color: rgba(255,255,255,.45);
   border-bottom-color: rgba(255,255,255,.05);
+}
+html.dark .sidebar-section-title:hover {
+  color: rgba(255,255,255,.7);
+}
+html.dark .sidebar-section-chevron {
+  color: rgba(255,255,255,.35);
 }
 
 /* Badge info kecil di kanan teks menu */
