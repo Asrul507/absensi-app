@@ -110,27 +110,39 @@ if (selectPeriode) {
         if (!periodId) {
             currentPayrollData = [];
             const tbody = document.getElementById('payroll-run-table');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Silakan tentukan periode di atas.</td></tr>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Silakan tentukan periode di atas.</td></tr>';
             return;
         }
         await loadExistingPayrollRun(periodId);
     });
 }
 
+function getBaseSalaryAmount(details) {
+    if (!Array.isArray(details) || details.length === 0) return 0;
+    const baseByCode = details.find((item) => String(item?.payroll_components?.kode_komponen || '').toUpperCase() === 'GAPOK');
+    if (baseByCode) return parseFloat(baseByCode.nominal || 0) || 0;
+    const baseByName = details.find((item) => String(item?.payroll_components?.nama_komponen || '').toLowerCase().includes('gaji pokok'));
+    return parseFloat(baseByName?.nominal || 0) || 0;
+}
+
+function normalizeMode(value) {
+    return value === 'harian' ? 'harian' : 'bulanan';
+}
+
 async function loadExistingPayrollRun(periodId) {
     const tbody = document.getElementById('payroll-run-table');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Memuat data draf payroll...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Memuat data draf payroll...</td></tr>';
 
     const { data, error } = await supabase
         .from('payroll_slips')
-        .select(`id, total_pemasukan, total_potongan, gaji_bersih, status, user_id, nama_bank, nomor_rekening, profiles(nama_lengkap, departemen)`)
+        .select(`id, total_pemasukan, total_potongan, gaji_bersih, gaji_per_hari, salary_mode, hari_kerja_per_bulan, status, user_id, nama_bank, nomor_rekening, profiles(nama_lengkap, departemen)`)
         .eq('period_id', periodId);
 
     if (error) {
         console.error("🚨 ERROR LOAD EXISTING DATA:", error.message);
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Gagal memuat data penggajian.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Gagal memuat data penggajian.</td></tr>';
         return;
     }
 
@@ -147,7 +159,7 @@ if (btnHitungGaji) {
 
         const tbody = document.getElementById('payroll-run-table');
         if (!tbody) return;
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Sedang memproses & mencocokkan template...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Sedang memproses & mencocokkan template...</td></tr>`;
 
         try {
             // PENGEMBANGAN: Ikut menarik nama_bank dan nomor_rekening dari tabel mapping
@@ -158,6 +170,8 @@ if (btnHitungGaji) {
                     template_id,
                     nama_bank,
                     nomor_rekening,
+                    salary_mode,
+                    hari_kerja_per_bulan,
                     profiles!inner(client_id, nama_lengkap)
                 `);
 
@@ -166,7 +180,7 @@ if (btnHitungGaji) {
             const filteredMappings = mappings?.filter(m => m.profiles && m.profiles.client_id === targetOfficeId) || [];
 
             if (filteredMappings.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Tidak ada karyawan yang terhubung ke template gaji di kantor ini.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Tidak ada karyawan yang terhubung ke template gaji di kantor ini.</td></tr>`;
                 return;
             }
 
@@ -177,7 +191,8 @@ if (btnHitungGaji) {
                     .from('payroll_template_details')
                     .select(`
                         nominal, 
-                        payroll_components!inner(nama_komponen, jenis, office_id)
+                        tipe_nilai,
+                        payroll_components!inner(nama_komponen, kode_komponen, jenis, office_id)
                     `)
                     .eq('template_id', item.template_id)
                     .eq('payroll_components.office_id', targetOfficeId);
@@ -186,17 +201,36 @@ if (btnHitungGaji) {
 
                 let totalPemasukan = 0;
                 let totalPotongan = 0;
+                const gajiPokok = getBaseSalaryAmount(details || []);
+                const rincianKomponen = [];
 
                 details?.forEach(d => {
-                    const nom = parseFloat(d.nominal) || 0;
+                    const tipeNilai = d.tipe_nilai === 'persen' ? 'persen' : 'nominal';
+                    const rawNilai = parseFloat(d.nominal) || 0;
+                    const nom = tipeNilai === 'persen' ? (gajiPokok * rawNilai / 100) : rawNilai;
                     if (d.payroll_components?.jenis === 'pemasukan') {
                         totalPemasukan += nom;
                     } else if (d.payroll_components?.jenis === 'potongan') {
                         totalPotongan += nom;
                     }
+                    rincianKomponen.push({
+                        nama_komponen: d.payroll_components?.nama_komponen || '-',
+                        kode_komponen: d.payroll_components?.kode_komponen || null,
+                        jenis: d.payroll_components?.jenis || '-',
+                        tipe_nilai: tipeNilai,
+                        nilai_input: rawNilai,
+                        nominal_terhitung: nom
+                    });
                 });
 
                 const gajiBersih = totalPemasukan - totalPotongan;
+                const salaryMode = normalizeMode(item.salary_mode);
+                const hariKerjaPerBulan = salaryMode === 'harian'
+                    ? Math.min(31, Math.max(20, parseInt(item.hari_kerja_per_bulan || 26, 10)))
+                    : 26;
+                const gajiPerHari = salaryMode === 'harian' && hariKerjaPerBulan > 0
+                    ? gajiBersih / hariKerjaPerBulan
+                    : 0;
 
                 // PENGEMBANGAN: Mengirim data bank dan rekening saat simpan data slip
                 await supabase
@@ -207,6 +241,10 @@ if (btnHitungGaji) {
                         total_pemasukan: totalPemasukan,
                         total_potongan: totalPotongan,
                         gaji_bersih: gajiBersih,
+                        salary_mode: salaryMode,
+                        hari_kerja_per_bulan: hariKerjaPerBulan,
+                        gaji_per_hari: gajiPerHari,
+                        rincian_komponen: rincianKomponen,
                         nama_bank: item.nama_bank || '-',
                         nomor_rekening: item.nomor_rekening || '-',
                         status: 'Belum Diapprove'
@@ -239,7 +277,7 @@ function renderTableList(data) {
     tbody.innerHTML = '';
 
     if (filteredData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Belum ada data draf penggajian untuk periode ini. Silakan klik Ambil Template & Hitung Gaji.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">Belum ada data draf penggajian untuk periode ini. Silakan klik Ambil Template & Hitung Gaji.</td></tr>`;
         updateTotalSummary(0, 0, 0, 0);
         return;
     }
@@ -256,6 +294,9 @@ function renderTableList(data) {
         const pemasukan = parseFloat(p.total_pemasukan || 0);
         const potongan = parseFloat(p.total_potongan || 0);
         const bersih = parseFloat(p.gaji_bersih || 0);
+        const modeGaji = normalizeMode(p.salary_mode);
+        const gajiPerHari = parseFloat(p.gaji_per_hari || 0);
+        const hariKerjaPerBulan = parseInt(p.hari_kerja_per_bulan || 26, 10);
         sumPemasukan += pemasukan;
         sumPotongan += potongan;
         sumBersih += bersih;
@@ -269,6 +310,11 @@ function renderTableList(data) {
                 <td class="text-success">Rp ${pemasukan.toLocaleString('id-ID')}</td>
                 <td class="text-danger">Rp ${potongan.toLocaleString('id-ID')}</td>
                 <td class="fw-bold">Rp ${bersih.toLocaleString('id-ID')}</td>
+                <td>
+                    <span class="badge ${modeGaji === 'harian' ? 'bg-info text-dark' : 'bg-secondary'} text-uppercase">${modeGaji}</span>
+                    ${modeGaji === 'harian' ? `<br><small class="text-muted">${hariKerjaPerBulan} hari/bulan</small>` : ''}
+                </td>
+                <td class="fw-semibold">${modeGaji === 'harian' ? `Rp ${gajiPerHari.toLocaleString('id-ID')}` : '-'}</td>
                 <td><span class="badge ${badgeClass}">${labelText}</span></td>
                 <td>
                     <button class="btn btn-xs btn-outline-dark btn-sm py-0 px-2 me-1" onclick="lihatDetailSlip('${p.id}', '${p.profiles?.nama_lengkap || 'Karyawan'}')">
@@ -398,30 +444,38 @@ window.lihatDetailSlip = async function(slipId, namaKaryawan) {
     
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
+    const modeGaji = normalizeMode(slip.salary_mode);
+    const hariKerjaPerBulan = parseInt(slip.hari_kerja_per_bulan || 26, 10);
+    const gajiPerHari = parseFloat(slip.gaji_per_hari || 0);
     doc.text(`Nama Karyawan : ${namaKaryawan}`, 15, 36);
     doc.text(`Periode Gaji  : ${slip.payroll_periods?.nama_periode || '-'}`, 15, 41);
     doc.text(`Bank / Rek.   : ${slip.nama_bank || '-'} / ${slip.nomor_rekening || '-'}`, 15, 46);
-    doc.text(`Status Slip   : ${slip.status}`, 15, 51);
-    doc.line(15, 54, 133, 54);
+    doc.text(`Mode Gaji     : ${modeGaji.toUpperCase()}${modeGaji === 'harian' ? ` (${hariKerjaPerBulan} hari)` : ''}`, 15, 51);
+    doc.text(`Status Slip   : ${slip.status}`, 15, 56);
+    doc.line(15, 59, 133, 59);
 
     // KATEGORI BIAYA
-    doc.text("Total Pendapatan Kotor (Bruto)", 15, 63);
-    doc.text(`Rp ${parseFloat(slip.total_pemasukan || 0).toLocaleString('id-ID')}`, 133, 63, { align: 'right' });
+    doc.text("Total Pendapatan Kotor (Bruto)", 15, 68);
+    doc.text(`Rp ${parseFloat(slip.total_pemasukan || 0).toLocaleString('id-ID')}`, 133, 68, { align: 'right' });
 
-    doc.text("Total Potongan", 15, 70);
-    doc.text(`- Rp ${parseFloat(slip.total_potongan || 0).toLocaleString('id-ID')}`, 133, 70, { align: 'right' });
-    doc.line(15, 74, 133, 74);
+    doc.text("Total Potongan", 15, 75);
+    doc.text(`- Rp ${parseFloat(slip.total_potongan || 0).toLocaleString('id-ID')}`, 133, 75, { align: 'right' });
+    doc.line(15, 79, 133, 79);
 
     // GAJI BERSIH / TOTAL TAKE HOME PAY
     doc.setFont("helvetica", "bold");
-    doc.text("GAJI BERSIH (THP)", 15, 81);
-    doc.text(`Rp ${parseFloat(slip.gaji_bersih || 0).toLocaleString('id-ID')}`, 133, 81, { align: 'right' });
-    doc.line(15, 84, 133, 84);
+    doc.text("GAJI BERSIH (THP)", 15, 86);
+    doc.text(`Rp ${parseFloat(slip.gaji_bersih || 0).toLocaleString('id-ID')}`, 133, 86, { align: 'right' });
+    if (modeGaji === 'harian') {
+        doc.text("GAJI PER HARI", 15, 92);
+        doc.text(`Rp ${gajiPerHari.toLocaleString('id-ID')}`, 133, 92, { align: 'right' });
+    }
+    doc.line(15, 95, 133, 95);
 
     // FOOTER KETERANGAN
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7);
-    doc.text(`Dokumen slip ini sah diterbitkan secara elektronik oleh ${namaKantor}.`, 15, 96);
+    doc.text(`Dokumen slip ini sah diterbitkan secara elektronik oleh ${namaKantor}.`, 15, 104);
 
     // Proses Download Berkas
     const cleanName = namaKaryawan.replace(/\s+/g, '_');
@@ -442,9 +496,12 @@ document.getElementById('btn-export-excel')?.addEventListener('click', () => {
         "Nama Karyawan": p.profiles?.nama_lengkap || 'Tanpa Nama',
         "Nama Bank": p.nama_bank || '-',
         "Nomor Rekening": p.nomor_rekening || '-',
+        "Mode Gaji": normalizeMode(p.salary_mode),
+        "Hari Kerja / Bulan": p.hari_kerja_per_bulan || 26,
         "Total Pemasukan (Rp)": p.total_pemasukan || 0,
         "Total Potongan (Rp)": p.total_potongan || 0,
         "Gaji Bersih / THP (Rp)": p.gaji_bersih || 0,
+        "Gaji Per Hari (Rp)": p.gaji_per_hari || 0,
         "Status Validasi": p.status || 'Belum Diapprove'
     }));
 
@@ -482,9 +539,12 @@ document.getElementById('btn-export-pdf')?.addEventListener('click', () => {
         p.profiles?.nama_lengkap || 'Tanpa Nama',
         p.nama_bank || '-',
         p.nomor_rekening || '-',
+        normalizeMode(p.salary_mode),
+        `${p.hari_kerja_per_bulan || 26}`,
         `Rp ${parseFloat(p.total_pemasukan || 0).toLocaleString('id-ID')}`,
         `Rp ${parseFloat(p.total_potongan || 0).toLocaleString('id-ID')}`,
         `Rp ${parseFloat(p.gaji_bersih || 0).toLocaleString('id-ID')}`,
+        normalizeMode(p.salary_mode) === 'harian' ? `Rp ${parseFloat(p.gaji_per_hari || 0).toLocaleString('id-ID')}` : '-',
         p.status || 'Belum Diapprove'
     ]);
 
@@ -492,7 +552,7 @@ document.getElementById('btn-export-pdf')?.addEventListener('click', () => {
         startY: 26,
         theme: 'striped',
         headStyles: { fillColor: [43, 48, 53] }, // Mengikuti tema bg-dark tabel HTML
-        head: [['Nama Karyawan', 'Bank', 'No. Rekening', 'Total Pemasukan', 'Total Potongan', 'Gaji Bersih (THP)', 'Status']],
+        head: [['Nama Karyawan', 'Bank', 'No. Rekening', 'Mode', 'Hari Kerja', 'Total Pemasukan', 'Total Potongan', 'Gaji Bersih (THP)', 'Gaji Per Hari', 'Status']],
         body: bodyTableData,
         styles: { fontSize: 9 }
     });

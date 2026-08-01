@@ -125,7 +125,7 @@ async function fetchSlipGaji(userId, periodId) {
     const { data: slip, error } = await supabase
         .from('payroll_slips')
         .select(`
-            id, total_pemasukan, total_potongan, gaji_bersih, status,
+            id, total_pemasukan, total_potongan, gaji_bersih, gaji_per_hari, salary_mode, hari_kerja_per_bulan, rincian_komponen, status,
             user_id, nama_bank, nomor_rekening,
             profiles!inner ( nama_lengkap, departemen, client_id ),
             payroll_periods ( nama_periode, office_id )
@@ -156,20 +156,30 @@ async function fetchSlipGaji(userId, periodId) {
         }
     }
 
-    // Ambil rincian komponen dari template mapping
-    let detailItems = [];
-    const { data: mapping } = await supabase
-        .from('payroll_mappings')
-        .select('template_id')
-        .eq('user_id', userId)
-        .maybeSingle();
+    // Prioritas: gunakan snapshot rincian komponen dari payroll_slips
+    let detailItems = Array.isArray(slip.rincian_komponen) ? slip.rincian_komponen : [];
 
-    if (mapping?.template_id) {
-        const { data: details } = await supabase
-            .from('payroll_template_details')
-            .select('nominal, payroll_components ( nama_komponen, jenis )')
-            .eq('template_id', mapping.template_id);
-        detailItems = details || [];
+    // Fallback untuk data lama yang belum punya snapshot
+    if (detailItems.length === 0) {
+        const { data: mapping } = await supabase
+            .from('payroll_mappings')
+            .select('template_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        if (mapping?.template_id) {
+            const { data: details } = await supabase
+                .from('payroll_template_details')
+                .select('nominal, tipe_nilai, payroll_components ( nama_komponen, jenis )')
+                .eq('template_id', mapping.template_id);
+            detailItems = (details || []).map((item) => ({
+                nama_komponen: item.payroll_components?.nama_komponen || '-',
+                jenis: item.payroll_components?.jenis || '-',
+                tipe_nilai: item.tipe_nilai === 'persen' ? 'persen' : 'nominal',
+                nilai_input: parseFloat(item.nominal || 0),
+                nominal_terhitung: parseFloat(item.nominal || 0)
+            }));
+        }
     }
 
     renderSlipHTML(slip, detailItems, namaKantor);
@@ -188,6 +198,15 @@ function renderSlipHTML(slip, items, namaKantor) {
     document.getElementById('slip-status').innerText = slip.status;
     document.getElementById('slip-tanggal-cetak').innerText = new Date().toLocaleDateString('id-ID');
     document.getElementById('slip-total-bersih').innerText = `Rp ${parseFloat(slip.gaji_bersih).toLocaleString('id-ID')}`;
+    const mode = slip.salary_mode === 'harian' ? 'Harian' : 'Bulanan';
+    const hariKerja = parseInt(slip.hari_kerja_per_bulan || 26, 10);
+    const gajiPerHari = parseFloat(slip.gaji_per_hari || 0);
+    const modeEl = document.getElementById('slip-salary-mode');
+    const hariKerjaEl = document.getElementById('slip-hari-kerja');
+    const gajiPerHariEl = document.getElementById('slip-gaji-per-hari');
+    if (modeEl) modeEl.innerText = mode;
+    if (hariKerjaEl) hariKerjaEl.innerText = `${hariKerja} hari`;
+    if (gajiPerHariEl) gajiPerHariEl.innerText = mode === 'Harian' ? `Rp ${gajiPerHari.toLocaleString('id-ID')}` : '-';
 
     const bankEl = document.getElementById('slip-nama-bank');
     const rekEl = document.getElementById('slip-nomor-rekening');
@@ -201,12 +220,19 @@ function renderSlipHTML(slip, items, namaKantor) {
 
     if (items.length > 0) {
         items.forEach(item => {
-            if (!item.payroll_components) return;
+            const jenis = item.jenis || item.payroll_components?.jenis;
+            const namaKomponen = item.nama_komponen || item.payroll_components?.nama_komponen || '-';
+            const tipeNilai = item.tipe_nilai === 'persen' ? 'persen' : 'nominal';
+            const nilaiInput = parseFloat(item.nilai_input ?? item.nominal_terhitung ?? item.nominal ?? 0) || 0;
+            const nominalTerhitung = parseFloat(item.nominal_terhitung ?? item.nominal ?? 0) || 0;
+            const labelNilai = tipeNilai === 'persen'
+                ? `${nilaiInput.toLocaleString('id-ID')}%`
+                : `Rp ${nominalTerhitung.toLocaleString('id-ID')}`;
             const row = `<tr>
-                <td>${item.payroll_components.nama_komponen}</td>
-                <td class="text-end">Rp ${parseFloat(item.nominal).toLocaleString('id-ID')}</td>
+                <td>${namaKomponen} <small class="text-muted">(${labelNilai})</small></td>
+                <td class="text-end">Rp ${nominalTerhitung.toLocaleString('id-ID')}</td>
             </tr>`;
-            if (item.payroll_components.jenis === 'pemasukan') {
+            if (jenis === 'pemasukan') {
                 if (boxPemasukan) boxPemasukan.innerHTML += row;
             } else {
                 if (boxPotongan) boxPotongan.innerHTML += row;
