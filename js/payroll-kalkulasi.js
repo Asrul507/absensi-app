@@ -74,3 +74,53 @@ async function ambilDataKehadiranKaryawan(tanggalMulai, tanggalSelesai) {
 
 // Ekspor fungsi ke objek global window
 window.ambilDataKehadiranKaryawan = ambilDataKehadiranKaryawan;
+
+/**
+ * Menghitung Total Gaji Harian Karyawan berdasarkan Aturan Potongan Absensi
+ * @param {Array} attendanceLogs - Riwayat absensi karyawan dalam periode tersebut
+ * @param {Array} deductionRules - Data dari tabel payroll_deduction_rules untuk office_id terkait
+ * @param {number} dailyRate - Nominal gaji per hari karyawan
+ * @returns {Object} Hasil rincian hari dibayar, hari dipotong, dan total gaji harian
+ */
+export function hitungGajiHarianKaryawan(attendanceLogs, deductionRules, dailyRate) {
+  // 1. Buat Peta Aturan: status_absensi -> is_deducted (true = dipotong, false = dibayar)
+  const ruleMap = {};
+  if (Array.isArray(deductionRules)) {
+    deductionRules.forEach(rule => {
+      ruleMap[rule.status_absensi.toLowerCase()] = rule.is_deducted;
+    });
+  }
+
+  let totalHariDibayar = 0;
+  let totalHariDipotong = 0;
+  const rincianHari = [];
+
+  // 2. Evaluasi setiap baris absensi karyawan
+  if (Array.isArray(attendanceLogs)) {
+    attendanceLogs.forEach(log => {
+      const status = (log.status_absensi || log.status || '').toLowerCase();
+      // Default: jika status tidak terdaftar, dianggap dipotong jika alpa/mangkir, sisanya dibayar
+      const defaultDeducted = ['alpa', 'mangkir'].includes(status);
+      const isDeducted = ruleMap.hasOwnProperty(status) ? ruleMap[status] : defaultDeducted;
+
+      if (!isDeducted) {
+        totalHariDibayar += 1;
+        rincianHari.push({ tanggal: log.tanggal, status, dibayar: true });
+      } else {
+        totalHariDipotong += 1;
+        rincianHari.push({ tanggal: log.tanggal, status, dibayar: false });
+      }
+    });
+  }
+
+  // 3. Kalkulasi Total Nominal Gaji Harian
+  const totalGajiHarian = totalHariDibayar * Number(dailyRate || 0);
+
+  return {
+    totalHariDibayar,
+    totalHariDipotong,
+    dailyRate: Number(dailyRate || 0),
+    totalGajiHarian,
+    rincianHari
+  };
+}
