@@ -250,6 +250,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadDataKomponen();
     await loadDataTemplate();
     await loadDataPeriode();
+    if (myOfficeId) {
+        await loadPayrollDeductionRules(myOfficeId); // PERBAIKAN: Memuat aturan absensi saat halaman dibuka
+    }
 });
 
 // --- LOAD DATA FUNCTIONS WITH DEFENSIVE CHECKS ---
@@ -593,3 +596,99 @@ function escapeHtml(value) {
 function buildEmptyStateRow(columnCount, message) {
     return `<tr><td colspan="${columnCount}" class="text-center text-muted">${escapeHtml(message)}</td></tr>`;
 }
+
+// ============================================================
+// LOGIKA PENGATURAN ABSENSI & GAJI HARIAN
+// ============================================================
+
+/**
+ * 1. Memuat Aturan Potongan Absensi dari Supabase
+ * @param {string} officeId - ID Kantor/Client aktif
+ */
+async function loadPayrollDeductionRules(officeId) {
+  const tbody = document.getElementById('payrollDeductionRulesBody');
+  if (!tbody) return;
+
+  try {
+    const { data, error } = await supabase
+      .from('payroll_deduction_rules')
+      .select('*')
+      .eq('office_id', officeId)
+      .order('status_absensi', { ascending: true });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada data aturan. Sila jalankan migrasi SQL di Supabase.</td></tr>';
+      return;
+    }
+
+    const lockedStatuses = ['hadir', 'alpa', 'mangkir'];
+
+    tbody.innerHTML = data.map(rule => {
+      const isLocked = lockedStatuses.includes(rule.status_absensi);
+      return `
+        <tr>
+          <td class="fw-bold text-capitalize align-middle">${escapeHtml(rule.status_absensi)}</td>
+          <td class="align-middle">
+            <select 
+              class="form-select form-select-sm" 
+              style="max-width: 220px;"
+              ${isLocked ? 'disabled' : ''} 
+              onchange="updateDeductionRule('${escapeHtml(rule.id)}', this.value)"
+            >
+              <option value="dihitung" ${!rule.is_deducted ? 'selected' : ''}>Dihitung (Dibayar)</option>
+              <option value="dipotong" ${rule.is_deducted ? 'selected' : ''}>Dipotong (Tidak Dibayar)</option>
+            </select>
+          </td>
+          <td class="text-muted small align-middle">
+            ${rule.is_deducted 
+              ? '<span class="text-danger"><i class="fas fa-times-circle me-1"></i>Hari ini memotong gaji harian.</span>' 
+              : '<span class="text-success"><i class="fas fa-check-circle me-1"></i>Hari ini dihitung mendapat gaji harian.</span>'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+  } catch (err) {
+    console.error('Gagal memuat aturan potongan:', err);
+    tbody.innerHTML = '<tr><td colspan="3" class="text-danger text-center">Gagal memuat aturan dari database.</td></tr>';
+  }
+}
+
+/**
+ * 2. Memperbarui Aturan ke Supabase saat Dropdown Diubah oleh HR
+ * @param {string} ruleId - ID baris di payroll_deduction_rules
+ * @param {string} selectedValue - 'dihitung' atau 'dipotong'
+ */
+async function updateDeductionRule(ruleId, selectedValue) {
+  const isDeducted = (selectedValue === 'dipotong');
+
+  try {
+    const { error } = await supabase
+      .from('payroll_deduction_rules')
+      .update({ 
+        is_deducted: isDeducted, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', ruleId);
+
+    if (error) throw error;
+
+    console.log(`Aturan ID ${ruleId} berhasil diperbarui.`);
+    
+    // PERBAIKAN: Refresh keterangan tampilan secara otomatis
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (targetOfficeId) {
+      await loadPayrollDeductionRules(targetOfficeId);
+    }
+  } catch (err) {
+    alert('Gagal menyimpan perubahan aturan!');
+    console.error('Update error:', err);
+  }
+}
+
+// Ekspor/jadikan fungsi global agar bisa dipanggil elemen HTML
+window.updateDeductionRule = updateDeductionRule;
+window.loadPayrollDeductionRules = loadPayrollDeductionRules;
