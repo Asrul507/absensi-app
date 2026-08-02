@@ -692,3 +692,176 @@ async function updateDeductionRule(ruleId, selectedValue) {
 // Ekspor/jadikan fungsi global agar bisa dipanggil elemen HTML
 window.updateDeductionRule = updateDeductionRule;
 window.loadPayrollDeductionRules = loadPayrollDeductionRules;
+
+// ============================================================
+// LOGIKA PENGATURAN ABSENSI & GAJI HARIAN (CRUD COMPLETE)
+// ============================================================
+
+/**
+ * 1. Memuat Aturan Potongan Absensi dari Supabase
+ */
+async function loadPayrollDeductionRules(officeId) {
+  const tbody = document.getElementById('payrollDeductionRulesBody');
+  if (!tbody) return;
+
+  try {
+    const { data, error } = await supabase
+      .from('payroll_deduction_rules')
+      .select('*')
+      .eq('office_id', officeId)
+      .order('status_absensi', { ascending: true });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Belum ada data aturan. Klik "+ Tambah Status Absensi" untuk membuat baru.</td></tr>';
+      return;
+    }
+
+    // Status dasar yang tidak boleh dihapus/dikunci
+    const lockedStatuses = ['hadir', 'alpa', 'mangkir'];
+
+    tbody.innerHTML = data.map(rule => {
+      const isLocked = lockedStatuses.includes(rule.status_absensi.toLowerCase());
+      return `
+        <tr>
+          <td class="fw-bold text-capitalize align-middle">${escapeHtml(rule.status_absensi)}</td>
+          <td class="align-middle">
+            <select 
+              class="form-select form-select-sm" 
+              style="max-width: 220px;"
+              ${isLocked ? 'disabled' : ''} 
+              onchange="updateDeductionRule('${escapeHtml(rule.id)}', this.value)"
+            >
+              <option value="dihitung" ${!rule.is_deducted ? 'selected' : ''}>Dihitung (Dibayar)</option>
+              <option value="dipotong" ${rule.is_deducted ? 'selected' : ''}>Dipotong (Tidak Dibayar)</option>
+            </select>
+          </td>
+          <td class="text-muted small align-middle">
+            ${rule.is_deducted 
+              ? '<span class="text-danger"><i class="fas fa-times-circle me-1"></i>Hari ini memotong gaji harian.</span>' 
+              : '<span class="text-success"><i class="fas fa-check-circle me-1"></i>Hari ini dihitung mendapat gaji harian.</span>'}
+          </td>
+          <td class="align-middle text-center">
+            ${!isLocked ? `
+              <button class="btn btn-danger btn-sm py-0 px-2" onclick="hapusAturanAbsensi('${escapeHtml(rule.id)}', '${escapeHtml(rule.status_absensi)}')">
+                <i class="fas fa-trash"></i>
+              </button>
+            ` : '<span class="text-muted small">Bawaan</span>'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+  } catch (err) {
+    console.error('Gagal memuat aturan potongan:', err);
+    tbody.innerHTML = '<tr><td colspan="4" class="text-danger text-center">Gagal memuat aturan dari database.</td></tr>';
+  }
+}
+
+/**
+ * 2. Buka Modal Tambah Aturan
+ */
+function bukaModalTambahAturan() {
+  const modalEl = document.getElementById('modalTambahAturan');
+  if (!modalEl || typeof bootstrap === 'undefined') {
+    return alert("Modal tidak ditemukan.");
+  }
+  document.getElementById('input-status-absensi').value = '';
+  document.getElementById('input-kategori-absensi').value = 'dihitung';
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+}
+
+/**
+ * 3. Simpan Aturan Baru ke Supabase
+ */
+async function simpanAturanBaru() {
+  updateCurrentUser();
+  const targetOfficeId = currentUser.office_id || currentUser.client_id;
+  const statusInput = document.getElementById('input-status-absensi')?.value?.trim().toLowerCase();
+  const kategoriInput = document.getElementById('input-kategori-absensi')?.value;
+
+  if (!targetOfficeId) return alert("ID Kantor tidak terdeteksi.");
+  if (!statusInput) return alert("Nama status absensi tidak boleh kosong.");
+
+  const isDeducted = (kategoriInput === 'dipotong');
+
+  try {
+    const { error } = await supabase
+      .from('payroll_deduction_rules')
+      .insert([{
+        office_id: targetOfficeId,
+        status_absensi: statusInput,
+        is_deducted: isDeducted
+      }]);
+
+    if (error) throw error;
+
+    bootstrap.Modal.getInstance(document.getElementById('modalTambahAturan'))?.hide();
+    await loadPayrollDeductionRules(targetOfficeId);
+    alert(`Status absensi "${statusInput}" berhasil ditambahkan.`);
+
+  } catch (err) {
+    alert("Gagal menambahkan status absensi: " + err.message);
+  }
+}
+
+/**
+ * 4. Hapus Aturan Absensi dari Supabase
+ */
+async function hapusAturanAbsensi(ruleId, namaStatus) {
+  if (!confirm(`Hapus aturan untuk status "${namaStatus}"?`)) return;
+
+  try {
+    const { error } = await supabase
+      .from('payroll_deduction_rules')
+      .delete()
+      .eq('id', ruleId);
+
+    if (error) throw error;
+
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (targetOfficeId) {
+      await loadPayrollDeductionRules(targetOfficeId);
+    }
+  } catch (err) {
+    alert("Gagal menghapus aturan: " + err.message);
+  }
+}
+
+/**
+ * 5. Update Aturan saat Dropdown Diubah
+ */
+async function updateDeductionRule(ruleId, selectedValue) {
+  const isDeducted = (selectedValue === 'dipotong');
+
+  try {
+    const { error } = await supabase
+      .from('payroll_deduction_rules')
+      .update({ 
+        is_deducted: isDeducted, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', ruleId);
+
+    if (error) throw error;
+
+    updateCurrentUser();
+    const targetOfficeId = currentUser.office_id || currentUser.client_id;
+    if (targetOfficeId) {
+      await loadPayrollDeductionRules(targetOfficeId);
+    }
+  } catch (err) {
+    alert('Gagal menyimpan perubahan aturan!');
+    console.error('Update error:', err);
+  }
+}
+
+// Ekspor fungsi ke objek global window agar bisa dipanggil dari event HTML
+window.bukaModalTambahAturan = bukaModalTambahAturan;
+window.simpanAturanBaru = simpanAturanBaru;
+window.hapusAturanAbsensi = hapusAturanAbsensi;
+window.updateDeductionRule = updateDeductionRule;
+window.loadPayrollDeductionRules = loadPayrollDeductionRules;
