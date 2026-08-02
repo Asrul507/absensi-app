@@ -15,7 +15,6 @@ const PAYROLL_MESSAGES = {
 // Fungsi internal untuk mengambil session secara aman
 function updateCurrentUser() {
     currentUser = window.currentUser || window.parent?.currentUser || {};
-    // Fallback jika dibungkus dalam objek user
     if (!currentUser.office_id && currentUser.user) {
         currentUser = currentUser.user;
     }
@@ -25,10 +24,7 @@ function updateCurrentUser() {
 updateCurrentUser();
 
 document.addEventListener("DOMContentLoaded", async () => {
-    // Perbarui session sekali lagi saat DOM siap
     updateCurrentUser();
-
-    // Ambil ID Kantor yang valid
     const myOfficeId = currentUser.office_id || currentUser.client_id;
     console.log("Session Terdeteksi di Payroll Config:", currentUser, "Office ID:", myOfficeId);
 
@@ -38,7 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    // PENTING: Inisialisasi Event Listener hanya jika Elemen HTML-nya eksis di halaman
+    // Event Listener Form Komponen
     const formKomponen = document.getElementById('form-komponen');
     if (formKomponen) {
         formKomponen.addEventListener('submit', async (e) => {
@@ -82,6 +78,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Event Listener Form Template
     const formTemplate = document.getElementById('form-template');
     if (formTemplate) {
         formTemplate.addEventListener('submit', async (e) => {
@@ -90,28 +87,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             const targetOfficeId = currentUser.office_id || currentUser.client_id;
             const nama = document.getElementById('nama-template')?.value?.trim();
 
-            if (!targetOfficeId) {
-                return alert("Gagal membuat template: ID Kantor Anda tidak terdeteksi.");
-            }
-            if (!nama) {
-                return alert("Nama template tidak boleh kosong.");
-            }
+            if (!targetOfficeId) return alert("Gagal membuat template: ID Kantor tidak terdeteksi.");
+            if (!nama) return alert("Nama template tidak boleh kosong.");
 
             const { data, error } = await supabase
                 .from('payroll_templates')
-                .insert([{
-                    office_id: targetOfficeId,
-                    nama_template: nama
-                }])
+                .insert([{ office_id: targetOfficeId, nama_template: nama }])
                 .select('id, nama_template')
                 .single();
 
             if (error) return alert("Gagal membuat template: " + error.message);
             formTemplate.reset();
             await loadDataTemplate();
-            if (data?.id) {
-                window.pilihTemplate(data.id, data.nama_template);
-            }
+            if (data?.id) window.pilihTemplate(data.id, data.nama_template);
         });
     }
 
@@ -132,6 +120,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Event Listener Form Detail Template
     const formDetailTemplate = document.getElementById('form-detail-template');
     if (formDetailTemplate) {
         formDetailTemplate.addEventListener('submit', async (e) => {
@@ -141,14 +130,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             const nominal = document.getElementById('nominal-komponen')?.value;
             const tipeNilai = document.getElementById('tipe-nilai-komponen')?.value || 'nominal';
 
-            if (!tempId) return alert("Tidak ada template yang dipilih. Silakan pilih template dari daftar terlebih dahulu.");
-            if (!compId) return alert("Tidak ada komponen yang dipilih. Silakan pilih komponen yang ingin dimasukkan ke template.");
-            if (nominal === '' || nominal === null || nominal === undefined) {
-                return alert("Nominal komponen wajib diisi.");
-            }
-            if (!['nominal', 'persen'].includes(tipeNilai)) {
-                return alert("Tipe nilai komponen tidak valid.");
-            }
+            if (!tempId) return alert("Pilih template terlebih dahulu.");
+            if (!compId) return alert("Pilih komponen terlebih dahulu.");
+            if (nominal === '' || nominal === null) return alert("Nominal komponen wajib diisi.");
 
             const { data: existingDetail, error: existingError } = await supabase
                 .from('payroll_template_details')
@@ -159,14 +143,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (existingError) return alert("Gagal memeriksa rincian template: " + existingError.message);
 
-            const payload = {
-                template_id: tempId,
-                component_id: compId,
-                nominal: Number(nominal),
-                tipe_nilai: tipeNilai
-            };
+            const payload = { template_id: tempId, component_id: compId, nominal: Number(nominal), tipe_nilai: tipeNilai };
             let error = null;
-            // If the component already exists in the template, update only its nominal value.
             if (existingDetail?.id) {
                 const updateResult = await supabase
                     .from('payroll_template_details')
@@ -174,19 +152,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                     .eq('id', existingDetail.id);
                 error = updateResult.error;
             } else {
-                const insertResult = await supabase
-                    .from('payroll_template_details')
-                    .insert([payload]);
+                const insertResult = await supabase.from('payroll_template_details').insert([payload]);
                 error = insertResult.error;
             }
 
             if (error) return alert("Gagal menambah rincian: " + error.message);
-            const selectKomponen = document.getElementById('pilih-komponen');
-            const inputNominal = document.getElementById('nominal-komponen');
-            const inputTipeNilai = document.getElementById('tipe-nilai-komponen');
-            if (selectKomponen) selectKomponen.value = '';
-            if (inputNominal) inputNominal.value = '';
-            if (inputTipeNilai) inputTipeNilai.value = 'nominal';
+            document.getElementById('pilih-komponen').value = '';
+            document.getElementById('nominal-komponen').value = '';
+            document.getElementById('tipe-nilai-komponen').value = 'nominal';
             await loadDetailTemplate(tempId);
         });
     }
@@ -213,7 +186,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         detailTable.addEventListener('click', (event) => {
             const actionButton = event.target.closest('button[data-action]');
             if (!actionButton) return;
-
             const { action, detailId, templateId } = actionButton.dataset;
             if (action === 'hapus-detail') {
                 window.hapusDetailKomponen(detailId, templateId);
@@ -221,6 +193,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Event Listener Periode Gaji
     const formPeriode = document.getElementById('form-periode');
     if (formPeriode) {
         formPeriode.addEventListener('submit', async (e) => {
@@ -246,16 +219,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Load data awal dari database
+    // Load data awal saat halaman siap
     await loadDataKomponen();
     await loadDataTemplate();
     await loadDataPeriode();
     if (myOfficeId) {
-        await loadPayrollDeductionRules(myOfficeId); // PERBAIKAN: Memuat aturan absensi saat halaman dibuka
+        await loadPayrollDeductionRules(myOfficeId);
     }
 });
 
-// --- LOAD DATA FUNCTIONS WITH DEFENSIVE CHECKS ---
+// --- LOAD DATA FUNCTIONS ---
 async function loadDataKomponen() {
     updateCurrentUser();
     const targetOfficeId = currentUser.office_id || currentUser.client_id;
@@ -294,12 +267,8 @@ async function loadDataKomponen() {
         komponenOptionsHtml += `<option value="${escapeHtml(k.id)}">${escapeHtml(k.nama_komponen)} (${escapeHtml(k.jenis)})</option>`;
     });
 
-    if (tbody) {
-        tbody.innerHTML = komponenRowsHtml || buildEmptyStateRow(PAYROLL_COMPONENT_COLUMN_COUNT, PAYROLL_MESSAGES.noComponents);
-    }
-    if (select) {
-        select.innerHTML = komponenOptionsHtml;
-    }
+    if (tbody) tbody.innerHTML = komponenRowsHtml || buildEmptyStateRow(PAYROLL_COMPONENT_COLUMN_COUNT, PAYROLL_MESSAGES.noComponents);
+    if (select) select.innerHTML = komponenOptionsHtml;
 }
 
 async function loadDataTemplate() {
@@ -349,20 +318,14 @@ async function loadDataTemplate() {
 
     if (!data || data.length === 0) {
         resetTemplateSelection();
-        if (list) {
-            list.innerHTML = `<li class="list-group-item text-muted text-center">${escapeHtml(PAYROLL_MESSAGES.noTemplates)}</li>`;
-        }
+        if (list) list.innerHTML = `<li class="list-group-item text-muted text-center">${escapeHtml(PAYROLL_MESSAGES.noTemplates)}</li>`;
         return;
     }
 
-    if (list) {
-        list.innerHTML = templateListHtml;
-    }
+    if (list) list.innerHTML = templateListHtml;
 
     if (!activeTemplateStillExists) {
-        if (activeTemplateId) {
-            resetTemplateSelection();
-        }
+        if (activeTemplateId) resetTemplateSelection();
         return;
     }
 
@@ -390,7 +353,7 @@ window.pilihTemplate = async function(id, nama) {
     if (formDetail) formDetail.style.display = activeTemplateId ? 'flex' : 'none';
 
     await loadDataTemplate();
-}
+};
 
 window.editTemplate = function(id, nama) {
     const modalEl = document.getElementById('modalEditTemplate');
@@ -547,10 +510,7 @@ window.hapusTemplate = async function(id) {
     const { error } = await supabase.from('payroll_templates').delete().eq('id', id);
     if (error) return alert("Gagal menghapus template: " + error.message);
 
-    if (String(activeTemplateId) === String(id)) {
-        resetTemplateSelection();
-    }
-
+    if (String(activeTemplateId) === String(id)) resetTemplateSelection();
     await loadDataTemplate();
 };
 
@@ -584,7 +544,6 @@ function resetTemplateSelection() {
 }
 
 function escapeHtml(value) {
-    // Ampersand harus diproses lebih dulu agar entity yang sudah escape tidak ter-escape ulang.
     return String(value ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -598,108 +557,9 @@ function buildEmptyStateRow(columnCount, message) {
 }
 
 // ============================================================
-// LOGIKA PENGATURAN ABSENSI & GAJI HARIAN
-// ============================================================
-
-/**
- * 1. Memuat Aturan Potongan Absensi dari Supabase
- * @param {string} officeId - ID Kantor/Client aktif
- */
-async function loadPayrollDeductionRules(officeId) {
-  const tbody = document.getElementById('payrollDeductionRulesBody');
-  if (!tbody) return;
-
-  try {
-    const { data, error } = await supabase
-      .from('payroll_deduction_rules')
-      .select('*')
-      .eq('office_id', officeId)
-      .order('status_absensi', { ascending: true });
-
-    if (error) throw error;
-
-    if (!data || data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada data aturan. Sila jalankan migrasi SQL di Supabase.</td></tr>';
-      return;
-    }
-
-    const lockedStatuses = ['hadir', 'alpa', 'mangkir'];
-
-    tbody.innerHTML = data.map(rule => {
-      const isLocked = lockedStatuses.includes(rule.status_absensi);
-      return `
-        <tr>
-          <td class="fw-bold text-capitalize align-middle">${escapeHtml(rule.status_absensi)}</td>
-          <td class="align-middle">
-            <select 
-              class="form-select form-select-sm" 
-              style="max-width: 220px;"
-              ${isLocked ? 'disabled' : ''} 
-              onchange="updateDeductionRule('${escapeHtml(rule.id)}', this.value)"
-            >
-              <option value="dihitung" ${!rule.is_deducted ? 'selected' : ''}>Dihitung (Dibayar)</option>
-              <option value="dipotong" ${rule.is_deducted ? 'selected' : ''}>Dipotong (Tidak Dibayar)</option>
-            </select>
-          </td>
-          <td class="text-muted small align-middle">
-            ${rule.is_deducted 
-              ? '<span class="text-danger"><i class="fas fa-times-circle me-1"></i>Hari ini memotong gaji harian.</span>' 
-              : '<span class="text-success"><i class="fas fa-check-circle me-1"></i>Hari ini dihitung mendapat gaji harian.</span>'}
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-  } catch (err) {
-    console.error('Gagal memuat aturan potongan:', err);
-    tbody.innerHTML = '<tr><td colspan="3" class="text-danger text-center">Gagal memuat aturan dari database.</td></tr>';
-  }
-}
-
-/**
- * 2. Memperbarui Aturan ke Supabase saat Dropdown Diubah oleh HR
- * @param {string} ruleId - ID baris di payroll_deduction_rules
- * @param {string} selectedValue - 'dihitung' atau 'dipotong'
- */
-async function updateDeductionRule(ruleId, selectedValue) {
-  const isDeducted = (selectedValue === 'dipotong');
-
-  try {
-    const { error } = await supabase
-      .from('payroll_deduction_rules')
-      .update({ 
-        is_deducted: isDeducted, 
-        updated_at: new Date().toISOString() 
-      })
-      .eq('id', ruleId);
-
-    if (error) throw error;
-
-    console.log(`Aturan ID ${ruleId} berhasil diperbarui.`);
-    
-    // PERBAIKAN: Refresh keterangan tampilan secara otomatis
-    updateCurrentUser();
-    const targetOfficeId = currentUser.office_id || currentUser.client_id;
-    if (targetOfficeId) {
-      await loadPayrollDeductionRules(targetOfficeId);
-    }
-  } catch (err) {
-    alert('Gagal menyimpan perubahan aturan!');
-    console.error('Update error:', err);
-  }
-}
-
-// Ekspor/jadikan fungsi global agar bisa dipanggil elemen HTML
-window.updateDeductionRule = updateDeductionRule;
-window.loadPayrollDeductionRules = loadPayrollDeductionRules;
-
-// ============================================================
 // LOGIKA PENGATURAN ABSENSI & GAJI HARIAN (CRUD COMPLETE)
 // ============================================================
 
-/**
- * 1. Memuat Aturan Potongan Absensi dari Supabase
- */
 async function loadPayrollDeductionRules(officeId) {
   const tbody = document.getElementById('payrollDeductionRulesBody');
   if (!tbody) return;
@@ -718,7 +578,6 @@ async function loadPayrollDeductionRules(officeId) {
       return;
     }
 
-    // Status dasar yang tidak boleh dihapus/dikunci
     const lockedStatuses = ['hadir', 'alpa', 'mangkir'];
 
     tbody.innerHTML = data.map(rule => {
@@ -759,13 +618,10 @@ async function loadPayrollDeductionRules(officeId) {
   }
 }
 
-/**
- * 2. Buka Modal Tambah Aturan
- */
 function bukaModalTambahAturan() {
   const modalEl = document.getElementById('modalTambahAturan');
   if (!modalEl || typeof bootstrap === 'undefined') {
-    return alert("Modal tidak ditemukan.");
+    return alert("Modal tidak ditemukan. Pastikan halaman dimuat ulang.");
   }
   document.getElementById('input-status-absensi').value = '';
   document.getElementById('input-kategori-absensi').value = 'dihitung';
@@ -773,9 +629,6 @@ function bukaModalTambahAturan() {
   modal.show();
 }
 
-/**
- * 3. Simpan Aturan Baru ke Supabase
- */
 async function simpanAturanBaru() {
   updateCurrentUser();
   const targetOfficeId = currentUser.office_id || currentUser.client_id;
@@ -800,16 +653,11 @@ async function simpanAturanBaru() {
 
     bootstrap.Modal.getInstance(document.getElementById('modalTambahAturan'))?.hide();
     await loadPayrollDeductionRules(targetOfficeId);
-    alert(`Status absensi "${statusInput}" berhasil ditambahkan.`);
-
   } catch (err) {
     alert("Gagal menambahkan status absensi: " + err.message);
   }
 }
 
-/**
- * 4. Hapus Aturan Absensi dari Supabase
- */
 async function hapusAturanAbsensi(ruleId, namaStatus) {
   if (!confirm(`Hapus aturan untuk status "${namaStatus}"?`)) return;
 
@@ -831,9 +679,6 @@ async function hapusAturanAbsensi(ruleId, namaStatus) {
   }
 }
 
-/**
- * 5. Update Aturan saat Dropdown Diubah
- */
 async function updateDeductionRule(ruleId, selectedValue) {
   const isDeducted = (selectedValue === 'dipotong');
 
@@ -859,7 +704,7 @@ async function updateDeductionRule(ruleId, selectedValue) {
   }
 }
 
-// Ekspor fungsi ke objek global window agar bisa dipanggil dari event HTML
+// Ekspor fungsi ke objek global window agar dapat dipanggil elemen HTML
 window.bukaModalTambahAturan = bukaModalTambahAturan;
 window.simpanAturanBaru = simpanAturanBaru;
 window.hapusAturanAbsensi = hapusAturanAbsensi;
