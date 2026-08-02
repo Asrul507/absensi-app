@@ -560,6 +560,9 @@ function buildEmptyStateRow(columnCount, message) {
 // LOGIKA PENGATURAN ABSENSI & GAJI HARIAN (CRUD COMPLETE)
 // ============================================================
 
+/**
+ * Memuat Aturan Potongan Absensi dari Supabase (Alpa BISA DIEDIT & DIHAPUS)
+ */
 async function loadPayrollDeductionRules(officeId) {
   const tbody = document.getElementById('payrollDeductionRulesBody');
   if (!tbody) return;
@@ -578,7 +581,8 @@ async function loadPayrollDeductionRules(officeId) {
       return;
     }
 
-    const lockedStatuses = ['hadir', 'alpa', 'mangkir'];
+    // Hanya status 'hadir' saja yang dikunci dari penghapusan
+    const lockedStatuses = ['hadir'];
 
     tbody.innerHTML = data.map(rule => {
       const isLocked = lockedStatuses.includes(rule.status_absensi.toLowerCase());
@@ -598,8 +602,8 @@ async function loadPayrollDeductionRules(officeId) {
           </td>
           <td class="text-muted small align-middle">
             ${rule.is_deducted 
-              ? '<span class="text-danger"><i class="fas fa-times-circle me-1"></i>Hari ini memotong gaji harian.</span>' 
-              : '<span class="text-success"><i class="fas fa-check-circle me-1"></i>Hari ini dihitung mendapat gaji harian.</span>'}
+              ? '<span class="text-danger fw-bold"><i class="fas fa-times-circle me-1"></i>Hari ini memotong gaji harian.</span>' 
+              : '<span class="text-success fw-bold"><i class="fas fa-check-circle me-1"></i>Hari ini dihitung mendapat gaji harian.</span>'}
           </td>
           <td class="align-middle text-center">
             ${!isLocked ? `
