@@ -159,8 +159,11 @@
     </div>
     <!-- Bagian 4: Pengaturan Absensi & Gaji Harian -->
     <div class="card shadow-sm mb-4 payroll-card">
-        <div class="card-header payroll-card-header payroll-card-header--soft">
+        <div class="card-header payroll-card-header payroll-card-header--soft d-flex justify-content-between align-items-center">
             <h5 class="mb-0">4. Pengaturan Absensi & Gaji Harian</h5>
+            <button type="button" class="btn btn-sm btn-success" onclick="bukaModalTambahAturan()">
+                <i class="fas fa-plus me-1"></i>Tambah Status Absensi
+            </button>
         </div>
         <div class="card-body">
             <p class="text-muted small mb-3">Tentukan status absensi mana yang dihitung (dibayar) dan mana yang memotong gaji harian.</p>
@@ -172,17 +175,48 @@
                             <th>Status Absensi</th>
                             <th>Kategori Perhitungan</th>
                             <th>Keterangan</th>
+                            <th style="width: 100px;">Aksi</th>
                         </tr>
                     </thead>
                     <tbody id="payrollDeductionRulesBody">
-                        <tr><td colspan="3" class="text-center text-muted">Memuat aturan...</td></tr>
+                        <tr><td colspan="4" class="text-center text-muted">Memuat aturan...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
+
+<!-- Modal Tambah Status Absensi Baru -->
+<div class="modal fade" id="modalTambahAturan" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title fw-bold"><i class="fas fa-plus-circle me-2"></i>Tambah Status Absensi Baru</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label small fw-bold">Nama Status Absensi</label>
+          <input type="text" id="input-status-absensi" class="form-control" placeholder="Contoh: training, isoman, skorsing" required>
+          <div class="form-text text-muted">Gunakan huruf kecil/standar (misal: training).</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-bold">Kategori Perhitungan</label>
+          <select id="input-kategori-absensi" class="form-select">
+            <option value="dihitung">Dihitung (Dibayar)</option>
+            <option value="dipotong">Dipotong (Tidak Dibayar)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-success btn-sm" onclick="simpanAturanBaru()">
+          <i class="fas fa-save me-1"></i>Simpan Status
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
-    
 
 <!-- Modal Edit Komponen Gaji -->
 <div class="modal fade" id="modalEditKomponen" tabindex="-1" aria-hidden="true">
