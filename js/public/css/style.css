@@ -1,0 +1,84 @@
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Paksa browser memakai skema warna terang untuk semua kontrol form
+   (input, select, textarea). Tanpa ini, browser/OS yang memakai mode gelap
+   akan otomatis mewarnai teks input jadi putih, padahal latar input di
+   aplikasi ini sengaja dibuat terang (bg-slate-50/100/white) -> teks jadi
+   tidak terbaca (putih di atas putih). */
+:root {
+  color-scheme: light;
+}
+
+input, select, textarea {
+  color-scheme: light;
+}
+
+#camera-video {
+  border-radius: 1rem;
+  object-fit: cover !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@keyframes scanSuccessFlash {
+  0% { border-color: #10b981; background-color: rgba(16, 185, 129, 0.25); }
+  100% { border-color: transparent; background-color: transparent; }
+}
+
+.scan-flash {
+  animation: scanSuccessFlash 0.5s ease-out;
+}
+
+/* Format Cetak Struk Thermal (58mm) */
+@media print {
+  body * { visibility: hidden; }
+  #receipt-print-area, #receipt-print-area * { visibility: visible; }
+  #receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 58mm;
+    margin: 0;
+    padding: 8px;
+    font-size: 11px;
+    font-family: monospace;
+  }
+}
+
+/* ========================================================================= */
+/* PENGATURAN CETAK PRINTER THERMAL (58mm / 80mm)                            */
+/* ========================================================================= */
+@media print {
+  /* Sembunyikan semua elemen di layar kecuali #printable-receipt */
+  body * {
+    visibility: hidden !important;
+  }
+
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible !important;
+  }
+
+  /* Posisikan struk tepat di pojok kiri atas halaman thermal */
+  #printable-receipt {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 58mm !important; /* Standar 58mm (bisa melebar hingga 80mm sesuai kertas) */
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: #000 !important;
+    font-size: 9pt !important;
+    line-height: 1.15 !important;
+  }
+
+  @page {
+    margin: 0;
+    size: auto;
+  }
+}

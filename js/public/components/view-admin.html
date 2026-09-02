@@ -1,0 +1,160 @@
+<div id="view-admin-portal" class="fixed inset-0 bg-slate-900 z-[200] hidden flex flex-col text-slate-100 overflow-y-auto">
+  <!-- Header Developer Hub -->
+  <header class="bg-slate-950 border-b border-slate-800 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-lg font-black shadow-lg">
+        <i class="fa-solid fa-layer-group"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-extrabold text-white">Posta Superadmin Portal</h1>
+        <span class="text-xs text-indigo-400 font-medium">Multi-Tenant & Role Access Control</span>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <button onclick="window.openCreateUserModalAdmin()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-lg transition flex items-center gap-1.5">
+        <i class="fa-solid fa-user-plus"></i>
+        <span>Tambah User Toko</span>
+      </button>
+      <button onclick="window.openCreateTenantModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg transition flex items-center gap-1.5">
+        <i class="fa-solid fa-store"></i>
+        <span>Tambah Toko Baru</span>
+      </button>
+      <button onclick="window.logout()" title="Logout" class="p-2 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-xl transition">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Konten Utama -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-6 space-y-8">
+    <!-- SECTION 1: DAFTAR TOKO & AKSES INSTAN -->
+    <section class="space-y-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-black text-white flex items-center gap-2">
+            <i class="fa-solid fa-shop text-indigo-400"></i>
+            <span>Daftar Toko & Akses Langsung</span>
+          </h2>
+          <p class="text-xs text-slate-400">Pilih toko untuk login langsung sebagai Superadmin</p>
+        </div>
+        <button onclick="window.loadAdminTenants()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 flex items-center gap-1">
+          <i class="fa-solid fa-rotate-right"></i>
+          <span>Segarkan</span>
+        </button>
+      </div>
+
+      <div id="admin-tenants-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="col-span-full py-12 text-center text-slate-500 text-sm">Memuat data toko...</div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: DAFTAR SELURUH USER SISTEM -->
+    <section class="space-y-4 pt-4 border-t border-slate-800">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-black text-white flex items-center gap-2">
+            <i class="fa-solid fa-users-gear text-emerald-400"></i>
+            <span>Daftar User & Akun Per Toko</span>
+          </h2>
+          <p class="text-xs text-slate-400">Kelola akun Owner, Admin, dan Kasir dari seluruh cabang toko</p>
+        </div>
+        <button onclick="window.loadAdminUsersList()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 flex items-center gap-1">
+          <i class="fa-solid fa-rotate-right"></i>
+          <span>Segarkan User</span>
+        </button>
+      </div>
+
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-800 bg-slate-900/60 text-[10px] uppercase text-slate-400 font-bold">
+              <th class="py-3 px-4">Nama User</th>
+              <th class="py-3 px-4">Username</th>
+              <th class="py-3 px-4">Toko / Subdomain</th>
+              <th class="py-3 px-4">Role</th>
+              <th class="py-3 px-4 text-center">Status</th>
+              <th class="py-3 px-4 text-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-table-tbody" class="divide-y divide-slate-800/60 text-slate-300">
+            <tr><td colspan="6" class="text-center py-8 text-slate-500">Memuat data user...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- MODAL TAMBAH USER (SUPERADMIN) -->
+<div id="create-user-admin-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[260] hidden flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 text-slate-100 shadow-2xl space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-user-plus text-emerald-400"></i>
+        <h3 id="create-user-admin-modal-title" class="font-bold text-sm text-white">Tambah User Toko Baru</h3>
+      </div>
+      <button onclick="document.getElementById('create-user-admin-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-200">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <form onsubmit="event.preventDefault(); window.submitCreateUserAdmin();" class="space-y-3 text-xs">
+      <div>
+        <label class="font-bold text-slate-400 uppercase tracking-wider block mb-1">Pilih Toko / Tenant</label>
+        <select id="adm-user-tenant-select" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500">
+          <option value="">-- Pilih Toko --</option>
+        </select>
+      </div>
+      <div>
+        <label class="font-bold text-slate-400 uppercase tracking-wider block mb-1">Nama Lengkap</label>
+        <input id="adm-user-fullname" type="text" placeholder="Contoh: Siti Rahma" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500" />
+      </div>
+      <div>
+        <label class="font-bold text-slate-400 uppercase tracking-wider block mb-1">Username</label>
+       <input 
+  id="adm-user-username" 
+  type="text" 
+  autocomplete="username"
+  placeholder="username_kasir" 
+  required 
+  class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500 font-mono" 
+/>
+      </div>
+      <div>
+        <label class="font-bold text-slate-400 uppercase tracking-wider block mb-1">Password</label>
+       <input 
+  id="adm-user-password" 
+  type="password" 
+  autocomplete="new-password"
+  placeholder="••••••••" 
+  required 
+  class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500" 
+/>
+      </div>
+      <div>
+        <label class="font-bold text-slate-400 uppercase tracking-wider block mb-1">Role / Hak Akses</label>
+        <select id="adm-user-role" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500">
+          <option value="CASHIER">CASHIER (Hanya Transaksi POS & Barang Masuk)</option>
+          <option value="ADMIN">ADMIN (Kelola Produk, Stok & Kasir)</option>
+          <option value="OWNER">OWNER (Akses Penuh Toko)</option>
+          <option value="SUPERADMIN">SUPERADMIN (Pusat Developer)</option>
+        </select>
+      </div>
+      <div id="adm-user-active-row" class="hidden pt-1">
+        <label class="inline-flex items-center gap-2 font-bold text-slate-300 cursor-pointer text-xs">
+          <input id="adm-user-active-input" type="checkbox" class="w-4 h-4 rounded border-slate-700 text-emerald-600 focus:ring-emerald-500" />
+          <span>Akun Aktif (bisa login)</span>
+        </label>
+      </div>
+
+      <div class="pt-3 flex gap-2">
+        <button type="button" onclick="document.getElementById('create-user-admin-modal').classList.add('hidden')" class="w-1/3 py-2.5 bg-slate-800 hover:bg-slate-700 font-bold rounded-xl text-xs text-slate-300">Batal</button>
+        <button id="btn-adm-save-user" type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-lg flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-check"></i>
+          <span>Simpan User</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

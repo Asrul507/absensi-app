@@ -1,0 +1,36 @@
+<div id="view-employees" class="flex-1 hidden flex-col bg-slate-50 p-3 sm:p-4 overflow-hidden pb-20 md:pb-4">
+  <div class="bg-white rounded-2xl border border-slate-200 flex-1 flex flex-col overflow-hidden shadow-sm">
+    <div class="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5">
+      <div>
+        <h2 class="font-bold text-slate-800 text-sm sm:text-base flex items-center gap-2">
+          <i class="fa-solid fa-users-gear text-emerald-600"></i>
+          <span class="role-admin-only">Manajemen Karyawan</span>
+          <span class="role-cashier-only hidden">Akun Saya</span>
+        </h2>
+        <span class="text-[11px] text-slate-500 role-admin-only">Kelola akun Owner, Admin, dan Kasir untuk toko ini</span>
+        <span class="text-[11px] text-slate-500 role-cashier-only hidden">Anda hanya bisa mengganti password akun Anda sendiri</span>
+      </div>
+      <button onclick="window.openAddEmployeeModal()" class="role-admin-only px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
+        <i class="fa-solid fa-user-plus"></i>
+        <span>Tambah Karyawan</span>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-auto p-3 sm:p-4">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr class="border-b border-slate-200 bg-slate-50 text-[10px] uppercase text-slate-500 font-bold">
+            <th class="py-2.5 px-3">Nama Lengkap</th>
+            <th class="py-2.5 px-3">Username</th>
+            <th class="py-2.5 px-3">Role</th>
+            <th class="py-2.5 px-3 text-center">Status</th>
+            <th class="py-2.5 px-3 text-center">Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="employees-tbody" class="divide-y divide-slate-100">
+          <tr><td colspan="5" class="text-center py-8 text-slate-400">Memuat data karyawan...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

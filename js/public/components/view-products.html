@@ -1,0 +1,48 @@
+<div id="view-products" class="flex-1 hidden flex-col bg-slate-50 p-3 sm:p-4 overflow-hidden pb-20 md:pb-4">
+  <div class="bg-white rounded-2xl border border-slate-200 flex-1 flex flex-col overflow-hidden shadow-sm">
+    <div class="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5">
+      <div>
+        <h2 class="font-bold text-slate-800 text-sm sm:text-base flex items-center gap-2">
+          <i class="fa-solid fa-boxes-stacked text-emerald-600"></i>
+          <span>Daftar Master Produk</span>
+        </h2>
+        <span class="text-[11px] text-slate-500">Seluruh katalog barang dan sisa stok aktif di database</span>
+      </div>
+      <div class="flex items-center gap-2 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-64">
+          <input 
+            type="text" 
+            id="prod-table-search" 
+            oninput="window.renderProductTable()" 
+            placeholder="Filter nama / barcode..." 
+            class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-100 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-[10px]"></i>
+        </div>
+        <button onclick="window.openAddProductModal('MASTER')" class="shrink-0 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-plus"></i>
+          <span class="hidden sm:inline">Tambah Produk</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="flex-1 overflow-auto p-3 sm:p-4">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr class="border-b border-slate-200 bg-slate-50 text-[10px] uppercase text-slate-500 font-bold">
+            <th class="py-2.5 px-3">Barcode</th>
+            <th class="py-2.5 px-3">Nama Produk</th>
+            <th class="py-2.5 px-3">Kategori</th>
+            <th class="py-2.5 px-3 text-right">Harga Modal</th>
+            <th class="py-2.5 px-3 text-right">Harga Jual</th>
+            <th class="py-2.5 px-3 text-center">Stok</th>
+            <th class="py-2.5 px-3 text-center">Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="master-products-tbody" class="divide-y divide-slate-100">
+          <tr><td colspan="7" class="text-center py-8 text-slate-400">Memuat data produk...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
